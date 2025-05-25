@@ -107,22 +107,35 @@ class MessageEntity(Object):
         args = self.__dict__.copy()
 
         for arg in ("_client", "type", "user"):
-            args.pop(arg)
+            args.pop(arg, None)
 
         if self.user:
             args["user_id"] = await self._client.resolve_peer(self.user.id)
 
         if not self.url:
-            args.pop("url")
+            args.pop("url", None)
 
         if self.language is None:
-            args.pop("language")
+            args.pop("language", None)
 
-        args.pop("custom_emoji_id")
-        if self.custom_emoji_id is not None:
-            args["document_id"] = self.custom_emoji_id
+        is_custom_emoji_type = (self.type == enums.MessageEntityType.CUSTOM_EMOJI)
+        current_custom_emoji_id = args.pop("custom_emoji_id", None)
 
-        args.pop("expandable")
+        if is_custom_emoji_type:
+            if current_custom_emoji_id is None:
+                raise ValueError(
+                    "MessageEntityType.CUSTOM_EMOJI requires a 'custom_emoji_id'."
+                )
+            
+            min_val = -9223372036854775808
+            max_val = 9223372036854775807
+            if not (min_val <= current_custom_emoji_id <= max_val):
+                raise ValueError(
+                    f"custom_emoji_id {current_custom_emoji_id} is out of 64-bit integer range for MessageEntityType.CUSTOM_EMOJI."
+                )
+            args["document_id"] = current_custom_emoji_id
+
+        args.pop("expandable", None)
         if self.expandable is not None:
             args["collapsed"] = self.expandable
 
