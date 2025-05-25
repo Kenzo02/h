@@ -31,6 +31,7 @@ import pyrogram
 from pyrogram import StopTransmission
 from pyrogram import raw
 from pyrogram.session import Session
+from pyrogram.errors import FloodWait, FloodPremiumWait
 
 log = logging.getLogger(__name__)
 
@@ -105,10 +106,19 @@ class SaveFile:
                     if data is None:
                         return
 
-                    try:
-                        await session.invoke(data)
-                    except Exception as e:
-                        log.exception(e)
+                    while True:
+                        try:
+                            await session.invoke(data)
+                            break
+                        except (FloodWait, FloodPremiumWait) as e:
+                            log.warning(
+                                f"[{self.name}] Waiting for {e.value} seconds before continuing "
+                                f"(required by {type(data).__name__} in save_file worker)"
+                            )
+                            await asyncio.sleep(e.value)
+                        except Exception as e:
+                            log.exception(e)
+                            break
 
             part_size = 512 * 1024
 
