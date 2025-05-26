@@ -16,527 +16,236 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+import html
 import logging
-import os
 import re
-from datetime import datetime
-from typing import List, Optional, Union
+from html.parser import HTMLParser
+from typing import Optional
 
 import pyrogram
-from pyrogram import enums, raw, types, utils
-from pyrogram.file_id import FileType
+from pyrogram import raw
+from pyrogram.enums import MessageEntityType
+from pyrogram.errors import PeerIdInvalid
+from . import utils
 
 log = logging.getLogger(__name__)
 
 
-class SendMediaGroup:
-    # TODO: Add progress parameter
-    async def send_media_group(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        media: List[Union[
-            "types.InputMediaPhoto",
-            "types.InputMediaVideo",
-            "types.InputMediaAudio",
-            "types.InputMediaDocument"
-        ]],
-        disable_notification: bool = None,
-        message_thread_id: int = None,
-        effect_id: int = None,
-        reply_parameters: "types.ReplyParameters" = None,
-        schedule_date: datetime = None,
-        protect_content: bool = None,
-        show_caption_above_media: bool = None,
-        business_connection_id: str = None,
-        allow_paid_broadcast: bool = None,
-        paid_message_star_count: int = None,
+class Parser(HTMLParser):
+    MENTION_RE = re.compile(r"tg://user\?id=(\d+)")
 
-        reply_to_message_id: int = None,
-        reply_to_chat_id: Union[int, str] = None,
-        reply_to_story_id: int = None,
-        quote_text: str = None,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        quote_entities: List["types.MessageEntity"] = None,
-        quote_offset: int = None,
-    ) -> List["types.Message"]:
-        """Send a group of photos or videos as an album.
+    def __init__(self, client: "pyrogram.Client"):
+        super().__init__()
 
-        .. include:: /_includes/usable-by/users-bots.rst
+        self.client = client
 
-        Parameters:
-            chat_id (``int`` | ``str``):
-                Unique identifier (int) or username (str) of the target chat.
-                For your personal cloud (Saved Messages) you can simply use "me" or "self".
-                For a contact that exists in your Telegram address book you can use his phone number (str).
+        self.text = ""
+        self.entities = []
+        self.tag_entities = {}
 
-            media (List of :obj:`~pyrogram.types.InputMediaPhoto`, :obj:`~pyrogram.types.InputMediaVideo`, :obj:`~pyrogram.types.InputMediaAudio` and :obj:`~pyrogram.types.InputMediaDocument`):
-                A list describing photos and videos to be sent, must include 2–10 items.
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        extra = {}
 
-            disable_notification (``bool``, *optional*):
-                Sends the message silently.
-                Users will receive a notification with no sound.
+        if tag in ["b", "strong"]:
+            entity = raw.types.MessageEntityBold
+        elif tag in ["i", "em"]:
+            entity = raw.types.MessageEntityItalic
+        elif tag == "u":
+            entity = raw.types.MessageEntityUnderline
+        elif tag in ["s", "del", "strike"]:
+            entity = raw.types.MessageEntityStrike
+        elif tag == "blockquote":
+            entity = raw.types.MessageEntityBlockquote
+            extra["collapsed"] = "expandable" in attrs
+        elif tag == "code":
+            entity = raw.types.MessageEntityCode
+        elif tag == "pre":
+            entity = raw.types.MessageEntityPre
+            extra["language"] = attrs.get("language", "")
+        elif tag == "spoiler":
+            entity = raw.types.MessageEntitySpoiler
+        elif tag == "a":
+            url = attrs.get("href", "")
 
-            message_thread_id (``int``, *optional*):
-                Unique identifier for the target message thread (topic) of the forum.
-                For supergroups only.
+            mention = Parser.MENTION_RE.match(url)
 
-            effect_id (``int``, *optional*):
-                Unique identifier of the message effect.
-                For private chats only.
-
-            reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
-                Describes reply parameters for the message that is being sent.
-
-            schedule_date (:py:obj:`~datetime.datetime`, *optional*):
-                Date when the message will be automatically sent.
-
-            protect_content (``bool``, *optional*):
-                Protects the contents of the sent message from forwarding and saving.
-
-            show_caption_above_media (``bool``, *optional*):
-                Pass True, if the caption must be shown above the message media.
-
-            business_connection_id (``str``, *optional*):
-                Unique identifier of the business connection on behalf of which the message will be sent.
-
-            allow_paid_broadcast (``bool``, *optional*):
-                If True, you will be allowed to send up to 1000 messages per second.
-                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
-                The relevant Stars will be withdrawn from the bot's balance.
-                For bots only.
-
-            paid_message_star_count (``int``, *optional*):
-                The number of Telegram Stars the user agreed to pay to send the messages.
-
-        Returns:
-            List of :obj:`~pyrogram.types.Message`: On success, a list of the sent messages is returned.
-
-        Example:
-            .. code-block:: python
-
-                from pyrogram.types import InputMediaPhoto, InputMediaVideo
-
-                await app.send_media_group(
-                    "me",
-                    [
-                        InputMediaPhoto("photo1.jpg"),
-                        InputMediaPhoto("photo2.jpg", caption="photo caption"),
-                        InputMediaVideo("video.mp4", caption="video caption")
-                    ]
-                )
-        """
-        if any(
-            (
-                reply_to_message_id is not None,
-                reply_to_chat_id is not None,
-                reply_to_story_id is not None,
-                quote_text is not None,
-                parse_mode is not None,
-                quote_entities is not None,
-                quote_offset is not None,
-            )
-        ):
-            if reply_to_message_id is not None:
-                log.warning(
-                    "`reply_to_message_id` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if reply_to_chat_id is not None:
-                log.warning(
-                    "`reply_to_chat_id` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if reply_to_story_id is not None:
-                log.warning(
-                    "`reply_to_story_id` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if quote_text is not None:
-                log.warning(
-                    "`quote_text` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if parse_mode is not None:
-                log.warning(
-                    "`parse_mode` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if quote_entities is not None:
-                log.warning(
-                    "`quote_entities` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if quote_offset is not None:
-                log.warning(
-                    "`quote_offset` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            reply_parameters = types.ReplyParameters(
-                message_id=reply_to_message_id,
-                chat_id=reply_to_chat_id,
-                story_id=reply_to_story_id,
-                quote=quote_text,
-                quote_parse_mode=parse_mode,
-                quote_entities=quote_entities,
-                quote_position=quote_offset
-            )
-
-        multi_media = []
-
-        for i in media:
-            if isinstance(i, types.InputMediaPhoto):
-                if isinstance(i.media, str):
-                    if os.path.isfile(i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaUploadedPhoto(
-                                    file=await self.save_file(i.media),
-                                    spoiler=i.has_spoiler
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaPhoto(
-                            id=raw.types.InputPhoto(
-                                id=media.photo.id,
-                                access_hash=media.photo.access_hash,
-                                file_reference=media.photo.file_reference
-                            ),
-                            spoiler=i.has_spoiler
-                        )
-                    elif re.match("^https?://", i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaPhotoExternal(
-                                    url=i.media,
-                                    spoiler=i.has_spoiler
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaPhoto(
-                            id=raw.types.InputPhoto(
-                                id=media.photo.id,
-                                access_hash=media.photo.access_hash,
-                                file_reference=media.photo.file_reference
-                            ),
-                            spoiler=i.has_spoiler
-                        )
-                    else:
-                        media = utils.get_input_media_from_file_id(i.media, FileType.PHOTO, has_spoiler=i.has_spoiler)
-                else:
-                    media = await self.invoke(
-                        raw.functions.messages.UploadMedia(
-                            peer=await self.resolve_peer(chat_id),
-                            media=raw.types.InputMediaUploadedPhoto(
-                                file=await self.save_file(i.media),
-                                spoiler=i.has_spoiler
-                            ),
-                            business_connection_id=business_connection_id
-                        )
-                    )
-
-                    media = raw.types.InputMediaPhoto(
-                        id=raw.types.InputPhoto(
-                            id=media.photo.id,
-                            access_hash=media.photo.access_hash,
-                            file_reference=media.photo.file_reference
-                        ),
-                        spoiler=i.has_spoiler
-                    )
-            elif isinstance(i, types.InputMediaVideo):
-                if isinstance(i.media, str):
-                    if os.path.isfile(i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaUploadedDocument(
-                                    file=await self.save_file(i.media),
-                                    thumb=await self.save_file(i.thumb),
-                                    spoiler=i.has_spoiler,
-                                    mime_type=self.guess_mime_type(i.media) or "video/mp4",
-                                    nosound_video=True,
-                                    attributes=[
-                                        raw.types.DocumentAttributeVideo(
-                                            supports_streaming=i.supports_streaming or None,
-                                            duration=i.duration,
-                                            w=i.width,
-                                            h=i.height
-                                        ),
-                                        raw.types.DocumentAttributeFilename(file_name=i.file_name or os.path.basename(i.media))
-                                    ]
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaDocument(
-                            id=raw.types.InputDocument(
-                                id=media.document.id,
-                                access_hash=media.document.access_hash,
-                                file_reference=media.document.file_reference
-                            ),
-                            spoiler=i.has_spoiler
-                        )
-                    elif re.match("^https?://", i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaDocumentExternal(
-                                    url=i.media,
-                                    spoiler=i.has_spoiler
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaDocument(
-                            id=raw.types.InputDocument(
-                                id=media.document.id,
-                                access_hash=media.document.access_hash,
-                                file_reference=media.document.file_reference
-                            ),
-                            spoiler=i.has_spoiler
-                        )
-                    else:
-                        media = utils.get_input_media_from_file_id(i.media, FileType.VIDEO, has_spoiler=i.has_spoiler)
-                else:
-                    media = await self.invoke(
-                        raw.functions.messages.UploadMedia(
-                            peer=await self.resolve_peer(chat_id),
-                            media=raw.types.InputMediaUploadedDocument(
-                                file=await self.save_file(i.media),
-                                thumb=await self.save_file(i.thumb),
-                                spoiler=i.has_spoiler,
-                                mime_type=self.guess_mime_type(getattr(i.media, "name", "video.mp4")) or "video/mp4",
-                                nosound_video=True,
-                                attributes=[
-                                    raw.types.DocumentAttributeVideo(
-                                        supports_streaming=i.supports_streaming or None,
-                                        duration=i.duration,
-                                        w=i.width,
-                                        h=i.height
-                                    ),
-                                    raw.types.DocumentAttributeFilename(file_name=i.file_name or getattr(i.media, "name", "video.mp4"))
-                                ]
-                            ),
-                            business_connection_id=business_connection_id
-                        )
-                    )
-
-                    media = raw.types.InputMediaDocument(
-                        id=raw.types.InputDocument(
-                            id=media.document.id,
-                            access_hash=media.document.access_hash,
-                            file_reference=media.document.file_reference
-                        ),
-                        spoiler=i.has_spoiler
-                    )
-            elif isinstance(i, types.InputMediaAudio):
-                if isinstance(i.media, str):
-                    if os.path.isfile(i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaUploadedDocument(
-                                    mime_type=self.guess_mime_type(i.media) or "audio/mpeg",
-                                    file=await self.save_file(i.media),
-                                    thumb=await self.save_file(i.thumb),
-                                    attributes=[
-                                        raw.types.DocumentAttributeAudio(
-                                            duration=i.duration,
-                                            performer=i.performer,
-                                            title=i.title
-                                        ),
-                                        raw.types.DocumentAttributeFilename(file_name=i.file_name or os.path.basename(i.media))
-                                    ]
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaDocument(
-                            id=raw.types.InputDocument(
-                                id=media.document.id,
-                                access_hash=media.document.access_hash,
-                                file_reference=media.document.file_reference
-                            )
-                        )
-                    elif re.match("^https?://", i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaDocumentExternal(
-                                    url=i.media
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaDocument(
-                            id=raw.types.InputDocument(
-                                id=media.document.id,
-                                access_hash=media.document.access_hash,
-                                file_reference=media.document.file_reference
-                            )
-                        )
-                    else:
-                        media = utils.get_input_media_from_file_id(i.media, FileType.AUDIO)
-                else:
-                    media = await self.invoke(
-                        raw.functions.messages.UploadMedia(
-                            peer=await self.resolve_peer(chat_id),
-                            media=raw.types.InputMediaUploadedDocument(
-                                mime_type=self.guess_mime_type(getattr(i.media, "name", "audio.mp3")) or "audio/mpeg",
-                                file=await self.save_file(i.media),
-                                thumb=await self.save_file(i.thumb),
-                                attributes=[
-                                    raw.types.DocumentAttributeAudio(
-                                        duration=i.duration,
-                                        performer=i.performer,
-                                        title=i.title
-                                    ),
-                                    raw.types.DocumentAttributeFilename(file_name=i.file_name or getattr(i.media, "name", "audio.mp3"))
-                                ]
-                            ),
-                            business_connection_id=business_connection_id
-                        )
-                    )
-
-                    media = raw.types.InputMediaDocument(
-                        id=raw.types.InputDocument(
-                            id=media.document.id,
-                            access_hash=media.document.access_hash,
-                            file_reference=media.document.file_reference
-                        )
-                    )
-            elif isinstance(i, types.InputMediaDocument):
-                if isinstance(i.media, str):
-                    if os.path.isfile(i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaUploadedDocument(
-                                    mime_type=self.guess_mime_type(i.media) or "application/zip",
-                                    file=await self.save_file(i.media),
-                                    thumb=await self.save_file(i.thumb),
-                                    attributes=[
-                                        raw.types.DocumentAttributeFilename(file_name=i.file_name or os.path.basename(i.media))
-                                    ]
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaDocument(
-                            id=raw.types.InputDocument(
-                                id=media.document.id,
-                                access_hash=media.document.access_hash,
-                                file_reference=media.document.file_reference
-                            )
-                        )
-                    elif re.match("^https?://", i.media):
-                        media = await self.invoke(
-                            raw.functions.messages.UploadMedia(
-                                peer=await self.resolve_peer(chat_id),
-                                media=raw.types.InputMediaDocumentExternal(
-                                    url=i.media
-                                ),
-                                business_connection_id=business_connection_id
-                            )
-                        )
-
-                        media = raw.types.InputMediaDocument(
-                            id=raw.types.InputDocument(
-                                id=media.document.id,
-                                access_hash=media.document.access_hash,
-                                file_reference=media.document.file_reference
-                            )
-                        )
-                    else:
-                        media = utils.get_input_media_from_file_id(i.media, FileType.DOCUMENT)
-                else:
-                    media = await self.invoke(
-                        raw.functions.messages.UploadMedia(
-                            peer=await self.resolve_peer(chat_id),
-                            media=raw.types.InputMediaUploadedDocument(
-                                mime_type=self.guess_mime_type(
-                                    getattr(i.media, "name", "file.zip")
-                                ) or "application/zip",
-                                file=await self.save_file(i.media),
-                                thumb=await self.save_file(i.thumb),
-                                attributes=[
-                                    raw.types.DocumentAttributeFilename(file_name=i.file_name or getattr(i.media, "name", "file.zip"))
-                                ]
-                            ),
-                            business_connection_id=business_connection_id
-                        )
-                    )
-
-                    media = raw.types.InputMediaDocument(
-                        id=raw.types.InputDocument(
-                            id=media.document.id,
-                            access_hash=media.document.access_hash,
-                            file_reference=media.document.file_reference
-                        )
-                    )
+            if mention:
+                entity = raw.types.InputMessageEntityMentionName
+                extra["user_id"] = int(mention.group(1))
             else:
-                raise ValueError(f"{i.__class__.__name__} is not a supported type for send_media_group")
+                entity = raw.types.MessageEntityTextUrl
+                extra["url"] = url
+        elif tag == "emoji":
+            entity = raw.types.MessageEntityCustomEmoji
+            try:
+                custom_emoji_id = int(attrs.get("id"))
+            except Exception as e:
+                custom_emoji_id = 0
+            extra["document_id"] = custom_emoji_id
+        else:
+            return
 
-            multi_media.append(
-                raw.types.InputSingleMedia(
-                    media=media,
-                    random_id=self.rnd_id(),
-                    **await utils.parse_text_entities(self, i.caption, i.parse_mode, i.caption_entities)
-                )
-            )
+        if tag not in self.tag_entities:
+            self.tag_entities[tag] = []
 
-        peer = await self.resolve_peer(chat_id)
-        r = await self.invoke(
-            raw.functions.messages.SendMultiMedia(
-                peer=peer,
-                multi_media=multi_media,
-                silent=disable_notification or None,
-                reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id
-                ),
-                schedule_date=utils.datetime_to_timestamp(schedule_date),
-                noforwards=protect_content,
-                invert_media=show_caption_above_media,
-                allow_paid_floodskip=allow_paid_broadcast,
-                allow_paid_stars=paid_message_star_count,
-                effect=effect_id,
-            ),
-            sleep_threshold=60,
-            business_connection_id=business_connection_id
-        )
+        self.tag_entities[tag].append(entity(offset=len(self.text), length=0, **extra))
 
-        conn_id = None
+    def handle_data(self, data):
+        data = html.unescape(data)
 
-        for u in r.updates:
-            if getattr(u, "connection_id", None):
-                conn_id = u.connection_id
-                break
+        for entities in self.tag_entities.values():
+            for entity in entities:
+                entity.length += len(data)
+
+        self.text += data
+
+    def handle_endtag(self, tag):
+        try:
+            self.entities.append(self.tag_entities[tag].pop())
+        except (KeyError, IndexError):
+            line, offset = self.getpos()
+            offset += 1
+
+            log.debug("Unmatched closing tag </%s> at line %s:%s", tag, line, offset)
+        else:
+            if not self.tag_entities[tag]:
+                self.tag_entities.pop(tag)
+
+    def error(self, message):
+        pass
 
 
-        return await utils.parse_messages(
-            self,
-            raw.types.messages.Messages(
-                messages=[m.message for m in filter(
-                    lambda u: isinstance(u, (raw.types.UpdateNewMessage,
-                                             raw.types.UpdateNewChannelMessage,
-                                             raw.types.UpdateNewScheduledMessage,
-                                             raw.types.UpdateBotNewBusinessMessage)),
-                    r.updates
-                )],
-                users=r.users,
-                chats=r.chats
-            )#,
-            # business_connection_id=conn_id
-        )
+class HTML:
+    def __init__(self, client: Optional["pyrogram.Client"]):
+        self.client = client
+
+    async def parse(self, text: str) -> dict:
+        # Strip whitespaces from the beginning and the end, but preserve closing tags
+        text = re.sub(r"^\s*(<[\w<>=\s\"]*>)\s*", r"\1", text)
+        text = re.sub(r"\s*(</[\w</>]*>)\s*$", r"\1", text)
+
+        parser = Parser(self.client)
+        parser.feed(utils.add_surrogates(text))
+        parser.close()
+
+        if parser.tag_entities:
+            unclosed_tags = []
+
+            for tag, entities in parser.tag_entities.items():
+                unclosed_tags.append(f"<{tag}> (x{len(entities)})")
+
+            log.info("Unclosed tags: %s", ", ".join(unclosed_tags))
+
+        entities = []
+
+        for entity in parser.entities:
+            if isinstance(entity, raw.types.InputMessageEntityMentionName):
+                try:
+                    if self.client is not None:
+                        entity.user_id = await self.client.resolve_peer(entity.user_id)
+                except PeerIdInvalid:
+                    continue
+
+            entities.append(entity)
+
+        # Remove zero-length entities
+        entities = list(filter(lambda x: x.length > 0, entities))
+
+        return {
+            "message": utils.remove_surrogates(parser.text),
+            "entities": sorted(entities, key=lambda e: e.offset) or None
+        }
+
+    @staticmethod
+    def unparse(text: str, entities: list) -> str:
+        def parse_one(entity):
+            """
+            Parses a single entity and returns (start_tag, start), (end_tag, end)
+            """
+            entity_type = entity.type
+            start = entity.offset
+            end = start + entity.length
+
+            if entity_type in (
+                MessageEntityType.BOLD,
+                MessageEntityType.ITALIC,
+                MessageEntityType.UNDERLINE,
+                MessageEntityType.STRIKETHROUGH,
+            ):
+                name = entity_type.name[0].lower()
+                start_tag = f"<{name}>"
+                end_tag = f"</{name}>"
+            elif entity_type == MessageEntityType.PRE:
+                name = entity_type.name.lower()
+                language = getattr(entity, "language", "") or ""
+                start_tag = f'<{name} language="{language}">' if language else f"<{name}>"
+                end_tag = f"</{name}>"
+            elif entity_type == MessageEntityType.BLOCKQUOTE:
+                name = entity_type.name.lower()
+                expandable = getattr(entity, "expandable", False)
+                start_tag = f'<{name}{" expandable" if expandable else ""}>'
+                end_tag = f"</{name}>"
+            elif entity_type in (
+                MessageEntityType.CODE,
+                MessageEntityType.SPOILER,
+            ):
+                name = entity_type.name.lower()
+                start_tag = f"<{name}>"
+                end_tag = f"</{name}>"
+            elif entity_type == MessageEntityType.TEXT_LINK:
+                url = entity.url
+                start_tag = f'<a href="{url}">'
+                end_tag = "</a>"
+            elif entity_type == MessageEntityType.TEXT_MENTION:
+                user = entity.user
+                start_tag = f'<a href="tg://user?id={user.id}">'
+                end_tag = "</a>"
+            elif entity_type == MessageEntityType.CUSTOM_EMOJI:
+                custom_emoji_id = entity.custom_emoji_id
+                start_tag = f'<emoji id="{custom_emoji_id}">'
+                end_tag = "</emoji>"
+            else:
+                return
+
+            return (start_tag, start), (end_tag, end)
+
+        def recursive(entity_i: int) -> int:
+            """
+            Takes the index of the entity to start parsing from, returns the number of parsed entities inside it.
+            Uses entities_offsets as a stack, pushing (start_tag, start) first, then parsing nested entities,
+            and finally pushing (end_tag, end) to the stack.
+            No need to sort at the end.
+            """
+            this = parse_one(entities[entity_i])
+            if this is None:
+                return 1
+            (start_tag, start), (end_tag, end) = this
+            entities_offsets.append((start_tag, start))
+            internal_i = entity_i + 1
+            # while the next entity is inside the current one, keep parsing
+            while internal_i < len(entities) and entities[internal_i].offset < end:
+                internal_i += recursive(internal_i)
+            entities_offsets.append((end_tag, end))
+            return internal_i - entity_i
+
+        text = utils.add_surrogates(text)
+
+        entities_offsets = []
+
+        # probably useless because entities are already sorted by telegram
+        entities.sort(key=lambda e: (e.offset, -e.length))
+
+        # main loop for first-level entities
+        i = 0
+        while i < len(entities):
+            i += recursive(i)
+
+        if entities_offsets:
+            last_offset = entities_offsets[-1][1]
+            # no need to sort, but still add entities starting from the end
+            for entity, offset in reversed(entities_offsets):
+                text = text[:offset] + entity + html.escape(text[offset:last_offset]) + text[last_offset:]
+                last_offset = offset
+
+        return utils.remove_surrogates(text)

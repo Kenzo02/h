@@ -7,8 +7,6 @@ from pyrogram.raw.core import TLObject
 from pyrogram import raw
 from typing import List, Optional, Any
 
-__all__ = ["{name}"]
-
 {warning}
 
 

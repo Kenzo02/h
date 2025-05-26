@@ -17,5 +17,3 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from .parser import Parser
-
-__all__ = ["Parser"]
