@@ -40,6 +40,7 @@ from .game import Game
 from .general_forum_topic_hidden import GeneralForumTopicHidden
 from .general_forum_topic_unhidden import GeneralForumTopicUnhidden
 from .gift_code import GiftCode
+from .gift_upgrade_preview import GiftUpgradePreview
 from .invoice import Invoice
 from .link_preview_options import LinkPreviewOptions
 from .giveaway import Giveaway
@@ -121,6 +122,7 @@ __all__ = [
     "GeneralForumTopicHidden",
     "GeneralForumTopicUnhidden",
     "GiftCode",
+    "GiftUpgradePreview",
     "Giveaway",
     "Invoice",
     "LinkPreviewOptions",

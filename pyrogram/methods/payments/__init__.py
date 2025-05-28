@@ -19,40 +19,43 @@
 from .apply_gift_code import ApplyGiftCode
 from .check_gift_code import CheckGiftCode
 from .convert_gift_to_stars import ConvertGiftToStars
+from .get_available_gifts import GetAvailableGifts
+from .get_chat_gifts import GetChatGifts
+from .get_chat_gifts_count import GetChatGiftsCount
+from .get_gift_upgrade_preview import GetGiftUpgradePreview
 from .get_payment_form import GetPaymentForm
 from .get_stars_balance import GetStarsBalance
 from .get_upgraded_gift import GetUpgradedGift
-from .get_available_gifts import GetAvailableGifts
-from .get_chat_gifts_count import GetChatGiftsCount
-from .get_chat_gifts import GetChatGifts
 from .hide_gift import HideGift
 from .search_gifts_for_resale import SearchGiftsForResale
+from .send_gift import SendGift
 from .send_payment_form import SendPaymentForm
 from .send_resold_gift import SendResoldGift
 from .set_gift_resale_price import SetGiftResalePrice
 from .set_pinned_gifts import SetPinnedGifts
-from .send_gift import SendGift
 from .show_gift import ShowGift
 from .transfer_gift import TransferGift
 from .upgrade_gift import UpgradeGift
+
 
 class Payments(
     ApplyGiftCode,
     CheckGiftCode,
     ConvertGiftToStars,
+    GetAvailableGifts,
+    GetChatGifts,
+    GetChatGiftsCount,
+    GetGiftUpgradePreview,
     GetPaymentForm,
     GetStarsBalance,
     GetUpgradedGift,
-    GetAvailableGifts,
-    GetChatGiftsCount,
-    GetChatGifts,
     HideGift,
     SearchGiftsForResale,
+    SendGift,
     SendPaymentForm,
     SendResoldGift,
     SetGiftResalePrice,
     SetPinnedGifts,
-    SendGift,
     ShowGift,
     TransferGift,
     UpgradeGift
