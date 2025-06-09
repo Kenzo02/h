@@ -57,6 +57,9 @@ class ResolvePeer:
         if not self.is_connected:
             raise ConnectionError("Client has not been started yet")
 
+        if peer_id is None:
+            return None
+
         if peer_id in ("self", "me"):
             return raw.types.InputPeerSelf()
 

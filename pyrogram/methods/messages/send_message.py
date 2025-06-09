@@ -161,6 +161,8 @@ class SendMessage:
                             [InlineKeyboardButton("Docs", url="https://docs.pyrogram.org")]
                         ]))
         """
+        link_preview_options = link_preview_options or self.link_preview_options
+
         if any(
             (
                 reply_to_message_id is not None,

@@ -38,3 +38,6 @@ class ChatType(AutoName):
 
     CHANNEL = auto()
     "Chat is a channel"
+
+    DIRECT = auto()
+    "Chat is a direct with a channel"

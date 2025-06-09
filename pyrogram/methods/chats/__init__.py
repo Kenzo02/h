@@ -41,6 +41,7 @@ from .get_chat_members_count import GetChatMembersCount
 from .get_chat_online_count import GetChatOnlineCount
 from .get_chat_settings import GetChatSettings
 from .get_similar_channels import GetSimilarChannels
+from .get_suitable_discussion_chats import GetSuitableDiscussionChats
 from .get_dialogs import GetDialogs
 from .get_dialogs_count import GetDialogsCount
 from .get_folders import GetFolders
@@ -60,6 +61,7 @@ from .restrict_chat_member import RestrictChatMember
 from .set_administrator_title import SetAdministratorTitle
 from .set_chat_description import SetChatDescription
 from .set_chat_permissions import SetChatPermissions
+from .set_chat_discussion_group import SetChatDiscussionGroup
 from .set_chat_photo import SetChatPhoto
 from .set_chat_protected_content import SetChatProtectedContent
 from .set_chat_title import SetChatTitle
@@ -111,6 +113,7 @@ class Chats(
     GetChatMembersCount,
     SetChatUsername,
     SetChatPermissions,
+    SetChatDiscussionGroup,
     GetDialogsCount,
     GetFolders,
     GetForumTopics,
@@ -144,6 +147,7 @@ class Chats(
     GetChatOnlineCount,
     GetChatSettings,
     GetSimilarChannels,
+    GetSuitableDiscussionChats,
     GetSendAsChats,
     SetSendAsChat,
     SetChatProtectedContent

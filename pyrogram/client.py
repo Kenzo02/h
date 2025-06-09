@@ -52,7 +52,7 @@ from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
 from pyrogram.session import Auth, Session
 from pyrogram.storage import Storage, FileStorage, MemoryStorage
-from pyrogram.types import User, TermsOfService
+from pyrogram.types import User, TermsOfService, LinkPreviewOptions
 from pyrogram.utils import ainput
 from pyrogram.qrlogin import QRLogin
 from .connection import Connection
@@ -211,6 +211,9 @@ class Client(Methods):
             The platform where this client is running.
             Defaults to 'other'
 
+        link_preview_options (:obj:`~pyrogram.types.LinkPreviewOptions`, *optional*):
+            Global link preview options for the client.
+
         fetch_replies (``bool``, *optional*):
             Pass True to automatically fetch replies for messages.
             Defaults to True.
@@ -290,6 +293,7 @@ class Client(Methods):
         max_topic_cache_size: int = MAX_TOPIC_CACHE_SIZE,
         storage_engine: Optional[Storage] = None,
         client_platform: "enums.ClientPlatform" = enums.ClientPlatform.OTHER,
+        link_preview_options: Optional[LinkPreviewOptions] = None,
         fetch_replies: Optional[bool] = True,
         fetch_topics: Optional[bool] = True,
         fetch_stories: Optional[bool] = True,
@@ -331,6 +335,7 @@ class Client(Methods):
         self.max_message_cache_size = max_message_cache_size
         self.max_topic_cache_size = max_topic_cache_size
         self.client_platform = client_platform
+        self.link_preview_options = link_preview_options
         self.fetch_replies = fetch_replies
         self.fetch_topics = fetch_topics
         self.fetch_stories = fetch_stories

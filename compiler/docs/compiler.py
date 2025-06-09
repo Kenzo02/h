@@ -353,6 +353,8 @@ def pyrogram_api():
             get_personal_channels
             get_chat_settings
             transfer_chat_ownership
+            get_suitable_discussion_chats
+            set_chat_discussion_group
         """,
         users="""
         Users

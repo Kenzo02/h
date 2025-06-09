@@ -58,7 +58,7 @@ class SetPinnedGifts:
         stargifts = []
 
         for gift in owned_gift_ids:
-            saved_gift_match = re.match(r"^(\d+)_(\d+)$", str(gift))
+            saved_gift_match = re.match(r"^(-\d+)_(\d+)$", str(gift))
             slug_match = self.UPGRADED_GIFT_RE.match(str(gift))
 
             if saved_gift_match:

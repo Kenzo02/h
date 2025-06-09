@@ -53,17 +53,17 @@ class ConvertGiftToStars:
                 # Convert gift
                 await app.convert_gift_to_stars(message_id=123)
         """
-        SAVED_MATCH = re.search(r"(\d+)_(\d+)", str(owned_gift_id))
-        SLUG_MATCH = re.search(r"(\w+-\d+)", str(owned_gift_id))
+        saved_gift_match = re.match(r"^(-\d+)_(\d+)$", owned_gift_id)
+        slug_match = self.UPGRADED_GIFT_RE.match(owned_gift_id)
 
-        if SAVED_MATCH:
+        if saved_gift_match:
             stargift = raw.types.InputSavedStarGiftChat(
-                peer=await self.resolve_peer(SAVED_MATCH.group(1)),
-                saved_id=int(SAVED_MATCH.group(2))
+                peer=await self.resolve_peer(saved_gift_match.group(1)),
+                saved_id=int(saved_gift_match.group(2))
             )
-        elif SLUG_MATCH:
+        elif slug_match:
             stargift = raw.types.InputSavedStarGiftSlug(
-                slug=SLUG_MATCH.group(1)
+                slug=slug_match.group(1)
             )
         else:
             stargift = raw.types.InputSavedStarGiftUser(

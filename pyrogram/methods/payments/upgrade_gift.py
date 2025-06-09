@@ -68,7 +68,7 @@ class UpgradeGift:
         """
         owned_gift_id = str(owned_gift_id)
 
-        saved_gift_match = re.match(r"^(\d+)_(\d+)$", owned_gift_id)
+        saved_gift_match = re.match(r"^(-\d+)_(\d+)$", owned_gift_id)
         slug_match = self.UPGRADED_GIFT_RE.match(owned_gift_id)
 
         if saved_gift_match:

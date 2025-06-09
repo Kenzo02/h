@@ -791,9 +791,16 @@ class Chat(Object):
                 client=client,
             )
 
+        chat_type = enums.ChatType.CHANNEL
+
+        if channel.monoforum:
+            chat_type = enums.ChatType.DIRECT
+        elif channel.megagroup:
+            chat_type = enums.ChatType.SUPERGROUP
+
         return Chat(
             id=peer_id,
-            type=enums.ChatType.SUPERGROUP if channel.megagroup else enums.ChatType.CHANNEL,
+            type=chat_type,
             is_forum=channel.forum,
             is_verified=channel.verified,
             is_restricted=channel.restricted,
