@@ -33,8 +33,46 @@ def add_surrogates(text: str) -> str:
 
 
 def remove_surrogates(text: str) -> str:
-    # Replace each surrogate pair with a SMP code point
-    return text.encode("utf-16", "surrogatepass").decode("utf-16")
+    # Handle surrogate characters more comprehensively
+    # This preserves URL encoding while fixing surrogate issues
+    try:
+        # First attempt: standard approach for well-formed text
+        return text.encode("utf-16", "surrogatepass").decode("utf-16")
+    except UnicodeError:
+        # Fallback: handle malformed surrogates more carefully
+        result = []
+        i = 0
+        while i < len(text):
+            char = text[i]
+            char_code = ord(char)
+            
+            # Check if it's a high surrogate
+            if 0xD800 <= char_code <= 0xDBFF:
+                # Look for corresponding low surrogate
+                if i + 1 < len(text):
+                    next_char = text[i + 1]
+                    next_code = ord(next_char)
+                    if 0xDC00 <= next_code <= 0xDFFF:
+                        # Valid surrogate pair - reconstruct
+                        try:
+                            reconstructed = (char + next_char).encode("utf-16", "surrogatepass").decode("utf-16")
+                            result.append(reconstructed)
+                            i += 2
+                            continue
+                        except UnicodeError:
+                            pass
+                
+                # Invalid or orphaned high surrogate - skip it
+                i += 1
+            elif 0xDC00 <= char_code <= 0xDFFF:
+                # Orphaned low surrogate - skip it
+                i += 1
+            else:
+                # Normal character - keep it
+                result.append(char)
+                i += 1
+        
+        return ''.join(result)
 
 
 def replace_once(source: str, old: str, new: str, start: int):
