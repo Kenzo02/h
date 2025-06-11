@@ -124,7 +124,7 @@ class CreateFolder:
 
         raw_folders_ids = [
             folder.id for folder in dialog_filters.filters
-            if not isinstance(folder, raw.types.DialogFilterDefault)
+            if isinstance(folder, (raw.types.DialogFilter, raw.types.DialogFilterChatlist))
         ]
 
         # find first free folder id

@@ -128,7 +128,7 @@ class EditFolder:
 
         raw_folders = [
             folder for folder in dialog_filters.filters
-            if not isinstance(folder, raw.types.DialogFilterDefault)
+            if isinstance(folder, (raw.types.DialogFilter, raw.types.DialogFilterChatlist))
         ]
 
         is_folder_exists = False

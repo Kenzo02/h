@@ -43,8 +43,11 @@ class GetFolders:
 
         raw_folders = [
             folder for folder in dialog_filters.filters
-            if not isinstance(folder, raw.types.DialogFilterDefault)
+            if isinstance(folder, (raw.types.DialogFilter, raw.types.DialogFilterChatlist))
         ]
+
+        if not raw_folders:
+            return types.List()
 
         raw_peers = {}
 
