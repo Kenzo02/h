@@ -16,21 +16,20 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union
+from typing import Optional, Union
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import errors
+from pyrogram import errors, raw
 
 
-class ToggleForumTopics:
-    async def toggle_forum_topics(
+class SetChatDirectMessagesGroup:
+    async def set_chat_direct_messages_group(
         self: "pyrogram.Client",
         chat_id: Union[int, str],
-        is_forum: bool = False,
-        has_forum_tabs: bool = False
+        paid_message_star_count: int = 0,
+        is_enabled: bool = Optional[None],
     ) -> bool:
-        """Enable or disable forum functionality in a supergroup.
+        """Change direct messages group settings for a channel chat.
 
         .. include:: /_includes/usable-by/users.rst
 
@@ -38,11 +37,12 @@ class ToggleForumTopics:
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
 
-            enabled (``bool``):
-                The new status. Pass True to enable forum topics.
+            paid_message_star_count (``bool``):
+                The new number of Telegram Stars that must be paid for each message that is sent to the direct messages chat unless the sender is an administrator of the channel chat, 0-10000.
 
-            has_forum_tabs (``bool``):
-                Whether to enable or disable tabs in the forum. Defaults to False.
+            is_enabled (``bool``, *optional*):
+                Pass True if the direct messages group is enabled for the channel chat.
+                Pass False otherwise
 
         Returns:
             ``bool``: True on success. False otherwise.
@@ -50,18 +50,15 @@ class ToggleForumTopics:
         Example:
             .. code-block:: python
 
-                # Change status of topics to disabled
-                await app.toggle_forum_topics()
-
-                # Change status of topics to enabled
-                await app.toggle_forum_topics(is_forum=True)
+                # Enable direct messages
+                await app.set_chat_direct_messages_group(chat_id, is_enabled=True)
         """
         try:
             r = await self.invoke(
-                raw.functions.channels.ToggleForum(
+                raw.functions.channels.UpdatePaidMessagesPrice(
                     channel=await self.resolve_peer(chat_id),
-                    enabled=is_forum,
-                    tabs=has_forum_tabs
+                    send_paid_messages_stars=paid_message_star_count,
+                    broadcast_messages_allowed=is_enabled
                 )
             )
 

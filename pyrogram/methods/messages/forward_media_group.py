@@ -17,11 +17,10 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from typing import Union, List
+from typing import List, Union
 
 import pyrogram
-from pyrogram import raw, utils
-from pyrogram import types
+from pyrogram import raw, types, utils
 
 
 class ForwardMediaGroup:
@@ -37,6 +36,7 @@ class ForwardMediaGroup:
         hide_captions: bool = None,
         protect_content: bool = None,
         allow_paid_broadcast: bool = None,
+        reply_parameters: "types.ReplyParameters" = None,
         paid_message_star_count: int = None
     ) -> List["types.Message"]:
         """Forward a media group by providing one of the message ids.
@@ -83,6 +83,9 @@ class ForwardMediaGroup:
                 The relevant Stars will be withdrawn from the bot's balance.
                 For bots only.
 
+            reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
+                Describes reply parameters for the message that is being sent.
+
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
@@ -109,7 +112,11 @@ class ForwardMediaGroup:
                 drop_media_captions=hide_captions,
                 noforwards=protect_content,
                 allow_paid_floodskip=allow_paid_broadcast,
-                top_msg_id=message_thread_id,
+                reply_to=await utils.get_reply_to(
+                    client=self,
+                    reply_parameters=reply_parameters,
+                    message_thread_id=message_thread_id
+                ),
                 allow_paid_stars=paid_message_star_count
             )
         )

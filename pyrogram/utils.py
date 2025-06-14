@@ -294,11 +294,11 @@ def unpack_inline_message_id(inline_message_id: str) -> "raw.base.InputBotInline
         )
 
 
-MIN_CHANNEL_ID_OLD = -1002147483647
 MIN_CHANNEL_ID = -100999999999999
 MAX_CHANNEL_ID = -1000000000000
+MIN_MONOFORUM_CHANNEL_ID = 1070000000000
+MAX_MONOFORUM_CHANNEL_ID = 107999999999999
 MIN_CHAT_ID = -999999999999
-MAX_USER_ID_OLD = 2147483647
 MAX_USER_ID = 999999999999
 
 
@@ -325,6 +325,9 @@ def get_peer_id(peer: Union[raw.base.Peer, raw.base.InputPeer, raw.base.Requeste
         return -peer.chat_id
 
     if isinstance(peer, (raw.types.PeerChannel, raw.types.InputPeerChannel, raw.types.RequestedPeerChannel)):
+        if MIN_MONOFORUM_CHANNEL_ID <= peer.channel_id < MAX_MONOFORUM_CHANNEL_ID:
+            return peer.channel_id
+
         return MAX_CHANNEL_ID - peer.channel_id
 
     raise ValueError(f"Peer type invalid: {peer}")
@@ -337,8 +340,12 @@ def get_peer_type(peer_id: int) -> str:
 
         if MIN_CHANNEL_ID <= peer_id < MAX_CHANNEL_ID:
             return "channel"
+
     elif 0 < peer_id <= MAX_USER_ID:
         return "user"
+
+    elif MIN_MONOFORUM_CHANNEL_ID <= peer_id < MAX_MONOFORUM_CHANNEL_ID:
+        return "monoforum"
 
     raise ValueError(f"Peer id invalid: {peer_id}")
 
@@ -347,7 +354,7 @@ async def get_reply_to(
     client: "pyrogram.Client",
     reply_parameters: Optional["types.ReplyParameters"] = None,
     message_thread_id: Optional[int] = None,
-    direct_chat_id: Optional[int] = None
+    direct_messages_chat_topic_id: Optional[int] = None
 ) -> Optional[Union[raw.types.InputReplyToMessage, raw.types.InputReplyToStory, raw.types.InputReplyToMonoForum]]:
     """Get InputReply for reply_to argument"""
     if reply_parameters:
@@ -378,23 +385,27 @@ async def get_reply_to(
                 quote_text=message,
                 quote_entities=entities,
                 quote_offset=reply_parameters.quote_position,
-                monoforum_peer_id=await client.resolve_peer(direct_chat_id)
+                monoforum_peer_id=await client.resolve_peer(direct_messages_chat_topic_id)
             )
+
 
     if message_thread_id:
         return raw.types.InputReplyToMessage(
             reply_to_msg_id=message_thread_id
         )
 
-    if direct_chat_id:
+    if direct_messages_chat_topic_id:
         return raw.types.InputReplyToMonoForum(
-            monoforum_peer_id=await client.resolve_peer(direct_chat_id)
+            monoforum_peer_id=await client.resolve_peer(direct_messages_chat_topic_id)
         )
 
     return None
 
 
 def get_channel_id(peer_id: int) -> int:
+    if MIN_MONOFORUM_CHANNEL_ID <= peer_id < MAX_MONOFORUM_CHANNEL_ID:
+        return peer_id
+
     return MAX_CHANNEL_ID - peer_id
 
 

@@ -63,7 +63,7 @@ class ReplyParameters(Object):
         quote: Optional[str] = None,
         quote_parse_mode: Optional["enums.ParseMode"] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-        quote_position: Optional[int] = None,
+        quote_position: Optional[int] = None
     ):
         super().__init__()
 

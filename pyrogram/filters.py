@@ -549,7 +549,7 @@ private = create(private_filter)
 
 # region group_filter
 async def group_filter(_, __, m: Message):
-    return bool(m.chat and m.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP})
+    return bool(m.chat and m.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP, enums.ChatType.FORUM})
 
 
 group = create(group_filter)
@@ -565,6 +565,17 @@ async def channel_filter(_, __, m: Message):
 
 channel = create(channel_filter)
 """Filter messages sent in channels."""
+
+
+# endregion
+
+# region direct_filter
+async def direct_filter(_, __, m: Message):
+    return bool(m.chat and m.chat.type == enums.ChatType.DIRECT)
+
+
+direct = create(direct_filter)
+"""Filter messages sent in direct."""
 
 
 # endregion

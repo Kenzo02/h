@@ -28,9 +28,12 @@ from .checked_gift_code import CheckedGiftCode
 from .contact_registered import ContactRegistered
 from .contact import Contact
 from .dice import Dice
+from .direct_message_price_changed import DirectMessagePriceChanged
+from .direct_topic import DirectMessagesTopic
 from .document import Document
 from .external_reply_info import ExternalReplyInfo
 from .fact_check import FactCheck
+from .formatted_text import FormattedText
 from .forum_topic import ForumTopic
 from .forum_topic_closed import ForumTopicClosed
 from .forum_topic_created import ForumTopicCreated
@@ -110,9 +113,12 @@ __all__ = [
     "ContactRegistered",
     "Contact",
     "Dice",
+    "DirectMessagePriceChanged",
+    "DirectMessagesTopic",
     "Document",
     "ExternalReplyInfo",
     "FactCheck",
+    "FormattedText",
     "ForumTopic",
     "ForumTopicClosed",
     "ForumTopicCreated",

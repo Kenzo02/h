@@ -36,6 +36,7 @@ from .get_available_effects import GetAvailableEffects
 from .get_chat_history import GetChatHistory
 from .get_chat_history_count import GetChatHistoryCount
 from .get_custom_emoji_stickers import GetCustomEmojiStickers
+from .get_direct_messages_chat_topic_history import GetDirectMessagesChatTopicHistory
 from .get_discussion_message import GetDiscussionMessage
 from .get_discussion_replies import GetDiscussionReplies
 from .get_discussion_replies_count import GetDiscussionRepliesCount
@@ -78,6 +79,8 @@ from .send_web_page import SendWebPage
 from .start_bot import StartBot
 from .stop_poll import StopPoll
 from .stream_media import StreamMedia
+from .translate_message_text import TranslateMessageText
+from .translate_text import TranslateText
 from .view_messages import ViewMessages
 from .vote_poll import VotePoll
 
@@ -146,6 +149,9 @@ class Messages(
     GetDiscussionReplies,
     GetDiscussionRepliesCount,
     StreamMedia,
-    GetCustomEmojiStickers
+    TranslateMessageText,
+    TranslateText,
+    GetCustomEmojiStickers,
+    GetDirectMessagesChatTopicHistory
 ):
     pass

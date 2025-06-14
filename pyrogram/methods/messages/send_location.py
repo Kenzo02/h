@@ -33,6 +33,7 @@ class SendLocation:
         longitude: float,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         schedule_date: datetime = None,
@@ -76,7 +77,11 @@ class SendLocation:
 
             message_thread_id (``int``, *optional*):
                 Unique identifier for the target message thread (topic) of the forum.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -178,7 +183,8 @@ class SendLocation:
                 reply_to=await utils.get_reply_to(
                     self,
                     reply_parameters,
-                    message_thread_id
+                    message_thread_id,
+                    direct_messages_chat_topic_id
                 ),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),

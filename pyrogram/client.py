@@ -53,7 +53,7 @@ from pyrogram.methods import Methods
 from pyrogram.session import Auth, Session
 from pyrogram.storage import Storage, FileStorage, MemoryStorage
 from pyrogram.types import User, TermsOfService, LinkPreviewOptions
-from pyrogram.utils import ainput
+from pyrogram.utils import MIN_MONOFORUM_CHANNEL_ID, ainput
 from pyrogram.qrlogin import QRLogin
 from .connection import Connection
 from .connection.transport import TCP, TCPAbridged
@@ -798,7 +798,7 @@ class Client(Methods):
                             pts=local_pts,
                             limit=10000,
                             force=False
-                        ) if id < 0 else
+                        ) if id < 0 or id > MIN_MONOFORUM_CHANNEL_ID else
                         raw.functions.updates.GetDifference(
                             pts=local_pts,
                             date=local_date,

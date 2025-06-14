@@ -55,6 +55,7 @@ from .restriction import Restriction
 from .stories_stealth_mode import StoriesStealthMode
 from .user import User
 from .username import Username
+from .verification_status import VerificationStatus
 from .video_chat_ended import VideoChatEnded
 from .video_chat_members_invited import VideoChatMembersInvited
 from .video_chat_scheduled import VideoChatScheduled
@@ -77,6 +78,7 @@ __all__ = [
     "Dialog",
     "User",
     "Username",
+    "VerificationStatus",
     "Restriction",
     "StoriesStealthMode",
     "ChatEvent",

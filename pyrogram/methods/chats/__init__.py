@@ -43,6 +43,8 @@ from .get_chat_settings import GetChatSettings
 from .get_similar_channels import GetSimilarChannels
 from .get_suitable_discussion_chats import GetSuitableDiscussionChats
 from .get_dialogs import GetDialogs
+from .get_direct_messages_topics_by_id import GetDirectMessagesTopicsByID
+from .get_direct_messages_topics import GetDirectMessagesTopics
 from .get_dialogs_count import GetDialogsCount
 from .get_folders import GetFolders
 from .get_forum_topics import GetForumTopics
@@ -60,6 +62,7 @@ from .promote_chat_member import PromoteChatMember
 from .restrict_chat_member import RestrictChatMember
 from .set_administrator_title import SetAdministratorTitle
 from .set_chat_description import SetChatDescription
+from .set_chat_direct_messages_group import SetChatDirectMessagesGroup
 from .set_chat_permissions import SetChatPermissions
 from .set_chat_discussion_group import SetChatDiscussionGroup
 from .set_chat_photo import SetChatPhoto
@@ -102,6 +105,7 @@ class Chats(
     SetChatTitle,
     SetChatTTL,
     SetChatDescription,
+    SetChatDirectMessagesGroup,
     PinChatMessage,
     UnpinChatMessage,
     PinForumTopic,
@@ -110,6 +114,8 @@ class Chats(
     UpdateColor,
     EditFolder,
     GetDialogs,
+    GetDirectMessagesTopicsByID,
+    GetDirectMessagesTopics,
     GetChatMembersCount,
     SetChatUsername,
     SetChatPermissions,

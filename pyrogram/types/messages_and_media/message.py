@@ -23,7 +23,7 @@ from typing import BinaryIO, Callable, Dict, List, Match, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
-from pyrogram.errors import ChannelForumMissing, ChannelPrivate, MessageIdsEmpty, PeerIdInvalid
+from pyrogram.errors import ChannelForumMissing, ChannelPrivate, MessageIdsEmpty, PeerIdInvalid, ChatAdminRequired
 from pyrogram.parser import Parser
 from pyrogram.parser import utils as parser_utils
 
@@ -101,7 +101,11 @@ class Message(Object, Update):
 
         message_thread_id (``int``, *optional*):
             Unique identifier of a message thread to which the message belongs.
-            For supergroups only.
+            For forums only.
+
+        direct_messages_chat_topic_id (``int``, *optional*):
+            Unique identifier of a topic in a channel direct messages chat administered by the current user.
+            For direct chats only.
 
         effect_id (``int``, *optional*):
             Unique identifier of the message effect.
@@ -379,8 +383,11 @@ class Message(Object, Update):
         paid_messages_refunded (:obj:`~pyrogram.types.PaidMessagesRefunded`, *optional*):
             Service message: paid messages refunded.
 
-        paid_messages_price (:obj:`~pyrogram.types.PaidMessagesPriceChanged`, *optional*):
+        paid_messages_price_changed (:obj:`~pyrogram.types.PaidMessagesPriceChanged`, *optional*):
             Service message: paid messages price.
+
+        direct_message_price_changed (:obj:`~pyrogram.types.DirectMessagePriceChanged`, *optional*):
+            Service message: direct messages price.
 
         gift_code (:obj:`~pyrogram.types.GiftCode`, *optional*):
             Service message: gift code information.
@@ -515,6 +522,7 @@ class Message(Object, Update):
         topic: Optional["types.ForumTopic"] = None,
         forward_origin: Optional["types.MessageOrigin"] = None,
         message_thread_id: Optional[int] = None,
+        direct_messages_chat_topic_id: Optional[int] = None,
         effect_id: Optional[int] = None,
         reply_to_message_id: Optional[int] = None,
         reply_to_story_id: Optional[int] = None,
@@ -596,6 +604,7 @@ class Message(Object, Update):
         web_app_data: Optional["types.WebAppData"] = None,
         paid_messages_refunded: Optional["types.PaidMessagesRefunded"] = None,
         paid_messages_price_changed: Optional["types.PaidMessagesPriceChanged"] = None,
+        direct_message_price_changed: Optional["types.DirectMessagePriceChanged"] = None,
         gift_code: Optional["types.GiftCode"] = None,
         gifted_premium: Optional["types.GiftedPremium"] = None,
         gifted_stars: Optional["types.GiftedStars"] = None,
@@ -654,6 +663,7 @@ class Message(Object, Update):
         self.topic = topic
         self.forward_origin = forward_origin
         self.message_thread_id = message_thread_id
+        self.direct_messages_chat_topic_id = direct_messages_chat_topic_id
         self.effect_id = effect_id
         self.reply_to_message_id = reply_to_message_id
         self.reply_to_story_id = reply_to_story_id
@@ -738,7 +748,8 @@ class Message(Object, Update):
         self.phone_call_ended = phone_call_ended
         self.web_app_data = web_app_data
         self.paid_messages_refunded = paid_messages_refunded
-        self.paid_messages_price = paid_messages_price_changed
+        self.paid_messages_price_changed = paid_messages_price_changed
+        self.direct_message_price_changed = direct_message_price_changed
         self.gift_code = gift_code
         self.gifted_premium = gifted_premium
         self.gifted_stars = gifted_stars
@@ -852,7 +863,8 @@ class Message(Object, Update):
         forum_topic_reopened = None
         web_app_data = None
         paid_messages_refunded = None
-        paid_messages_price = None
+        paid_messages_price_changed = None
+        direct_message_price_changed = None
 
         service_type = enums.MessageServiceType.UNSUPPORTED
 
@@ -1048,8 +1060,12 @@ class Message(Object, Update):
             service_type = enums.MessageServiceType.PAID_MESSAGES_REFUNDED
             paid_messages_refunded = types.PaidMessagesRefunded._parse(action)
         elif isinstance(action, raw.types.MessageActionPaidMessagesPrice):
-            service_type = enums.MessageServiceType.PAID_MESSAGES_PRICE
-            paid_messages_price = types.PaidMessagesPriceChanged._parse(action)
+            if chat.type == enums.ChatType.DIRECT:
+                service_type = enums.MessageServiceType.DIRECT_MESSAGE_PRICE_CHANGED
+                direct_message_price_changed = types.DirectMessagePriceChanged._parse(action)
+            else:
+                service_type = enums.MessageServiceType.PAID_MESSAGES_PRICE_CHANGED
+                paid_messages_price_changed = types.PaidMessagesPriceChanged._parse(action)
 
         parsed_message = Message(
             id=message.id,
@@ -1106,7 +1122,8 @@ class Message(Object, Update):
             forum_topic_reopened=forum_topic_reopened,
             web_app_data=web_app_data,
             paid_messages_refunded=paid_messages_refunded,
-            paid_messages_price_changed=paid_messages_price,
+            paid_messages_price_changed=paid_messages_price_changed,
+            direct_message_price_changed=direct_message_price_changed,
             reactions=types.MessageReactions._parse(client, message.reactions),
             business_connection_id=business_connection_id,
             raw=message,
@@ -1207,7 +1224,6 @@ class Message(Object, Update):
                 chats,
             )
 
-        message_thread_id = None
         photo = None
         location = None
         contact = None
@@ -1344,7 +1360,6 @@ class Message(Object, Update):
 
         parsed_message = Message(
             id=message.id,
-            message_thread_id=message_thread_id,
             effect_id=getattr(message, "effect", None),
             date=utils.timestamp_to_datetime(message.date),
             chat=chat,
@@ -1525,7 +1540,9 @@ class Message(Object, Update):
         if not parsed_message.topic and parsed_message.chat.is_forum:
             parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.message_thread_id)]
 
-            if not parsed_topic and client.fetch_topics and client.me and not client.me.is_bot:
+            if parsed_topic:
+                parsed_message.topic = parsed_topic
+            elif client.fetch_topics and client.me and not client.me.is_bot:
                 try:
                     parsed_message.topic = await client.get_forum_topics_by_id(
                         chat_id=parsed_message.chat.id,
@@ -1537,7 +1554,24 @@ class Message(Object, Update):
                 except (ChannelPrivate, ChannelForumMissing):
                     pass
 
-            parsed_message.topic = parsed_topic
+        if chat.type == enums.ChatType.DIRECT:
+            parsed_message.direct_messages_chat_topic_id = message.saved_peer_id.user_id
+
+            parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.direct_messages_chat_topic_id)]
+
+            if parsed_topic:
+                parsed_message.topic = parsed_topic
+            elif client.fetch_topics:
+                try:
+                    parsed_message.topic = await client.get_direct_messages_topics_by_id(
+                        chat_id=parsed_message.chat.id,
+                        topic_ids=parsed_message.direct_messages_chat_topic_id
+                    )
+
+                    if parsed_message.topic:
+                        client.topic_cache[(parsed_message.chat.id, parsed_message.topic.id)] = parsed_message.topic
+                except ChatAdminRequired:
+                    pass
 
         if not parsed_message.poll:  # Do not cache poll messages
             client.message_cache[(parsed_message.chat.id, parsed_message.id)] = parsed_message
@@ -1700,6 +1734,7 @@ class Message(Object, Update):
         link_preview_options: "types.LinkPreviewOptions" = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -1759,7 +1794,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -1810,6 +1849,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -1821,6 +1863,7 @@ class Message(Object, Update):
             link_preview_options=link_preview_options,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             show_caption_above_media=show_caption_above_media,
             reply_parameters=reply_parameters,
@@ -1863,6 +1906,7 @@ class Message(Object, Update):
             "types.ForceReply"
         ] = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         progress: Callable = None,
@@ -1937,7 +1981,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -2003,6 +2051,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -2020,6 +2071,7 @@ class Message(Object, Update):
             thumb=thumb,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -2047,6 +2099,7 @@ class Message(Object, Update):
         thumb: Union[str, BinaryIO] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -2124,7 +2177,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -2190,6 +2247,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -2205,6 +2265,7 @@ class Message(Object, Update):
             thumb=thumb,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -2228,6 +2289,7 @@ class Message(Object, Update):
         caption_entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
@@ -2285,7 +2347,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
                 Describes reply parameters for the message that is being sent.
@@ -2323,6 +2389,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -2334,6 +2403,7 @@ class Message(Object, Update):
             caption_entities=caption_entities,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
@@ -2402,6 +2472,7 @@ class Message(Object, Update):
         vcard: str = "",
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -2460,7 +2531,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -2502,6 +2577,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -2513,6 +2591,7 @@ class Message(Object, Update):
             vcard=vcard,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -2538,6 +2617,7 @@ class Message(Object, Update):
         force_document: bool = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         schedule_date: datetime = None,
@@ -2617,7 +2697,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -2689,6 +2773,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -2703,6 +2790,7 @@ class Message(Object, Update):
             force_document=force_document,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             schedule_date=schedule_date,
@@ -2824,6 +2912,7 @@ class Message(Object, Update):
         quote: bool = None,
         disable_notification: bool = None,
         message_thread_id: bool = None,
+        direct_messages_chat_topic_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         paid_message_star_count: int = None,
 
@@ -2867,7 +2956,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
                 Describes reply parameters for the message that is being sent.
@@ -2892,12 +2985,16 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         return await self._client.send_inline_bot_result(
             chat_id=self.chat.id,
             query_id=query_id,
             result_id=result_id,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             reply_parameters=reply_parameters,
             paid_message_star_count=paid_message_star_count,
 
@@ -2914,6 +3011,7 @@ class Message(Object, Update):
         quote: bool = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -2965,7 +3063,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -3007,6 +3109,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -3016,6 +3121,7 @@ class Message(Object, Update):
             longitude=longitude,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -3034,6 +3140,7 @@ class Message(Object, Update):
         quote: bool = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         allow_paid_broadcast: bool = None,
@@ -3078,7 +3185,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -3117,6 +3228,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -3125,6 +3239,7 @@ class Message(Object, Update):
             media=media,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             allow_paid_broadcast=allow_paid_broadcast,
@@ -3149,6 +3264,7 @@ class Message(Object, Update):
         ttl_seconds: int = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         view_once: bool = None,
@@ -3223,7 +3339,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -3293,6 +3413,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -3307,6 +3430,7 @@ class Message(Object, Update):
             ttl_seconds=ttl_seconds,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             view_once=view_once,
@@ -3545,6 +3669,7 @@ class Message(Object, Update):
         caption_entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -3610,7 +3735,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -3676,6 +3805,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -3688,6 +3820,7 @@ class Message(Object, Update):
             caption_entities=caption_entities,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -3713,6 +3846,7 @@ class Message(Object, Update):
         foursquare_type: str = "",
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -3780,7 +3914,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -3822,6 +3960,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -3835,6 +3976,7 @@ class Message(Object, Update):
             foursquare_type=foursquare_type,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -3867,6 +4009,7 @@ class Message(Object, Update):
         supports_streaming: bool = True,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         no_sound: bool = None,
@@ -3969,7 +4112,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -4039,6 +4186,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -4060,6 +4210,7 @@ class Message(Object, Update):
             supports_streaming=supports_streaming,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             no_sound=no_sound,
@@ -4084,6 +4235,7 @@ class Message(Object, Update):
         thumb: Union[str, BinaryIO] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         protect_content: bool = None,
@@ -4151,7 +4303,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -4224,6 +4380,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -4235,6 +4394,7 @@ class Message(Object, Update):
             thumb=thumb,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             protect_content=protect_content,
@@ -4262,6 +4422,7 @@ class Message(Object, Update):
         duration: int = 0,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         view_once: bool = None,
@@ -4328,7 +4489,11 @@ class Message(Object, Update):
 
             message_thread_id (``int``, *optional*):
                 Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -4398,6 +4563,9 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
 
@@ -4410,6 +4578,7 @@ class Message(Object, Update):
             duration=duration,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
+            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             view_once=view_once,
@@ -4436,6 +4605,7 @@ class Message(Object, Update):
         entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
+        direct_messages_chat_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -4505,8 +4675,12 @@ class Message(Object, Update):
                 Users will receive a notification with no sound.
 
             message_thread_id (``int``, *optional*):
-                Unique identifier for the target message thread (topic) of the forum.
-                for forum supergroups only.
+                Unique identifier of a message thread to which the message belongs.
+                For forums only.
+
+            direct_messages_chat_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -4550,6 +4724,9 @@ class Message(Object, Update):
 
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
+
+        if direct_messages_chat_topic_id is None:
+            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -5259,16 +5436,18 @@ class Message(Object, Update):
                 Defaults to True.
 
         Returns:
-            True on success, False otherwise.
+            ``bool``: True on success, False otherwise.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
         """
-        return await self._client.delete_messages(
+        r = await self._client.delete_messages(
             chat_id=self.chat.id,
             message_ids=self.id,
             revoke=revoke
         )
+
+        return bool(r)
 
     async def click(
         self,
