@@ -95,6 +95,11 @@ class SaveFile:
         Raises:
             RPCError: In case of a Telegram RPC error.
         """
+        # If the given path is already an InputFile (or InputFileBig) instance, nothing needs to be uploaded.
+        # Simply return it so that callers can reuse previously-uploaded files transparently.
+        if isinstance(path, (raw.types.InputFile, raw.types.InputFileBig)):
+            return path
+
         async with self.save_file_semaphore:
             if path is None:
                 return None
