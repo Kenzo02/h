@@ -146,12 +146,6 @@ class Session:
 
                 self.ping_task = self.client.loop.create_task(self.ping_worker())
 
-                if not self.is_media and callable(self.client.connect_handler):
-                    try:
-                        await self.client.connect_handler(self.client)
-                    except Exception as e:
-                        log.exception(e)
-
                 log.info("Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer)
                 log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
                 log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
@@ -173,7 +167,19 @@ class Session:
 
         log.info("Session started")
 
+        if callable(self.client.connect_handler):
+            try:
+                await self.client.connect_handler(self.client, self)
+            except Exception as e:
+                log.exception(e)
+
     async def stop(self):
+        if callable(self.client.disconnect_handler):
+            try:
+                await self.client.disconnect_handler(self.client, self)
+            except Exception as e:
+                log.exception(e)
+
         self.is_started.clear()
 
         self.stored_msg_ids.clear()
@@ -189,12 +195,6 @@ class Session:
 
         if self.recv_task:
             await self.recv_task
-
-        if not self.is_media and callable(self.client.disconnect_handler):
-            try:
-                await self.client.disconnect_handler(self.client)
-            except Exception as e:
-                log.exception(e)
 
         log.info("Session stopped")
 

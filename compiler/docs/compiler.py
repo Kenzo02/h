@@ -283,6 +283,8 @@ def pyrogram_api():
             get_discussion_replies_count
             get_custom_emoji_stickers
             get_direct_messages_chat_topic_history
+            delete_direct_messages_chat_topic_history
+            set_direct_messages_chat_topic_is_marked_as_unread
             send_web_page
             start_bot
             delete_chat_history

@@ -316,6 +316,7 @@ MESSAGE_TOO_LONG	The provided message text is too long.
 MESSAGE_TOO_OLD	The message is too old, the requested information is not available.
 METHOD_INVALID	The specified API method is invalid and cannot be used.
 MIN_DATE_INVALID	The specified minimum date is invalid.
+MONOFORUM_FILTER_INVALID	The specified filter is invalid.
 MSG_ID_INVALID	The message ID used in the peer was invalid.
 MSG_TOO_OLD	chat_read_mark_expire_period have passed since the message was sent, read receipts were deleted.
 MSG_VOICE_MISSING	The message does not contain a voice message.

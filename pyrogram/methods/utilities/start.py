@@ -72,6 +72,8 @@ class Start:
 
                 asyncio.run(main())
         """
+        self.load_plugins()
+        
         is_authorized = await self.connect()
 
         try:
