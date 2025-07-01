@@ -41,6 +41,7 @@ from pyrogram.errors import (
 )
 from pyrogram.raw.all import layer
 from pyrogram.raw.core import FutureSalts, Int, MsgContainer, TLObject
+from ..helpers import log_task_exception
 
 from .internals import MsgFactory, MsgId
 
@@ -67,6 +68,21 @@ class Session:
         429: "transport flood",
         444: "invalid DC"
     }
+
+    @staticmethod
+    def _log_task_exception(task: asyncio.Task):
+        """Log any unhandled exception raised by an asyncio.Task."""
+        if task.cancelled():
+            return
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+        except Exception as err:  # pragma: no cover
+            log.exception("Error while retrieving task exception: %s", err)
+            return
+        if exc is not None:
+            log.exception("Unhandled exception in background task", exc_info=exc)
 
     def __init__(
         self,
@@ -276,7 +292,8 @@ class Session:
                 msg_id = msg.body.msg_id
             else:
                 if self.client is not None:
-                    self.client.loop.create_task(self.client.handle_updates(msg.body))
+                    task = self.client.loop.create_task(self.client.handle_updates(msg.body))
+                    task.add_done_callback(log_task_exception)
 
             if msg_id in self.results:
                 self.results[msg_id].value = getattr(msg.body, "result", msg.body)

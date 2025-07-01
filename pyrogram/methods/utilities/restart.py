@@ -17,6 +17,12 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 import pyrogram
+import asyncio
+import logging
+from ...helpers import log_task_exception
+
+
+log = logging.getLogger(__name__)
 
 
 class Restart:
@@ -68,6 +74,7 @@ class Restart:
         if block:
             await do_it()
         else:
-            self.loop.create_task(do_it())
+            task = self.loop.create_task(do_it())
+            task.add_done_callback(log_task_exception)
 
         return self
