@@ -77,12 +77,11 @@ class Parser(HTMLParser):
                 entity = raw.types.MessageEntityTextUrl
                 extra["url"] = url
         elif tag == "emoji":
-            entity = raw.types.MessageEntityCustomEmoji
             try:
-                custom_emoji_id = int(attrs.get("id"))
-            except Exception as e:
-                custom_emoji_id = 0
-            extra["document_id"] = custom_emoji_id
+                extra["document_id"] = int(attrs["id"])
+                entity = raw.types.MessageEntityCustomEmoji
+            except (KeyError, ValueError):
+                return
         else:
             return
 
