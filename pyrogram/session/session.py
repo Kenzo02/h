@@ -460,3 +460,24 @@ class Session:
                 await asyncio.sleep(0.5)
 
                 return await self.invoke(query, retries - 1, timeout)
+            except TimeoutError as e:
+                # Continuous timeouts likely mean the connection is broken. Attempt a full session restart
+                # before retrying (bounded by the remaining retries).
+                if retries == 0:
+                    raise e
+
+                log.warning('[%s] Timeout while executing "%s" → restarting session and retrying (%s/%s)',
+                            self.client.name,
+                            query_name,
+                            Session.MAX_RETRIES - retries + 1,
+                            Session.MAX_RETRIES)
+
+                try:
+                    await self.restart()
+                except Exception as err:  # pragma: no cover
+                    log.exception('Error while restarting session after timeout: %s', err)
+
+                # Give the session a brief moment to settle
+                await asyncio.sleep(0.5)
+
+                return await self.invoke(query, retries - 1, timeout)
