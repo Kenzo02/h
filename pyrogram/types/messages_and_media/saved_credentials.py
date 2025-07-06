@@ -16,12 +16,35 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from .authorization import *
-from .bots_and_keyboards import *
-from .inline_mode import *
-from .input_content import *
-from .list import List
-from .messages_and_media import *
-from .object import Object
-from .update import *
-from .user_and_chats import *
+from pyrogram import raw
+
+from ..object import Object
+
+
+class SavedCredentials(Object):
+    """Contains information about saved payment credentials.
+
+    Parameters:
+        id (``str``):
+            Unique identifier of the saved credentials.
+
+        title (``str``):
+            Title of the saved credentials.
+    """
+    def __init__(
+        self,
+        *,
+        id: str,
+        title: str
+    ):
+        super().__init__()
+
+        self.id = id
+        self.title = title
+
+    @staticmethod
+    def _parse(credential: "raw.base.PaymentSavedCredentials") -> "SavedCredentials":
+        return SavedCredentials(
+            id=credential.id,
+            title=credential.title
+        )

@@ -16,12 +16,37 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from .authorization import *
-from .bots_and_keyboards import *
-from .inline_mode import *
-from .input_content import *
-from .list import List
-from .messages_and_media import *
-from .object import Object
-from .update import *
-from .user_and_chats import *
+import re
+
+import pyrogram
+from pyrogram import raw
+
+from .input_invoice import InputInvoice
+
+
+class InputInvoiceName(InputInvoice):
+    """An invoice from a link.
+
+    Parameters:
+        name (``str``):
+            The name of the invoice or link itself.
+    """
+    def __init__(
+        self,
+        name: str,
+    ):
+        super().__init__()
+
+        self.name = name
+
+    async def write(self, client: "pyrogram.Client"):
+        match = re.match(r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/\$)([\w-]+)$", self.name)
+
+        if match:
+            slug = match.group(1)
+        else:
+            slug = self.name
+
+        return raw.types.InputInvoiceSlug(
+            slug=slug
+        )
