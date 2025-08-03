@@ -16,54 +16,37 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from typing import List
 import pyrogram
-from pyrogram import raw
+from pyrogram import raw, types
 
 
-class ExportFolderLink:
-    async def export_folder_link(
+class GetFolderInviteLinks:
+    async def get_folder_invite_links(
         self: "pyrogram.Client",
-        folder_id: int
-    ) -> str:
-        """Export link to a user's folder.
+        chat_folder_id: int
+    ) -> List["types.FolderInviteLink"]:
+        """Returns invite links created by the current user for a shareable chat folder.
 
         .. include:: /_includes/usable-by/users.rst
 
         Parameters:
-            folder_id (``int``):
+            chat_folder_id (``int``):
                 Unique identifier (int) of the target folder.
 
         Returns:
-            ``str``: On success, a link to the folder as string is returned.
+            List of :obj:`~pyrogram.types.FolderInviteLink`: On success, information about the invite links is returned.
 
         Example:
             .. code-block:: python
 
-                # Export folder link
-                await app.export_folder_link(folder_id)
+                # Get all folder links
+                await app.get_folder_invite_links(folder_id)
         """
-        folder = await self.get_folders(folder_id)
-
-        if not folder:
-            return
-
-        peers = []
-
-        if folder.included_chats:
-            peers.extend(iter(folder.included_chats))
-
-        if folder.excluded_chats:
-            peers.extend(iter(folder.included_chats))
-
-        if folder.pinned_chats:
-            peers.extend(iter(folder.included_chats))
-
         r = await self.invoke(
-            raw.functions.chatlists.ExportChatlistInvite(
-                chatlist=raw.types.InputChatlistDialogFilter(filter_id=folder_id),
-                title=folder.title,
-                peers=[await self.resolve_peer(i.id) for i in peers],
+            raw.functions.chatlists.GetExportedInvites(
+                chatlist=raw.types.InputChatlistDialogFilter(filter_id=chat_folder_id)
             )
         )
 
-        return r.invite.url
+        return types.List([types.FolderInviteLink._parse(r) for r in r.invites])

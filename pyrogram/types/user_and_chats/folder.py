@@ -481,23 +481,28 @@ class Folder(Object):
             excluded_chats=[i.id for i in self.excluded_chats or [] if peer_id != i.id]
         )
 
-    async def export_link(self):
-        """Bound method *export_link* of :obj:`~pyrogram.types.Folder`.
+    async def create_invite_link(self, name: str = None, chat_ids: List[Union[int, str]] = None) -> "types.FolderInviteLink":
+        """Bound method *create_invite_link* of :obj:`~pyrogram.types.Folder`.
 
         Use as a shortcut for:
 
         .. code-block:: python
 
-            await client.export_folder_link(123456789)
+            await client.create_invite_link(123456789)
 
         Example:
             .. code-block:: python
 
-               await folder.export_link()
+               await folder.create_invite_link()
 
         Returns:
-            ``str``: On success, a link to the folder as string is returned.
+            :obj:`~pyrogram.types.FolderInviteLink`: On success, information about the invite link is returned.
         """
-        return await self._client.export_folder_link(
-            folder_id=self.id
+        if chat_ids is None:
+            chat_ids = [i.id for i in self.included_chats]
+
+        return await self._client.create_folder_invite_link(
+            chat_folder_id=self.id,
+            name=name,
+            chat_ids=chat_ids
         )

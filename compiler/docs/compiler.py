@@ -332,6 +332,8 @@ def pyrogram_api():
             create_group
             create_supergroup
             delete_channel
+            delete_folder_invite_link
+            get_folder_invite_links
             delete_supergroup
             delete_user_history
             set_slow_mode
@@ -350,7 +352,8 @@ def pyrogram_api():
             update_color
             update_chat_notifications
             toggle_forum_topics
-            export_folder_link
+            create_folder_invite_link
+            get_chats_for_folder_invite_link
             get_folders
             create_folder
             delete_folder
@@ -665,6 +668,7 @@ def pyrogram_api():
             VideoNote
             Contact
             Location
+            MaskPosition
             MediaArea
             Venue
             Sticker
@@ -1008,7 +1012,7 @@ def pyrogram_api():
             Folder.update_color
             Folder.pin_chat
             Folder.remove_chat
-            Folder.export_link
+            Folder.create_invite_link
         """,
         active_session="""
         ActiveSession
@@ -1094,6 +1098,8 @@ def pyrogram_api():
             PrivacyRuleType
             GiftForResaleOrder
             PaymentFormType
+            StickerType
+            MaskPointType
         """,
     )
 

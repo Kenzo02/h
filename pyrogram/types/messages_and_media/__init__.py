@@ -57,6 +57,7 @@ from .giveaway_created import GiveawayCreated
 from .giveaway_prize_stars import GiveawayPrizeStars
 from .giveaway_winners import GiveawayWinners
 from .location import Location
+from .mask_position import MaskPosition
 from .media_area import MediaArea
 from .message import Message
 from .message_entity import MessageEntity
@@ -151,6 +152,7 @@ __all__ = [
     "GiveawayPrizeStars",
     "GiveawayWinners",
     "Location",
+    "MaskPosition",
     "MediaArea",
     "Message",
     "MessageEntity",

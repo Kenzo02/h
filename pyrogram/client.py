@@ -226,6 +226,10 @@ class Client(Methods):
             Pass True to automatically fetch stories if they are missing.
             Defaults to True.
 
+        fetch_stickers (``bool``, *optional*):
+            Pass True to automatically fetch names of sticker sets.
+            Defaults to True.
+
         loop (:py:class:`asyncio.AbstractEventLoop`, *optional*):
             Event loop.
 
@@ -297,6 +301,7 @@ class Client(Methods):
         fetch_replies: Optional[bool] = True,
         fetch_topics: Optional[bool] = True,
         fetch_stories: Optional[bool] = True,
+        fetch_stickers: Optional[bool] = True,
         init_connection_params: Optional["raw.base.JSONValue"] = None,
         connection_factory: Type[Connection] = Connection,
         protocol_factory: Type[TCP] = TCPAbridged,
@@ -339,6 +344,7 @@ class Client(Methods):
         self.fetch_replies = fetch_replies
         self.fetch_topics = fetch_topics
         self.fetch_stories = fetch_stories
+        self.fetch_stickers = fetch_stickers
         self.init_connection_params = init_connection_params
         self.connection_factory = connection_factory
         self.protocol_factory = protocol_factory
@@ -450,9 +456,9 @@ class Client(Methods):
                         if not value:
                             continue
 
-                        confirm = (await ainput(f'Is "{value}" correct? (y/N): ', loop=self.loop)).lower()
+                        confirm = await ainput(f'Is "{value}" correct? (y/N): ', loop=self.loop)
 
-                        if confirm == "y":
+                        if confirm.lower() == "y":
                             break
 
                     if ":" in value:
@@ -500,9 +506,9 @@ class Client(Methods):
 
                     try:
                         if not self.password:
-                            confirm = await ainput("Confirm password recovery (y/n): ", loop=self.loop)
+                            confirm = await ainput("Confirm password recovery (y/N): ", loop=self.loop)
 
-                            if confirm == "y":
+                            if confirm.lower() == "y":
                                 email_pattern = await self.send_recovery_code()
                                 print(f"The recovery code has been sent to {email_pattern}")
 
@@ -812,8 +818,11 @@ class Client(Methods):
                             qts=0
                         )
                     )
-                except (ChannelPrivate, ChannelInvalid, PersistentTimestampOutdated, PersistentTimestampInvalid):
+                except (ChannelPrivate, ChannelInvalid):
+                    await self.storage.update_state(id)
                     break
+                except (PersistentTimestampOutdated, PersistentTimestampInvalid):
+                    continue
 
                 if isinstance(diff, raw.types.updates.DifferenceEmpty):
                     await self.storage.update_state(
@@ -827,10 +836,11 @@ class Client(Methods):
                     )
                     break
                 elif isinstance(diff, raw.types.updates.DifferenceTooLong):
+                    local_pts = diff.pts
                     await self.storage.update_state(
                         (
                             id,
-                            diff.pts,
+                            local_pts,
                             None,
                             local_date,
                             local_seq
@@ -862,10 +872,11 @@ class Client(Methods):
                     )
                     break
                 elif isinstance(diff, raw.types.updates.ChannelDifferenceTooLong):
+                    local_pts = diff.dialog.pts
                     await self.storage.update_state(
                         (
                             id,
-                            diff.dialog.pts,
+                            local_pts,
                             None,
                             local_date,
                             local_seq
@@ -958,9 +969,9 @@ class Client(Methods):
                                 print("Invalid value")
                                 continue
 
-                            confirm = (await ainput(f'Is "{value}" correct? (y/N): ', loop=self.loop)).lower()
+                            confirm = await ainput(f'Is "{value}" correct? (y/N): ', loop=self.loop)
 
-                            if confirm == "y":
+                            if confirm.lower() == "y":
                                 await self.storage.api_id(value)
                                 break
                         except Exception as e:

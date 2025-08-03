@@ -26,15 +26,18 @@ from .create_group import CreateGroup
 from .create_supergroup import CreateSupergroup
 from .close_forum_topic import CloseForumTopic
 from .delete_channel import DeleteChannel
+from .delete_folder_invite_link import DeleteFolderInviteLink
 from .delete_chat_photo import DeleteChatPhoto
 from .delete_folder import DeleteFolder
 from .delete_forum_topic import DeleteForumTopic
 from .delete_supergroup import DeleteSupergroup
 from .delete_user_history import DeleteUserHistory
 from .edit_forum_topic import EditForumTopic
-from .export_folder_link import ExportFolderLink
+from .create_folder_invite_link import CreateFolderInviteLink
 from .get_chat import GetChat
+from .get_chats_for_folder_invite_link import GetChatsForFolderInviteLink
 from .get_chat_event_log import GetChatEventLog
+from .get_folder_invite_links import GetFolderInviteLinks
 from .get_chat_member import GetChatMember
 from .get_chat_members import GetChatMembers
 from .get_chat_members_count import GetChatMembersCount
@@ -89,6 +92,7 @@ from .reorder_folders import ReorderFolders
 
 class Chats(
     GetChat,
+    GetChatsForFolderInviteLink,
     LeaveChat,
     LeaveFolder,
     JoinChat,
@@ -135,10 +139,11 @@ class Chats(
     CloseForumTopic,
     AddChatMembers,
     DeleteChannel,
+    DeleteFolderInviteLink,
     DeleteForumTopic,
     DeleteSupergroup,
     EditForumTopic,
-    ExportFolderLink,
+    CreateFolderInviteLink,
     GetPersonalChannels,
     SetAdministratorTitle,
     SetSlowMode,
@@ -150,6 +155,7 @@ class Chats(
     UnpinAllChatMessages,
     MarkChatUnread,
     GetChatEventLog,
+    GetFolderInviteLinks,
     GetChatOnlineCount,
     GetChatSettings,
     GetSimilarChannels,

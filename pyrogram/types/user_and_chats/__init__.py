@@ -29,6 +29,7 @@ from .chat import Chat
 from .chat_admin_with_invite_links import ChatAdminWithInviteLinks
 from .chat_color import ChatColor
 from .chat_event import ChatEvent
+from .folder_invite_link import FolderInviteLink
 from .chat_event_filter import ChatEventFilter
 from .chat_invite_link import ChatInviteLink
 from .chat_join_request import ChatJoinRequest
@@ -82,6 +83,7 @@ __all__ = [
     "Restriction",
     "StoriesStealthMode",
     "ChatEvent",
+    "FolderInviteLink",
     "ChatEventFilter",
     "ChatInviteLink",
     "InviteLinkImporter",
