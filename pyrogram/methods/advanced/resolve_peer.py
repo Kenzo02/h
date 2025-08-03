@@ -23,7 +23,7 @@ from typing import Union
 import pyrogram
 from pyrogram import raw
 from pyrogram import utils
-from pyrogram.errors import PeerIdInvalid
+from pyrogram.errors import PeerIdInvalid, ChannelInvalid, UserInvalid, ChatInvalid
 
 log = logging.getLogger(__name__)
 
@@ -104,35 +104,44 @@ class ResolvePeer:
             peer_type = utils.get_peer_type(peer_id)
 
             if peer_type == "user":
-                await self.fetch_peers(
+                try:
+                    await self.fetch_peers(
+                        await self.invoke(
+                            raw.functions.users.GetUsers(
+                                id=[
+                                    raw.types.InputUser(
+                                        user_id=peer_id,
+                                        access_hash=0
+                                    )
+                                ]
+                            )
+                        )
+                    )
+                except UserInvalid:
+                    raise PeerIdInvalid
+            elif peer_type == "chat":
+                try:
                     await self.invoke(
-                        raw.functions.users.GetUsers(
+                        raw.functions.messages.GetChats(
+                            id=[-peer_id]
+                        )
+                    )
+                except ChatInvalid:
+                    raise PeerIdInvalid
+            else:
+                try:
+                    await self.invoke(
+                        raw.functions.channels.GetChannels(
                             id=[
-                                raw.types.InputUser(
-                                    user_id=peer_id,
+                                raw.types.InputChannel(
+                                    channel_id=utils.get_channel_id(peer_id),
                                     access_hash=0
                                 )
                             ]
                         )
                     )
-                )
-            elif peer_type == "chat":
-                await self.invoke(
-                    raw.functions.messages.GetChats(
-                        id=[-peer_id]
-                    )
-                )
-            else:
-                await self.invoke(
-                    raw.functions.channels.GetChannels(
-                        id=[
-                            raw.types.InputChannel(
-                                channel_id=utils.get_channel_id(peer_id),
-                                access_hash=0
-                            )
-                        ]
-                    )
-                )
+                except ChannelInvalid:
+                    raise PeerIdInvalid
             try:
                 return await self.storage.get_peer_by_id(peer_id)
             except KeyError:
