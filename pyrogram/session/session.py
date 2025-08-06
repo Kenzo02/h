@@ -138,7 +138,8 @@ class Session:
             try:
                 await self.connection.connect()
 
-                self.recv_task = self.client.loop.create_task(self.recv_worker())
+                if self.recv_task is None or self.recv_task.done():
+                    self.recv_task = self.client.loop.create_task(self.recv_worker())
 
                 await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
 
@@ -212,6 +213,7 @@ class Session:
 
         if self.recv_task:
             try:
+                self.recv_task.cancel()
                 await self.recv_task
             except asyncio.CancelledError:
                 pass
@@ -221,10 +223,17 @@ class Session:
         log.info("Session stopped")
 
     async def restart(self):
+        if self.restart_event.is_set():
+            return  # Another restart is already in progress
         self.restart_event.set()
         await self.stop()
         await self.start()
         self.restart_event.clear()
+
+    def safe_restart(self):
+        """Safely restart session avoiding concurrent restarts"""
+        if not self.restart_event.is_set():
+            self.client.loop.create_task(self.restart())
 
     async def handle_packet(self, packet):
         try:
@@ -238,7 +247,7 @@ class Session:
             )
         except ValueError as e:
             log.debug(e)
-            self.client.loop.create_task(self.restart())
+            self.safe_restart()
             return
 
         messages = (
@@ -335,7 +344,7 @@ class Session:
                     ), False
                 )
             except OSError:
-                self.client.loop.create_task(self.restart())
+                self.safe_restart()
                 break
             except RPCError:
                 pass
@@ -367,7 +376,7 @@ class Session:
                     )
 
                 if self.is_started.is_set():
-                    self.client.loop.create_task(self.restart())
+                    self.safe_restart()
 
                 break
 
@@ -470,7 +479,7 @@ class Session:
 
                 # restart was never being called after Exception block
                 if not self.restart_event.is_set():
-                    self.client.loop.create_task(self.restart())
+                    self.safe_restart()
                 else:
                     # multiple Exceptions can be raised in a row, so we need to wait for the restart to finish
                     try:
