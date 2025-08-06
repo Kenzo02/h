@@ -516,6 +516,7 @@ def pyrogram_api():
         advanced="""
         Advanced
             invoke
+            recover_gaps
             resolve_peer
             save_file
         """,

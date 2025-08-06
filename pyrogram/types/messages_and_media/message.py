@@ -23,7 +23,7 @@ from typing import BinaryIO, Callable, Dict, List, Match, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
-from pyrogram.errors import ChannelForumMissing, ChannelPrivate, MessageIdsEmpty, PeerIdInvalid, ChatAdminRequired
+from pyrogram.errors import ChannelForumMissing, ChannelPrivate, ChannelInvalid, MessageIdsEmpty, PeerIdInvalid, ChatAdminRequired
 from pyrogram.parser import Parser
 from pyrogram.parser import utils as parser_utils
 
@@ -1554,7 +1554,7 @@ class Message(Object, Update):
                                 replies=replies - 1,
                                 **reply_to_params
                             )
-                        except (ChannelPrivate, MessageIdsEmpty):
+                        except (ChannelPrivate, ChannelInvalid, MessageIdsEmpty):
                             pass
 
                     parsed_message.reply_to_message = reply_to_message

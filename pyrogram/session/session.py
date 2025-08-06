@@ -211,7 +211,12 @@ class Session:
         await self.connection.close()
 
         if self.recv_task:
-            await self.recv_task
+            try:
+                await self.recv_task
+            except asyncio.CancelledError:
+                pass
+
+            self.recv_task = None
 
         log.info("Session stopped")
 
@@ -341,7 +346,10 @@ class Session:
         log.info("NetworkTask started")
 
         while True:
-            packet = await self.connection.recv()
+            try:
+                packet = await asyncio.wait_for(self.connection.recv(), timeout=1)
+            except asyncio.TimeoutError:
+                continue
 
             if packet is None or len(packet) == 4:
                 if packet:

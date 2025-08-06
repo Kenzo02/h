@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from typing import Union
 import pyrogram
 
 from pyrogram import raw
@@ -34,6 +35,9 @@ class Location(Object):
 
         accuracy_radius (``int``, *optional*):
             The estimated horizontal accuracy of the location, in meters as defined by the sender.
+
+        address (``str``, *optional*):
+            Textual description of the address (mandatory).
     """
 
     def __init__(
@@ -42,20 +46,31 @@ class Location(Object):
         client: "pyrogram.Client" = None,
         longitude: float,
         latitude: float,
-        accuracy_radius: int = None
+        accuracy_radius: int = None,
+        address: str = None
     ):
         super().__init__(client)
 
         self.longitude = longitude
         self.latitude = latitude
         self.accuracy_radius = accuracy_radius
+        self.address = address
 
     @staticmethod
-    def _parse(client, geo_point: "raw.types.GeoPoint") -> "Location":
+    def _parse(client, geo_point: Union["raw.types.GeoPoint", "raw.types.BusinessLocation"]) -> "Location":
         if isinstance(geo_point, raw.types.GeoPoint):
             return Location(
                 longitude=geo_point.long,
                 latitude=geo_point.lat,
                 accuracy_radius=getattr(geo_point, "accuracy_radius", None),
+                client=client
+            )
+
+        if isinstance(geo_point, raw.types.BusinessLocation):
+            return Location(
+                longitude=getattr(geo_point.geo_point, "long", None),
+                latitude=getattr(geo_point.geo_point, "lat", None),
+                accuracy_radius=getattr(geo_point.geo_point, "accuracy_radius", None),
+                address=geo_point.address,
                 client=client
             )
