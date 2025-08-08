@@ -34,6 +34,7 @@ from pyrogram.errors import (
     FloodPremiumWait,
     FloodWait,
     InternalServerError,
+    PersistentTimestampOutdated,
     RPCError,
     SecurityCheckMismatch,
     ServiceUnavailable,
@@ -46,6 +47,19 @@ from ..helpers import log_task_exception
 from .internals import MsgFactory, MsgId
 
 log = logging.getLogger(__name__)
+
+# Sentinel object to distinguish restart interruption from timeout
+RESTART_SENTINEL = object()
+
+
+class SessionRestartedError(Exception):
+    """Raised when a request is interrupted by session restart.
+    
+    This typically happens during session restarts and the request
+    should be retried with a new session. This error helps distinguish
+    between network timeouts and restart-induced interruptions.
+    """
+    pass
 
 
 class Result:
@@ -226,14 +240,36 @@ class Session:
         if self.restart_event.is_set():
             return  # Another restart is already in progress
         self.restart_event.set()
-        await self.stop()
-        await self.start()
-        self.restart_event.clear()
+
+        try:
+            await self.stop()
+
+            # Atomic notification and clearing to avoid race conditions
+            # Take snapshot of pending results first
+            pending_results = list(self.results.items())
+            
+            # Clear collections atomically
+            self.pending_acks.clear()
+            self.results.clear()
+
+            # Notify all pending requests after clearing to avoid KeyError
+            for msg_id, result in pending_results:
+                if not result.event.is_set():
+                    result.value = RESTART_SENTINEL  # Use sentinel to distinguish from timeout
+                    result.event.set()
+
+            # Generate new session ID to ensure fresh session state
+            self.session_id = os.urandom(8)
+
+            await self.start()
+        finally:
+            self.restart_event.clear()
 
     def safe_restart(self):
         """Safely restart session avoiding concurrent restarts"""
         if not self.restart_event.is_set():
-            self.client.loop.create_task(self.restart())
+            task = self.client.loop.create_task(self.restart())
+            task.add_done_callback(self._log_task_exception)
 
     async def handle_packet(self, packet):
         try:
@@ -265,6 +301,16 @@ class Session:
                 else:
                     self.pending_acks.add(msg.msg_id)
 
+            # Handle NewSessionCreated messages first to avoid security check issues after restart
+            if isinstance(msg.body, raw.types.NewSessionCreated):
+                # Add basic time sanity check for security
+                time_diff = (msg.msg_id - MsgId()) / 2 ** 32
+                if abs(time_diff) > 300:  # 5 minutes tolerance for clock skew
+                    log.warning("NewSessionCreated with suspicious timing: %s seconds diff", time_diff)
+                    # Still process but log the warning
+                bisect.insort(self.stored_msg_ids, msg.msg_id)
+                continue
+
             try:
                 if len(self.stored_msg_ids) > Session.STORED_MSG_IDS_MAX_SIZE:
                     del self.stored_msg_ids[:Session.STORED_MSG_IDS_MAX_SIZE // 2]
@@ -294,9 +340,6 @@ class Session:
 
             if isinstance(msg.body, (raw.types.MsgDetailedInfo, raw.types.MsgNewDetailedInfo)):
                 self.pending_acks.add(msg.body.answer_msg_id)
-                continue
-
-            if isinstance(msg.body, raw.types.NewSessionCreated):
                 continue
 
             msg_id = None
@@ -415,7 +458,16 @@ class Session:
             except asyncio.TimeoutError:
                 pass
 
-            result = self.results.pop(msg_id).value
+            # Handle case where results might have been cleared during session restart
+            result_obj = self.results.pop(msg_id, None)
+            if result_obj is None:
+                raise SessionRestartedError("Request interrupted by session restart")
+
+            result = result_obj.value
+
+            # Check for restart interruption using sentinel
+            if result is RESTART_SENTINEL:
+                raise SessionRestartedError("Request interrupted by session restart")
 
             if result is None:
                 raise TimeoutError("Request timed out")
@@ -457,6 +509,18 @@ class Session:
         while True:
             try:
                 return await self.send(query, timeout=timeout)
+            except SessionRestartedError:
+                # Add moderate delay before retry on session restart to prevent rapid restart loops
+                if retries == 0:
+                    raise TimeoutError("Request failed due to session restart")
+
+                delay = min(2.0, 0.5 * (Session.MAX_RETRIES - retries + 1))  # Progressive backoff: 0.5, 1.0, 1.5, 2.0s
+                log.warning('[%s] Session restart interrupted "%s" → waiting %ss before retry (%s/%s)',
+                            self.client.name, query_name, delay,
+                            Session.MAX_RETRIES - retries + 1, Session.MAX_RETRIES)
+
+                await asyncio.sleep(delay)
+                return await self.invoke(query, retries - 1, timeout)
             except (FloodWait, FloodPremiumWait) as e:
                 amount = e.value
 
@@ -477,15 +541,22 @@ class Session:
                     query_name, str(e) or repr(e)
                 )
 
-                # restart was never being called after Exception block
-                if not self.restart_event.is_set():
-                    self.safe_restart()
-                else:
-                    # multiple Exceptions can be raised in a row, so we need to wait for the restart to finish
-                    try:
-                        await asyncio.wait_for(self.restart_event.wait(), self.WAIT_TIMEOUT)
-                    except asyncio.TimeoutError:
-                        pass
+                # Only restart session for network errors (OSError) or certain server errors
+                # Don't restart for temporary server issues like PERSISTENT_TIMESTAMP_OUTDATED
+                should_restart = isinstance(e, OSError) or (
+                    isinstance(e, (InternalServerError, ServiceUnavailable)) and
+                    not isinstance(e, PersistentTimestampOutdated)
+                )
+
+                if should_restart:
+                    if not self.restart_event.is_set():
+                        self.safe_restart()
+                    else:
+                        # multiple Exceptions can be raised in a row, so we need to wait for the restart to finish
+                        try:
+                            await asyncio.wait_for(self.restart_event.wait(), self.WAIT_TIMEOUT)
+                        except asyncio.TimeoutError:
+                            pass
 
                 await asyncio.sleep(0.5)
 
