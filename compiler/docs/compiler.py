@@ -294,6 +294,8 @@ def pyrogram_api():
             send_paid_media
             send_paid_reaction
             add_to_gifs
+            approve_suggested_post
+            decline_suggested_post
             add_checklist_tasks
         """,
         chats="""
@@ -432,6 +434,7 @@ def pyrogram_api():
             get_payment_form
             get_stars_balance
             get_upgraded_gift
+            gift_premium_with_stars
             hide_gift
             search_gifts_for_resale
             send_gift
@@ -557,6 +560,7 @@ def pyrogram_api():
             set_privacy
             get_privacy
             set_global_privacy_settings
+            set_inactive_session_ttl
             get_global_privacy_settings
         """
     )
@@ -712,6 +716,15 @@ def pyrogram_api():
             RefundedPayment
             ReplyParameters
             SuccessfulPayment
+            SuggestedPostInfo
+            SuggestedPostPaid
+            SuggestedPostPrice
+            SuggestedPostPriceStar
+            SuggestedPostPriceTon
+            SuggestedPostApprovalFailed
+            SuggestedPostApproved
+            SuggestedPostDeclined
+            SuggestedPostRefunded
             TextQuote
             PaidMediaInfo
             PaidMediaPreview
@@ -727,6 +740,7 @@ def pyrogram_api():
             ChatBoost
             ContactRegistered
             ScreenshotTaken
+            StarAmount
             WriteAccessAllowed
             GiftAttribute
             StoryView
@@ -734,6 +748,7 @@ def pyrogram_api():
             ChatBackground
             ChatTheme
             GiftedStars
+            GiftedTon
             UpgradedGiftAttributeId
         """,
         bot_keyboards="""
@@ -816,6 +831,7 @@ def pyrogram_api():
             InputPrivacyRuleDisallowChats
             InputPrivacyRuleDisallowContacts
             InputPrivacyRuleDisallowUsers
+            InputSuggestedPostInfo
             InputTextMessageContent
             InputVenueMessageContent
         """,
@@ -1101,6 +1117,8 @@ def pyrogram_api():
             PaymentFormType
             StickerType
             MaskPointType
+            SuggestedPostRefundReason
+            SuggestedPostState
         """,
     )
 

@@ -50,6 +50,7 @@ class SendVideoNote:
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
+        suggested_post_info: "types.InputSuggestedPostInfo" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -83,9 +84,9 @@ class SendVideoNote:
                 pass a file path as string to upload a new video note that exists on your local machine, or
                 pass a binary file-like object with its attribute ".name" set for in-memory uploads.
                 Sending video notes by a URL is currently unsupported.
-                
+
                 .. note::
-                    When uploading from local file: if the file is larger than 10 MB, Telegram will upload 
+                    When uploading from local file: if the file is larger than 10 MB, Telegram will upload
                     it as a regular video instead of a video note.
 
             duration (``int``, *optional*):
@@ -140,6 +141,9 @@ class SendVideoNote:
 
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
+
+            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+                Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
                 Additional interface options. An object for an inline keyboard, custom reply keyboard,
@@ -310,6 +314,7 @@ class SendVideoNote:
                             noforwards=protect_content,
                             allow_paid_floodskip=allow_paid_broadcast,
                             allow_paid_stars=paid_message_star_count,
+                            suggested_post=suggested_post_info.write() if suggested_post_info else None,
                             reply_markup=await reply_markup.write(self) if reply_markup else None,
                             message="",
                             effect=effect_id

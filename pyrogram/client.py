@@ -502,7 +502,7 @@ class Client(Methods):
                     print("Password hint: {}".format(await self.get_password_hint()))
 
                     if not self.password:
-                        self.password = await ainput("Enter password (empty to recover): ", hide=self.hide_password, loop=self.loop)
+                        self.password = await ainput("Enter 2FA password (empty to recover): ", hide=self.hide_password, loop=self.loop)
 
                     try:
                         if not self.password:
@@ -557,12 +557,30 @@ class Client(Methods):
 
         return signed_up
 
-    async def authorize_qr(self, except_ids: List[int] = []) -> User:
+    async def authorize_qr(self, except_ids: List[int] = []) -> "User":
         from qrcode import QRCode
+
         qr_login = QRLogin(self, except_ids)
+        await qr_login.recreate()
+
+        qr = QRCode(version=1)
+        signed_in = None
 
         while True:
             try:
+                print(
+                    "\x1b[2J\n"
+                    f"Welcome to Pyrogram (version {__version__})\n"
+                    "Pyrogram is free software and comes with ABSOLUTELY NO WARRANTY. Licensed\n"
+                    f"under the terms of the {__license__}.\n"
+                    "Scan the QR code below to login\n"
+                    "Settings -> Privacy and Security -> Active Sessions -> Scan QR Code.",
+                    flush=True
+                )
+
+                qr.clear()
+                qr.add_data(qr_login.url)
+                qr.print_ascii(tty=True)
                 log.info("Waiting for QR code being scanned.")
 
                 signed_in = await qr_login.wait()
@@ -573,21 +591,42 @@ class Client(Methods):
             except asyncio.TimeoutError:
                 log.info("Recreating QR code.")
                 await qr_login.recreate()
-                print("\x1b[2J")
-                print(f"Welcome to Pyrogram (version {__version__})")
-                print(f"Pyrogram is free software and comes with ABSOLUTELY NO WARRANTY. Licensed\n"
-                      f"under the terms of the {__license__}.\n")
-                print("Scan the QR code below to login")
-                print("Settings -> Privacy and Security -> Active Sessions -> Scan QR Code.\n")
+            except SessionPasswordNeeded as e:
+                print(e.MESSAGE)
 
-                qrcode = QRCode(version=1)
-                qrcode.add_data(qr_login.url)
-                qrcode.print_ascii(invert=True)
-            except SessionPasswordNeeded:
-                print(f"Password hint: {await self.get_password_hint()}")
-                return await self.check_password(
-                    await ainput("Enter 2FA password: ", hide=self.hide_password, loop=self.loop)
-                )
+                while True:
+                    print("Password hint: {}".format(await self.get_password_hint()))
+
+                    if not self.password:
+                        self.password = await ainput("Enter 2FA password (empty to recover): ", hide=self.hide_password, loop=self.loop)
+
+                    try:
+                        if not self.password:
+                            confirm = await ainput("Confirm password recovery (y/N): ", loop=self.loop)
+
+                            if confirm.lower() == "y":
+                                email_pattern = await self.send_recovery_code()
+                                print(f"The recovery code has been sent to {email_pattern}")
+
+                                while True:
+                                    recovery_code = await ainput("Enter recovery code: ", loop=self.loop)
+
+                                    try:
+                                        return await self.recover_password(recovery_code)
+                                    except BadRequest as e:
+                                        print(e.MESSAGE)
+                                    except Exception as e:
+                                        log.exception(e)
+                                        raise
+                            else:
+                                self.password = None
+                        else:
+                            return await self.check_password(self.password)
+                    except BadRequest as e:
+                        print(e.MESSAGE)
+                        self.password = None
+            else:
+                break
 
     def set_parse_mode(self, parse_mode: Optional["enums.ParseMode"]):
         """Set the parse mode to be used globally by the client.

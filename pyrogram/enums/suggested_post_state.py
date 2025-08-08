@@ -16,21 +16,19 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from .get_account_ttl import GetAccountTTL
-from .get_global_privacy_settings import GetGlobalPrivacySettings
-from .get_privacy import GetPrivacy
-from .set_account_ttl import SetAccountTTL
-from .set_global_privacy_settings import SetGlobalPrivacySettings
-from .set_inactive_session_ttl import SetInactiveSessionTTL
-from .set_privacy import SetPrivacy
+from enum import auto
 
-class Account(
-    GetAccountTTL,
-    GetGlobalPrivacySettings,
-    GetPrivacy,
-    SetAccountTTL,
-    SetGlobalPrivacySettings,
-    SetInactiveSessionTTL,
-    SetPrivacy
-):
-    pass
+from .auto_name import AutoName
+
+
+class SuggestedPostState(AutoName):
+    """Suggested post state enumeration used in :obj:`~pyrogram.types.SuggestedPostInfo`."""
+
+    PENDING = auto()
+    """The post must be approved or declined."""
+
+    APPROVED = auto()
+    """The post was approved"""
+
+    DECLINED = auto()
+    """The post was declined"""

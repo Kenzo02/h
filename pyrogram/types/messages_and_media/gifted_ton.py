@@ -23,8 +23,8 @@ from pyrogram import raw, types
 from ..object import Object
 
 
-class GiftedStars(Object):
-    """Telegram Stars were gifted to a user.
+class GiftedTon(Object):
+    """Toncoins were gifted to a user.
 
     Parameters:
         gifter (:obj:`~pyrogram.types.User`, *optional*):
@@ -34,20 +34,8 @@ class GiftedStars(Object):
         receiver (:obj:`~pyrogram.types.User`):
             User that received Telegram Premium.
 
-        currency (``str``):
-            Currency for the paid amount.
-
-        amount (``int``):
-            The paid amount, in the smallest units of the currency.
-
-        cryptocurrency (``str``, *optional*):
-            Cryptocurrency used to pay for the gift.
-
-        cryptocurrency_amount (``int``, *optional*):
-            The paid amount, in the smallest units of the cryptocurrency.
-
-        star_count (``int``):
-            Number of Telegram Stars that were gifted.
+        ton_amount (``int``):
+            The received amount of Toncoins, in the smallest units of the cryptocurrency.
 
         transaction_id (``str``, *optional*):
             Identifier of the transaction for Telegram Stars purchase.
@@ -61,11 +49,7 @@ class GiftedStars(Object):
         *,
         gifter: "types.User" = None,
         receiver: "types.User",
-        currency: str = None,
-        amount: int = None,
-        cryptocurrency: str = None,
-        cryptocurrency_amount: int = None,
-        star_count: int = None,
+        ton_amount: int = None,
         transaction_id: str = None,
         sticker: "types.Sticker" = None,
     ):
@@ -73,37 +57,29 @@ class GiftedStars(Object):
 
         self.gifter = gifter
         self.receiver = receiver
-        self.currency = currency
-        self.amount = amount
-        self.cryptocurrency = cryptocurrency
-        self.cryptocurrency_amount = cryptocurrency_amount
-        self.star_count = star_count
+        self.ton_amount = ton_amount
         self.transaction_id = transaction_id
         self.sticker = sticker
 
     @staticmethod
     async def _parse(
         client,
-        action: "raw.types.MessageActionGiftStars",
+        action: "raw.types.MessageActionGiftTon",
         gifter: "raw.base.User" = None,
         receiver: "raw.base.User" = None,
-    ) -> "GiftedStars":
+    ) -> "GiftedTon":
         raw_stickers = await client.invoke(
             raw.functions.messages.GetStickerSet(
-                stickerset=raw.types.InputStickerSetPremiumGifts(),
+                stickerset=raw.types.InputStickerSetTonGifts(),
                 hash=0
             )
         )
 
-        return GiftedStars(
+        return GiftedTon(
             gifter=types.User._parse(client, gifter),
             receiver=types.User._parse(client, receiver),
-            currency=action.currency,
-            amount=action.amount,
-            cryptocurrency=getattr(action, "crypto_currency", None),
-            cryptocurrency_amount=getattr(action, "crypto_amount", None),
-            star_count=action.stars,
-            transaction_id=getattr(action, "transaction_id", None),
+            ton_amount=action.crypto_amount,
+            transaction_id=action.transaction_id,
             sticker=random.choice(
                 types.List(
                     [

@@ -45,6 +45,7 @@ class SendMessage:
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
+        suggested_post_info: "types.InputSuggestedPostInfo" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -120,6 +121,9 @@ class SendMessage:
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
+            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+                Information about the suggested post.
+ 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
                 Additional interface options. An object for an inline keyboard, custom reply keyboard,
                 instructions to remove reply keyboard or to force a reply from the user.
@@ -256,6 +260,7 @@ class SendMessage:
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 allow_paid_floodskip=allow_paid_broadcast,
                 allow_paid_stars=paid_message_star_count,
+                suggested_post=suggested_post_info.write() if suggested_post_info else None,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 message=message,
                 entities=entities,

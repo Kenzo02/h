@@ -49,6 +49,7 @@ from .input_privacy_rule_disallow_bots import InputPrivacyRuleDisallowBots
 from .input_privacy_rule_disallow_chats import InputPrivacyRuleDisallowChats
 from .input_privacy_rule_disallow_contacts import InputPrivacyRuleDisallowContacts
 from .input_privacy_rule_disallow_users import InputPrivacyRuleDisallowUsers
+from .input_suggested_post_info import InputSuggestedPostInfo
 from .input_text_message_content import InputTextMessageContent
 from .input_venue_message_content import InputVenueMessageContent
 
@@ -86,6 +87,7 @@ __all__ = [
     "InputPrivacyRuleDisallowChats",
     "InputPrivacyRuleDisallowContacts",
     "InputPrivacyRuleDisallowUsers",
+    "InputSuggestedPostInfo",
     "InputTextMessageContent",
     "InputVenueMessageContent"
 ]

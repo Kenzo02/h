@@ -24,22 +24,54 @@ from typing import List, Optional
 
 import pyrogram
 from pyrogram import filters, handlers, raw, types
-from pyrogram.methods.messages.inline_session import get_session
+from pyrogram.session import Session
+from pyrogram.session.auth import Auth
 
 log = logging.getLogger(__name__)
 
+
+async def get_session(client: "pyrogram.Client", dc_id: int) -> Session:
+    if dc_id == await client.storage.dc_id():
+        return client.session
+
+    async with client.media_sessions_lock:
+        if client.media_sessions.get(dc_id):
+            return client.media_sessions[dc_id]
+
+        session = client.media_sessions[dc_id] = Session(
+            client,
+            dc_id,
+            await Auth(client, dc_id, await client.storage.test_mode()).create(),
+            await client.storage.test_mode(),
+            is_media=False,
+        )
+
+        await session.start()
+
+        return session
+
+
 class QRLogin:
     def __init__(self, client, except_ids: List[int] = []):
-        self.client = client
-        self.request = raw.functions.auth.ExportLoginToken(
-            api_id=client.api_id,
-            api_hash=client.api_hash,
-            except_ids=except_ids
-        )
-        self.r = None
+        self.client: "pyrogram.Client" = client
+        self.except_ids: List[int] = except_ids
+        self.r: "raw.base.auth.LoginToken" = None
 
     async def recreate(self):
-        self.r = await self.client.invoke(self.request)
+        self.r = await self.client.invoke(
+            raw.functions.auth.ExportLoginToken(
+                api_id=self.client.api_id,
+                api_hash=self.client.api_hash,
+                except_ids=self.except_ids,
+            )
+        )
+
+        if isinstance(self.r, raw.types.auth.LoginTokenMigrateTo):
+            await self.client.storage.dc_id(self.r.dc_id)
+            self.client.session = await get_session(self.client, self.r.dc_id)
+            self.r = await self.client.invoke(
+                raw.functions.auth.ImportLoginToken(token=self.r.token)
+            )
 
         return self.r
 
@@ -58,9 +90,7 @@ class QRLogin:
         handler = self.client.add_handler(
             handlers.RawUpdateHandler(
                 raw_handler,
-                filters=filters.create(
-                    lambda _, __, u: isinstance(u, raw.types.UpdateLoginToken)
-                )
+                filters=filters.create(lambda _, __, u: isinstance(u, raw.types.UpdateLoginToken)),
             )
         )
 
@@ -74,14 +104,6 @@ class QRLogin:
 
         await self.recreate()
 
-        if isinstance(self.r, raw.types.auth.LoginTokenMigrateTo):
-            session = await get_session(self.client, self.r.dc_id)
-            self.r = await session.invoke(
-                raw.functions.auth.ImportLoginToken(
-                    token=self.token
-                )
-            )
-
         if isinstance(self.r, raw.types.auth.LoginTokenSuccess):
             user = types.User._parse(self.client, self.r.authorization.user)
 
@@ -90,7 +112,7 @@ class QRLogin:
 
             return user
 
-        raise TypeError('Unexpected login token response: {}'.format(self.r))
+        raise TypeError("Unexpected login token response: {}".format(self.r))
 
     @property
     def url(self) -> str:

@@ -18,8 +18,10 @@
 
 from .add_checklist_tasks import AddChecklistTasks
 from .add_to_gifs import AddToGifs
+from .approve_suggested_post import ApproveSuggestedPost
 from .copy_media_group import CopyMediaGroup
 from .copy_message import CopyMessage
+from .decline_suggested_post import DeclineSuggestedPost
 from .delete_chat_history import DeleteChatHistory
 from .delete_direct_messages_chat_topic_history import DeleteDirectMessagesChatTopicHistory
 from .delete_messages import DeleteMessages
@@ -94,6 +96,8 @@ from .vote_poll import VotePoll
 class Messages(
     AddChecklistTasks,
     AddToGifs,
+    ApproveSuggestedPost,
+    DeclineSuggestedPost,
     DeleteMessages,
     EditMessageCaption,
     EditMessageChecklist,

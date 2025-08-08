@@ -16,49 +16,47 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
-
+from typing import Union
 import pyrogram
 from pyrogram import raw
 
-
-class GetStarsBalance:
-    async def get_stars_balance(
+class DeclineSuggestedPost():
+    async def decline_suggested_post(
         self: "pyrogram.Client",
-        chat_id: Optional[Union[int, str]] = None,
-    ) -> float:
-        """Get the current Telegram Stars balance of the current account.
+        chat_id: Union[int, str],
+        message_id: int,
+        comment: str = None
+    ) -> bool:
+        """Declines a suggested post in a channel direct messages chat.
 
-        .. include:: /_includes/usable-by/users-bots.rst
+        .. include:: /_includes/usable-by/users.rst
 
         Parameters:
-            chat_id (``int`` | ``str``, *optional*):
+            chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
-                For your personal cloud (Saved Messages) you can simply use "me" or "self".
+
+            message_id (``int``):
+                Unique identifier (int) of the target message.
+
+            comment (``str``, *optional*):
+                Comment for the creator of the suggested post, 0-128 characters.
 
         Returns:
-            ``float``: On success, the current stars balance is returned.
+            ``bool``: True on success.
 
         Example:
             .. code-block:: python
 
-                # Get stars balance of current account
-                await app.get_stars_balance()
+                await app.decline_suggested_post(chat_id, message_id, "I don't like this picture!")
 
-                # Get stars balance of a bot
-                await app.get_stars_balance(chat_id="pyrogrambot")
         """
-        if chat_id is None:
-            peer = raw.types.InputPeerSelf()
-        else:
-            peer = await self.resolve_peer(chat_id)
-
-        r = await self.invoke(
-            raw.functions.payments.GetStarsTransactions(
-                peer=peer,
-                offset="",
-                limit=0
+        await self.invoke(
+            raw.functions.messages.ToggleSuggestedPostApproval(
+                peer=await self.resolve_peer(chat_id),
+                msg_id=message_id,
+                reject=True,
+                reject_comment=comment
             )
         )
 
-        return r.balance.amount + r.balance.nanos / 1e9
+        return True

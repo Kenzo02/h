@@ -47,6 +47,8 @@ from .gift_for_resale_order import GiftForResaleOrder
 from .mask_point_type import MaskPointType
 from .media_area_type import MediaAreaType
 from .stories_privacy_rules import StoriesPrivacyRules
+from .suggested_post_refund_reason import SuggestedPostRefundReason
+from .suggested_post_state import SuggestedPostState
 from .user_status import UserStatus
 
 __all__ = [
@@ -81,5 +83,7 @@ __all__ = [
     'MaskPointType',
     'MediaAreaType',
     'StoriesPrivacyRules',
+    'SuggestedPostRefundReason',
+    'SuggestedPostState',
     'UserStatus'
 ]

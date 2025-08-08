@@ -16,7 +16,6 @@ CHAT_SEND_GAME_FORBIDDEN	You can't send a game to this chat.
 CHAT_SEND_GIFS_FORBIDDEN	You can't send animations in this chat.
 CHAT_SEND_INLINE_FORBIDDEN	You cannot use inline bots to send messages in this chat.
 CHAT_SEND_MEDIA_FORBIDDEN	You can't send media messages in this chat.
-USER_DISALLOWED_STARGIFTS	You can't send gifts to this user due to their privacy settings.
 CHAT_SEND_PHOTOS_FORBIDDEN	You can't send photos in this chat.
 CHAT_SEND_PLAIN_FORBIDDEN	You can't send non-media (text) messages in this chat.
 CHAT_SEND_POLL_FORBIDDEN	You can't send polls in this chat.
@@ -48,6 +47,7 @@ TAKEOUT_REQUIRED	The method must be invoked inside a [takeout](https://core.tele
 USER_BOT_INVALID	User accounts must provide the `bot` method parameter when calling this method. If there is no such method parameter, this method can only be invoked by bot accounts.
 USER_CHANNELS_TOO_MUCH	One of the users you tried to add is already in too many channels/supergroups.
 USER_DELETED	You can't send this secret message because the other participant deleted their account.
+USER_DISALLOWED_STARGIFTS	You can't send gifts to this user due to their privacy settings.
 USER_INVALID	The provided user is invalid.
 USER_IS_BLOCKED	You were blocked by this user.
 USER_NOT_MUTUAL_CONTACT	The provided user is not a mutual contact.

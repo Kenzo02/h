@@ -26,6 +26,7 @@ from .get_gift_upgrade_preview import GetGiftUpgradePreview
 from .get_payment_form import GetPaymentForm
 from .get_stars_balance import GetStarsBalance
 from .get_upgraded_gift import GetUpgradedGift
+from .gift_premium_with_stars import GiftPremiumWithStars
 from .hide_gift import HideGift
 from .search_gifts_for_resale import SearchGiftsForResale
 from .send_gift import SendGift
@@ -49,6 +50,7 @@ class Payments(
     GetPaymentForm,
     GetStarsBalance,
     GetUpgradedGift,
+    GiftPremiumWithStars,
     HideGift,
     SearchGiftsForResale,
     SendGift,

@@ -16,21 +16,16 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from .get_account_ttl import GetAccountTTL
-from .get_global_privacy_settings import GetGlobalPrivacySettings
-from .get_privacy import GetPrivacy
-from .set_account_ttl import SetAccountTTL
-from .set_global_privacy_settings import SetGlobalPrivacySettings
-from .set_inactive_session_ttl import SetInactiveSessionTTL
-from .set_privacy import SetPrivacy
+from enum import auto
 
-class Account(
-    GetAccountTTL,
-    GetGlobalPrivacySettings,
-    GetPrivacy,
-    SetAccountTTL,
-    SetGlobalPrivacySettings,
-    SetInactiveSessionTTL,
-    SetPrivacy
-):
-    pass
+from .auto_name import AutoName
+
+
+class SuggestedPostRefundReason(AutoName):
+    """Suggested post refund reason enumeration used in :obj:`~pyrogram.types.SuggestedPostRefunded`."""
+
+    POST_DELETED = auto()
+    """The post was refunded, because it was deleted by channel administrators."""
+
+    PAYMENT_REFUNDED = auto()
+    """The post was refunded, because the payment for the post was refunded."""
