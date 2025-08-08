@@ -506,21 +506,26 @@ class Session:
 
         query_name = ".".join(inner_query.QUALNAME.split(".")[1:])
 
-        while True:
+        attempts_used = 0
+        max_attempts = retries + 1  # +1 because retries=10 means 11 total attempts
+
+        while attempts_used < max_attempts:
             try:
                 return await self.send(query, timeout=timeout)
             except SessionRestartedError:
                 # Add moderate delay before retry on session restart to prevent rapid restart loops
-                if retries == 0:
+                if attempts_used == retries:  # Last attempt
                     raise TimeoutError("Request failed due to session restart")
 
-                delay = min(2.0, 0.5 * (Session.MAX_RETRIES - retries + 1))  # Progressive backoff: 0.5, 1.0, 1.5, 2.0s
+                # Fixed progressive backoff: earlier attempts = shorter delays
+                delay = min(2.0, 0.5 * (attempts_used + 1))  # 0.5s, 1.0s, 1.5s, 2.0s
                 log.warning('[%s] Session restart interrupted "%s" → waiting %ss before retry (%s/%s)',
                             self.client.name, query_name, delay,
-                            Session.MAX_RETRIES - retries + 1, Session.MAX_RETRIES)
+                            attempts_used + 1, max_attempts)
 
                 await asyncio.sleep(delay)
-                return await self.invoke(query, retries - 1, timeout)
+                attempts_used += 1
+                continue
             except (FloodWait, FloodPremiumWait) as e:
                 amount = e.value
 
@@ -531,14 +536,17 @@ class Session:
                             self.client.name, amount, query_name)
 
                 await asyncio.sleep(amount)
+                # Don't increment attempts_used for FloodWait - this is not a "real" retry
+                continue
             except (OSError, InternalServerError, ServiceUnavailable) as e:
-                if retries == 0:
+                if attempts_used == retries:  # Last attempt
                     raise e from None
 
-                (log.warning if retries < 2 else log.info)(
-                    '[%s] Retrying "%s" due to: %s',
-                    Session.MAX_RETRIES - retries + 1,
-                    query_name, str(e) or repr(e)
+                # Fix logging to use proper attempt counting
+                (log.warning if attempts_used >= retries - 2 else log.info)(
+                    '[%s] Retrying "%s" due to: %s (attempt %s/%s)',
+                    self.client.name, query_name, str(e) or repr(e),
+                    attempts_used + 1, max_attempts
                 )
 
                 # Only restart session for network errors (OSError) or certain server errors
@@ -559,19 +567,16 @@ class Session:
                             pass
 
                 await asyncio.sleep(0.5)
-
-                return await self.invoke(query, retries - 1, timeout)
+                attempts_used += 1
+                continue
             except TimeoutError as e:
                 # Continuous timeouts likely mean the connection is broken. Attempt a full session restart
                 # before retrying (bounded by the remaining retries).
-                if retries == 0:
+                if attempts_used == retries:  # Last attempt
                     raise e
 
-                log.warning('[%s] Timeout while executing "%s" → restarting session and retrying (%s/%s)',
-                            self.client.name,
-                            query_name,
-                            Session.MAX_RETRIES - retries + 1,
-                            Session.MAX_RETRIES)
+                log.warning('[%s] Timeout while executing "%s" → restarting session and retrying (attempt %s/%s)',
+                            self.client.name, query_name, attempts_used + 1, max_attempts)
 
                 try:
                     await self.restart()
@@ -580,5 +585,8 @@ class Session:
 
                 # Give the session a brief moment to settle
                 await asyncio.sleep(0.5)
+                attempts_used += 1
+                continue
 
-                return await self.invoke(query, retries - 1, timeout)
+        # This should never be reached, but just in case
+        raise RuntimeError(f"Unexpected exit from retry loop after {attempts_used} attempts")
