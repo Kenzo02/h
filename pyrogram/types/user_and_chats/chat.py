@@ -307,11 +307,11 @@ class Chat(Object):
             The number of boosts the current user has applied to the current supergroup.
             Returned only in :meth:`~pyrogram.Client.get_chat`
 
-        bot_broadcast_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
+        channel_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
             A suggested set of administrator rights for the bot, to be shown when adding the bot as admin to a channel.
             Returned only in :meth:`~pyrogram.Client.get_chat`
 
-        bot_group_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
+        chat_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
             A suggested set of administrator rights for the bot, to be shown when adding the bot as admin to a group.
             Returned only in :meth:`~pyrogram.Client.get_chat`
 
@@ -353,6 +353,10 @@ class Chat(Object):
 
         can_view_stats (``bool``, *optional*):
             True, if the current user can view stats in this chat.
+            Returned only in :meth:`~pyrogram.Client.get_chat`
+
+        can_send_voice_messages (``bool``, *optional*):
+            True, if the current user can send voice messages in this chat.
             Returned only in :meth:`~pyrogram.Client.get_chat`
 
         common_chats (``int``, *optional*):
@@ -466,7 +470,7 @@ class Chat(Object):
 
         accepted_gift_types (:obj:`~pyrogram.types.AcceptedGiftTypes`, *optional*):
             Information about gifts that can be received by the user.
-            Returned only in :meth:`~pyrogram.Client.get_chat`\
+            Returned only in :meth:`~pyrogram.Client.get_chat`
 
         raw (:obj:`~pyrogram.raw.types.UserFull` | :obj:`~pyrogram.raw.types.ChatFull` | :obj:`~pyrogram.raw.types.ChannelFull`, *optional*):
             The raw chat or user object, as received from the Telegram API.
@@ -562,8 +566,8 @@ class Chat(Object):
         banned_count: Optional[int] = None,
         available_min_id: Optional[int] = None,
         boosts_applied: Optional[int] = None,
-        bot_broadcast_admin_rights: Optional["types.ChatPrivileges"] = None,
-        bot_group_admin_rights: Optional["types.ChatPrivileges"] = None,
+        channel_admin_rights: Optional["types.ChatPrivileges"] = None,
+        chat_admin_rights: Optional["types.ChatPrivileges"] = None,
         bot_can_manage_emoji_status: Optional[bool] = None,
         can_delete_channel: Optional[bool] = None,
         can_pin_message: Optional[bool] = None,
@@ -574,6 +578,7 @@ class Chat(Object):
         can_view_revenue: Optional[bool] = None,
         can_view_stars_revenue: Optional[bool] = None,
         can_view_stats: Optional[bool] = None,
+        can_send_voice_messages: Optional[bool] = None,
         common_chats: Optional[int] = None,
         is_ads_enabled: Optional[bool] = None,
         is_blocked: Optional[bool] = None,
@@ -689,8 +694,8 @@ class Chat(Object):
         self.banned_count = banned_count
         self.available_min_id = available_min_id
         self.boosts_applied = boosts_applied
-        self.bot_broadcast_admin_rights = bot_broadcast_admin_rights
-        self.bot_group_admin_rights = bot_group_admin_rights
+        self.channel_admin_rights = channel_admin_rights
+        self.chat_admin_rights = chat_admin_rights
         self.bot_can_manage_emoji_status = bot_can_manage_emoji_status
         self.can_delete_channel = can_delete_channel
         self.can_pin_message = can_pin_message
@@ -701,6 +706,7 @@ class Chat(Object):
         self.can_view_revenue = can_view_revenue
         self.can_view_stars_revenue = can_view_stars_revenue
         self.can_view_stats = can_view_stats
+        self.can_send_voice_messages = can_send_voice_messages
         self.common_chats = common_chats
         self.is_ads_enabled = is_ads_enabled
         self.is_blocked = is_blocked
@@ -956,8 +962,8 @@ class Chat(Object):
         parsed_chat.message_auto_delete_time = user.ttl_period
         parsed_chat.theme_emoji = user.theme_emoticon
         parsed_chat.private_forward_name = user.private_forward_name
-        parsed_chat.bot_group_admin_rights = types.ChatPrivileges._parse(user.bot_group_admin_rights)
-        parsed_chat.bot_broadcast_admin_rights = types.ChatPrivileges._parse(user.bot_broadcast_admin_rights)
+        parsed_chat.chat_admin_rights = types.ChatPrivileges._parse(user.bot_group_admin_rights)
+        parsed_chat.channel_admin_rights = types.ChatPrivileges._parse(user.bot_broadcast_admin_rights)
         # parsed_chat.premium_gifts
         parsed_chat.chat_background = types.ChatBackground._parse(client, user.wallpaper)
 

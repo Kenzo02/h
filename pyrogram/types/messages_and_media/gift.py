@@ -483,7 +483,7 @@ class Gift(Object):
             ``bool``: On success, True is returned.
         """
         return await self._client.show_gift(
-            owned_gift_id=str(self.message_id)
+            owned_gift_id=self.owned_gift_id
         )
 
     async def hide(self) -> bool:
@@ -506,11 +506,15 @@ class Gift(Object):
             ``bool``: On success, True is returned.
         """
         return await self._client.hide_gift(
-            owned_gift_id=str(self.message_id)
+            owned_gift_id=self.owned_gift_id
         )
 
     async def convert(self) -> bool:
         """Bound method *convert* of :obj:`~pyrogram.types.Gift`.
+
+        .. note::
+
+            For regular gifts only.
 
         Use as a shortcut for:
 
@@ -529,11 +533,15 @@ class Gift(Object):
             ``bool``: On success, True is returned.
         """
         return await self._client.convert_gift_to_stars(
-            owned_gift_id=str(self.message_id)
+            owned_gift_id=self.owned_gift_id
         )
 
     async def upgrade(self, keep_original_details: Optional[bool] = None, star_count: Optional[int] = None) -> Optional["types.Message"]:
         """Bound method *upgrade* of :obj:`~pyrogram.types.Gift`.
+
+        .. note::
+
+            For regular gifts only.
 
         Use as a shortcut for:
 
@@ -552,13 +560,17 @@ class Gift(Object):
             :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
         """
         return await self._client.upgrade_gift(
-            owned_gift_id=str(self.message_id),
+            owned_gift_id=self.owned_gift_id,
             keep_original_details=keep_original_details,
             star_count=star_count
         )
 
     async def transfer(self, to_chat_id: Union[int, str]) -> Optional["types.Message"]:
         """Bound method *transfer* of :obj:`~pyrogram.types.Gift`.
+
+        .. note::
+
+            For upgraded gifts only.
 
         Use as a shortcut for:
 
@@ -578,7 +590,7 @@ class Gift(Object):
             :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
         """
         return await self._client.transfer_gift(
-            owned_gift_id=self.link,
+            owned_gift_id=self.owned_gift_id,
             new_owner_chat_id=to_chat_id
         )
 
@@ -587,7 +599,7 @@ class Gift(Object):
 
         .. note::
 
-            This works for upgraded gifts only.
+            For upgraded gifts only.
 
         Use as a shortcut for:
 
@@ -609,12 +621,12 @@ class Gift(Object):
             )
         )
 
-    async def buy(self, star_count: Optional[int] = None) -> Optional["types.Message"]:
+    async def buy(self, new_owner_chat_id: Optional[Union[int, str]] = None, star_count: Optional[int] = None) -> Optional["types.Message"]:
         """Bound method *buy* of :obj:`~pyrogram.types.Gift`.
 
         .. note::
 
-            This works for gifts from market only.
+            For upgraded gifts from market only.
 
         Use as a shortcut for:
 
@@ -630,9 +642,12 @@ class Gift(Object):
         Returns:
             :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
         """
+        if new_owner_chat_id is None:
+            new_owner_chat_id = "me"
+
         return await self._client.send_resold_gift(
             gift_link=self.link,
-            new_owner_chat_id="me",
+            new_owner_chat_id=new_owner_chat_id,
             star_count=star_count
         )
 
@@ -646,6 +661,11 @@ class Gift(Object):
         pay_for_upgrade: Optional[bool] = None,
     ) -> Optional["types.Message"]:
         """Bound method *send* of :obj:`~pyrogram.types.Gift`.
+
+        .. note::
+
+            For regular gifts only.
+            May return an error with a message "STARGIFT_USAGE_LIMITED" if the gift was sold out.
 
         Use as a shortcut for:
 

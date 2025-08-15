@@ -105,9 +105,6 @@ class User(Object, Update):
         is_stories_unavailable (``bool``, *optional*):
             True, if this user stories is unavailable.
 
-        is_business_bot (``bool``, *optional*):
-            True, if this bot can connect to business account.
-
         is_min (``bool``, *optional*):
             True, if this user have reduced set of fields.
 
@@ -187,11 +184,170 @@ class User(Object, Update):
         can_read_all_group_messages (``bool``, *optional*):
             True, if privacy mode is disabled for the bot. Returned only in get_me.
 
+        can_connect_to_business (``bool``, *optional*):
+            True, if the bot can be connected to a Telegram Business account to receive its messages.
+
         has_main_web_app (``bool``, *optional*):
             True, if the bot has a main Web App. Returned only in get_me.
 
         paid_message_star_count (``int``, *optional*):
             Number of Telegram Stars that must be paid by user for each sent message to the user.
+
+        settings (:obj:`~pyrogram.types.ChatSettings`, *optional*):
+            Chat settings.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        common_chats (``int``, *optional*):
+            Number of common chats with this user.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_blocked (``bool``, *optional*):
+            True, if you have blocked this user.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_phone_calls_available (``bool``, *optional*):
+            True, if this user can make VoIP calls.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_phone_calls_private (``bool``, *optional*):
+            True, if this user's privacy settings allow you to call them.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_video_calls_available (``bool``, *optional*):
+            True, if this user can receive video calls.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_wallpaper_overridden (``bool``, *optional*):
+            True, if this user has a custom wallpaper.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_translations_disabled (``bool``, *optional*):
+            True, if the real-time chat translation popup should be hidden.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_pinned_stories_available (``bool``, *optional*):
+            True, if this user has some pinned stories.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_blocked_my_stories_from (``bool``, *optional*):
+            True, if we've blocked this user, preventing them from seeing our stories.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_read_dates_available (``bool``, *optional*):
+            True, if we cannot fetch the exact read date of messages we send to this user.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        is_ads_enabled (``bool``, *optional*):
+            True, if ads were re-enabled for the current account (only accessible to the currently logged-in user).
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        can_pin_message (``bool``, *optional*):
+            True, if the current user can pin messages in this chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        can_schedule_messages (``bool``, *optional*):
+            True, if the current user can schedule messages in this chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        can_send_voice_messages (``bool``, *optional*):
+            True, if the current user can send voice messages in this chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        can_view_revenue (``bool``, *optional*):
+            True, if the current user can view revenue in this chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        bot_can_manage_emoji_status (``bool``, *optional*):
+            True, if the bot can change your emoji status.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        display_gifts_button (``bool``, *optional*):
+            True, if the gift button should be shown in the message input field for both participants in all chats.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        bio (``str``, *optional*):
+            Bio of the other party in a private chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        pinned_message (:obj:`~pyrogram.types.Message`, *optional*):
+            Pinned message, for groups, supergroups channels and own chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        folder_id (``int``, *optional*):
+            The folder identifier where the chat is located.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        message_auto_delete_time (``int``, *optional*):
+            The time after which all messages sent to the chat will be automatically deleted; in seconds.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        theme_emoji (``str``, *optional*):
+            Emoji representing a specific chat theme.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        private_forward_name (``str``, *optional*):
+            Anonymized text to be shown instead of the user's name on forwarded messages.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        chat_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
+            A suggested set of administrator rights for the bot, to be shown when adding the bot as admin to a group.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        channel_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
+            A suggested set of administrator rights for the bot, to be shown when adding the bot as admin to a channel.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        chat_background (:obj:`~pyrogram.types.ChatBackground`, *optional*):
+            Chat wallpaper.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        stories (List of :obj:`~pyrogram.types.Story`, *optional*):
+            The list of chat's stories if available.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        business_away_message (:obj:`~pyrogram.types.BusinessMessage`, *optional*):
+            For private chats with business accounts, the away message of the business.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        business_greeting_message (:obj:`~pyrogram.types.BusinessMessage`, *optional*):
+            For private chats with business accounts, the greeting message of the business.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        business_work_hours (:obj:`~pyrogram.types.BusinessWorkingHours`, *optional*):
+            For private chats with business accounts, the working hours of the business.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        business_location (:obj:`~pyrogram.types.Location`, *optional*):
+            For private chats with business accounts, the location of the business.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        business_intro (:obj:`~pyrogram.types.BusinessIntro`, *optional*):
+            For private chats with business accounts, the intro of the business.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        birthday (:obj:`~pyrogram.types.Birthday`, *optional*):
+            Information about user birthday.
+            Returned only in :meth:`~pyrogram.Client.get_me`
+
+        personal_channel (:obj:`~pyrogram.types.Chat`, *optional*):
+            The personal channel linked to this chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        personal_channel_message (:obj:`~pyrogram.types.Message`, *optional*):
+            The last message in the personal channel of this chat.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        gift_count (``int``, *optional*):
+            Number of saved to profile gifts for channels without `can_post_messages` administrator right, otherwise, the total number of received gifts.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        bot_verification (:obj:`~pyrogram.types.BotVerification`, *optional*):
+            Information about bot verification.
+            Returned only in :meth:`~pyrogram.Client.get_me`.
+
+        accepted_gift_types (:obj:`~pyrogram.types.AcceptedGiftTypes`, *optional*):
+            Information about gifts that can be received by the user.
+            Returned only in :meth:`~pyrogram.Client.get_me`
 
         raw (:obj:`~pyrogram.raw.base.User` | :obj:`~pyrogram.raw.base.UserStatus`, *optional*):
             The raw user or user status object, as received from the Telegram API.
@@ -223,7 +379,6 @@ class User(Object, Update):
         is_close_friend: Optional[bool] = None,
         is_stories_hidden: Optional[bool] = None,
         is_stories_unavailable: Optional[bool] = None,
-        is_business_bot: Optional[bool] = None,
         is_min: Optional[bool] = None,
         verification_status: Optional["types.VerificationStatus"] = None,
         first_name: Optional[str] = None,
@@ -249,8 +404,48 @@ class User(Object, Update):
         can_be_added_to_attachment_menu: Optional[bool] = None,
         can_join_groups: Optional[bool] = None,
         can_read_all_group_messages: Optional[bool] = None,
+        can_connect_to_business: Optional[bool] = None,
         has_main_web_app: Optional[bool] = None,
         paid_message_star_count: Optional[int] = None,
+        settings: Optional["types.ChatSettings"] = None,
+        common_chats: Optional[int] = None,
+        is_blocked: Optional[bool] = None,
+        is_phone_calls_available: Optional[bool] = None,
+        is_phone_calls_private: Optional[bool] = None,
+        is_video_calls_available: Optional[bool] = None,
+        is_wallpaper_overridden: Optional[bool] = None,
+        is_translations_disabled: Optional[bool] = None,
+        is_pinned_stories_available: Optional[bool] = None,
+        is_blocked_my_stories_from: Optional[bool] = None,
+        is_read_dates_available: Optional[bool] = None,
+        is_ads_enabled: Optional[bool] = None,
+        can_pin_message: Optional[bool] = None,
+        can_schedule_messages: Optional[bool] = None,
+        can_send_voice_messages: Optional[bool] = None,
+        can_view_revenue: Optional[bool] = None,
+        bot_can_manage_emoji_status: Optional[bool] = None,
+        display_gifts_button: Optional[bool] = None,
+        bio: Optional[str] = None,
+        pinned_message: Optional["types.Message"] = None,
+        folder_id: Optional[int] = None,
+        message_auto_delete_time: Optional[int] = None,
+        theme_emoji: Optional[str] = None,
+        private_forward_name: Optional[str] = None,
+        chat_admin_rights: Optional["types.ChatPrivileges"] = None,
+        channel_admin_rights: Optional["types.ChatPrivileges"] = None,
+        chat_background: Optional["types.ChatBackground"] = None,
+        stories: Optional[List["types.Story"]] = None,
+        business_away_message: Optional["types.BusinessMessage"] = None,
+        business_greeting_message: Optional["types.BusinessMessage"] = None,
+        business_work_hours: Optional["types.BusinessMessage"] = None,
+        business_location: Optional["types.Location"] = None,
+        business_intro: Optional["types.BusinessIntro"] = None,
+        birthday: Optional["types.Birthday"] = None,
+        personal_channel: Optional["types.Chat"] = None,
+        personal_channel_message: Optional["types.Message"] = None,
+        gift_count: Optional[int] = None,
+        bot_verification: Optional["types.BotVerification"] = None,
+        accepted_gift_types: Optional["types.AcceptedGiftTypes"] = None,
         raw: Optional[Union["raw.base.User", "raw.base.UserStatus"]] = None
     ):
         super().__init__(client)
@@ -268,7 +463,6 @@ class User(Object, Update):
         self.is_close_friend = is_close_friend
         self.is_stories_hidden = is_stories_hidden
         self.is_stories_unavailable = is_stories_unavailable
-        self.is_business_bot = is_business_bot
         self.verification_status = verification_status
         self.is_min = is_min
         self.first_name = first_name
@@ -294,8 +488,48 @@ class User(Object, Update):
         self.can_be_added_to_attachment_menu = can_be_added_to_attachment_menu
         self.can_join_groups = can_join_groups
         self.can_read_all_group_messages = can_read_all_group_messages
+        self.can_connect_to_business = can_connect_to_business
         self.has_main_web_app = has_main_web_app
         self.paid_message_star_count = paid_message_star_count
+        self.settings = settings
+        self.common_chats = common_chats
+        self.is_blocked = is_blocked
+        self.is_phone_calls_available = is_phone_calls_available
+        self.is_phone_calls_private = is_phone_calls_private
+        self.is_video_calls_available = is_video_calls_available
+        self.is_wallpaper_overridden = is_wallpaper_overridden
+        self.is_translations_disabled = is_translations_disabled
+        self.is_pinned_stories_available = is_pinned_stories_available
+        self.is_blocked_my_stories_from = is_blocked_my_stories_from
+        self.is_read_dates_available = is_read_dates_available
+        self.is_ads_enabled = is_ads_enabled
+        self.can_pin_message = can_pin_message
+        self.can_schedule_messages = can_schedule_messages
+        self.can_send_voice_messages = can_send_voice_messages
+        self.can_view_revenue = can_view_revenue
+        self.bot_can_manage_emoji_status = bot_can_manage_emoji_status
+        self.display_gifts_button = display_gifts_button
+        self.bio = bio
+        self.pinned_message = pinned_message
+        self.folder_id = folder_id
+        self.message_auto_delete_time = message_auto_delete_time
+        self.theme_emoji = theme_emoji
+        self.private_forward_name = private_forward_name
+        self.chat_admin_rights = chat_admin_rights
+        self.channel_admin_rights = channel_admin_rights
+        self.chat_background = chat_background
+        self.stories = stories
+        self.business_away_message = business_away_message
+        self.business_greeting_message = business_greeting_message
+        self.business_work_hours = business_work_hours
+        self.business_location = business_location
+        self.business_intro = business_intro
+        self.birthday = birthday
+        self.personal_channel = personal_channel
+        self.personal_channel_message = personal_channel_message
+        self.gift_count = gift_count
+        self.bot_verification = bot_verification
+        self.accepted_gift_types = accepted_gift_types
         self.raw = raw
 
     @property
@@ -338,7 +572,7 @@ class User(Object, Update):
 
     @staticmethod
     def _parse(client, user: "raw.base.User") -> Optional["User"]:
-        if user is None or isinstance(user, raw.types.UserEmpty):
+        if not isinstance(user, raw.types.User):
             return None
 
         return User(
@@ -355,7 +589,6 @@ class User(Object, Update):
             is_close_friend=user.close_friend,
             is_stories_hidden=user.stories_hidden,
             is_stories_unavailable=user.stories_unavailable,
-            is_business_bot=user.bot_business,
             is_min=user.min,
             verification_status=types.VerificationStatus._parse(user),
             first_name=user.first_name,
@@ -369,21 +602,101 @@ class User(Object, Update):
             phone_number=user.phone,
             photo=types.ChatPhoto._parse(client, user.photo, user.id, user.access_hash),
             restrictions=types.List([types.Restriction._parse(r) for r in user.restriction_reason]) or None,
-            reply_color=types.ChatColor._parse(getattr(user, "color", None)),
-            profile_color=types.ChatColor._parse_profile_color(getattr(user, "profile_color", None)),
-            added_to_attachment_menu=getattr(user, "attach_menu_enabled", None),
-            active_users_count=getattr(user, "bot_active_users", None),
-            inline_need_location=getattr(user, "bot_inline_geo", None),
-            inline_query_placeholder=getattr(user, "bot_inline_placeholder", None),
-            can_be_edited=getattr(user, "bot_can_edit", None),
-            can_be_added_to_attachment_menu=getattr(user, "bot_attach_menu", None),
-            can_join_groups=getattr(user, "bot_nochats", None),
-            can_read_all_group_messages=getattr(user, "bot_chat_history", None),
-            has_main_web_app=getattr(user, "bot_has_main_app", None),
-            paid_message_star_count=getattr(user, "send_paid_messages_stars", None),
+            reply_color=types.ChatColor._parse(user.color),
+            profile_color=types.ChatColor._parse_profile_color(user.profile_color),
+            added_to_attachment_menu=user.attach_menu_enabled,
+            active_users_count=user.bot_active_users,
+            inline_need_location=user.bot_inline_geo,
+            inline_query_placeholder=user.bot_inline_placeholder,
+            can_be_edited=user.bot_can_edit,
+            can_be_added_to_attachment_menu=user.bot_attach_menu,
+            can_join_groups=user.bot_nochats,
+            can_read_all_group_messages=user.bot_chat_history,
+            can_connect_to_business=user.bot_business,
+            has_main_web_app=user.bot_has_main_app,
+            paid_message_star_count=user.send_paid_messages_stars,
             raw=user,
             client=client
         )
+
+    @staticmethod
+    async def _parse_full(client, user: "raw.types.UserFull", users: dict, chats: dict) -> Optional["User"]:
+        parsed_user = User._parse(client, users[user.id])
+        parsed_user.raw = user
+
+        parsed_user.settings = types.ChatSettings._parse(client, user.settings, users)
+        # parsed_user.notify_settings = user.notify_settings
+        parsed_user.common_chats = user.common_chats_count
+        parsed_user.is_blocked = user.blocked
+        parsed_user.is_phone_calls_available = user.phone_calls_available
+        parsed_user.is_phone_calls_private = user.phone_calls_private
+        parsed_user.can_pin_message = user.can_pin_message
+        parsed_user.can_schedule_messages = user.has_scheduled
+        parsed_user.is_video_calls_available = user.video_calls_available
+        parsed_user.can_send_voice_messages = not user.voice_messages_forbidden
+        parsed_user.is_translations_disabled = user.translations_disabled
+        parsed_user.is_pinned_stories_available = user.stories_pinned_available
+        parsed_user.is_blocked_my_stories_from = user.blocked_my_stories_from
+        parsed_user.is_wallpaper_overridden = user.wallpaper_overridden
+        parsed_user.is_read_dates_available = not user.read_dates_private
+        parsed_user.is_ads_enabled = user.sponsored_enabled
+        parsed_user.can_view_revenue = user.can_view_revenue
+        parsed_user.bot_can_manage_emoji_status = user.bot_can_manage_emoji_status
+        parsed_user.display_gifts_button = user.display_gifts_button
+        parsed_user.bio = user.about or None
+        # parsed_user.personal_photo = user.personal_photo
+        # parsed_user.profile_photo = user.profile_photo
+        # parsed_user.fallback_photo = user.fallback_photo
+        # parsed_user.bot_info = user.bot_info
+
+        if user.pinned_msg_id:
+            parsed_user.pinned_message = await client.get_messages(chat_id=parsed_user.id, pinned=True)
+
+        parsed_user.folder_id = user.folder_id
+        parsed_user.message_auto_delete_time = user.ttl_period
+        parsed_user.theme_emoji = user.theme_emoticon
+        parsed_user.private_forward_name = user.private_forward_name
+        parsed_user.bot_group_admin_rights = types.ChatPrivileges._parse(user.bot_group_admin_rights)
+        parsed_user.bot_broadcast_admin_rights = types.ChatPrivileges._parse(user.bot_broadcast_admin_rights)
+        parsed_user.chat_background = types.ChatBackground._parse(client, user.wallpaper)
+
+        if user.stories:
+            parsed_user.stories = types.List(
+                [
+                    await types.Story._parse(
+                        client, story, user.stories.peer, users, chats
+                    )
+                    for story in user.stories.stories
+                ]
+            ) or None
+
+        parsed_user.business_work_hours = types.BusinessWorkingHours._parse(user.business_work_hours)
+        parsed_user.business_location = types.Location._parse(client, user.business_location)
+        parsed_user.business_greeting_message = types.BusinessMessage._parse(client, user.business_greeting_message, users)
+        parsed_user.business_away_message = types.BusinessMessage._parse(client, user.business_away_message, users)
+        parsed_user.business_intro = await types.BusinessIntro._parse(client, user.business_intro)
+        parsed_user.birthday = types.Birthday._parse(user.birthday)
+
+        if user.personal_channel_id:
+            parsed_user.personal_channel = types.Chat._parse_channel_chat(client, chats[user.personal_channel_id])
+            parsed_user.personal_channel_message = await client.get_messages(
+                chat_id=parsed_user.personal_channel.id,
+                message_ids=user.personal_channel_message
+            )
+
+        parsed_user.gift_count = user.stargifts_count
+        # parsed_user.starref_program = user.starref_program
+        parsed_user.bot_verification = types.BotVerification._parse(
+            client,
+            user.bot_verification,
+            users
+        )
+        parsed_user.accepted_gift_types = types.AcceptedGiftTypes._parse(user.disallowed_gifts)
+        # parsed_user.stars_rating = user.stars_rating
+        # parsed_user.stars_my_pending_rating = user.stars_my_pending_rating
+        # parsed_user.stars_my_pending_rating_date = user.stars_my_pending_rating_date
+
+        return parsed_user
 
     @staticmethod
     def _parse_status(user_status: "raw.base.UserStatus", is_bot: bool = False):
