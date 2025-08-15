@@ -285,6 +285,10 @@ class Session:
             log.debug(e)
             self.safe_restart()
             return
+        except SecurityCheckMismatch as e:
+            log.warning("Security check failed during packet unpacking: %s", e)
+            self.safe_restart()
+            return
 
         messages = (
             data.body.messages
