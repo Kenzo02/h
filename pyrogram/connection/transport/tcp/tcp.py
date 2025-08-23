@@ -21,7 +21,7 @@ import ipaddress
 import logging
 import socket
 from concurrent.futures import ThreadPoolExecutor
-from typing import Tuple, Dict, TypedDict, Optional
+from typing import Dict, Optional, Tuple, TypedDict
 
 import socks
 
@@ -45,12 +45,23 @@ class Proxy(TypedDict):
 class TCP:
     TIMEOUT = 10
 
-    def __init__(self, ipv6: bool, proxy: Proxy, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def __init__(
+        self,
+        ipv6: bool = False,
+        proxy: Proxy = None,
+        crypto_executor_workers: int = 1,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+    ) -> None:
         self.ipv6 = ipv6
         self.proxy = proxy
 
+        self.crypto_executor_workers = crypto_executor_workers
+        self.crypto_executor = ThreadPoolExecutor(max_workers=self.crypto_executor_workers, thread_name_prefix="CryptoWorker")
+
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
+
+        self.marker_event = asyncio.Event()
 
         self.lock = asyncio.Lock()
 
@@ -95,8 +106,7 @@ class TCP:
         )
         sock.settimeout(TCP.TIMEOUT)
 
-        with ThreadPoolExecutor() as executor:
-            await self.loop.run_in_executor(executor, sock.connect, destination)
+        await self.loop.run_in_executor(self.crypto_executor, sock.connect, destination)
 
         sock.setblocking(False)
 
@@ -124,26 +134,39 @@ class TCP:
 
     async def connect(self, address: Tuple[str, int]) -> None:
         try:
-            await asyncio.wait_for(self._connect(address), TCP.TIMEOUT)
+            await asyncio.wait_for(self._connect(address), timeout=TCP.TIMEOUT)
         except asyncio.TimeoutError:  # Re-raise as TimeoutError. asyncio.TimeoutError is deprecated in 3.11
             raise TimeoutError("Connection timed out")
 
     async def close(self) -> None:
-        if self.writer is None:
-            return None
-
-        try:
-            self.writer.close()
-            await asyncio.wait_for(self.writer.wait_closed(), TCP.TIMEOUT)
-        except Exception as e:
-            log.info("Close exception: %s %s", type(e).__name__, e)
-        finally:
-            self.writer = None
-
-    async def send(self, data: bytes) -> None:
         async with self.lock:
             if self.writer is None or self.writer.is_closing():
                 return None
+
+            try:
+                if self.writer.transport is not None:
+                    self.writer.transport.abort()
+
+                self.writer.close()
+
+                await asyncio.wait_for(self.writer.wait_closed(), timeout=TCP.TIMEOUT)
+            except asyncio.TimeoutError:
+                log.warning("Disconnect timed out")
+            except Exception as e:
+                log.info("Close exception: %s %s", type(e).__name__, e)
+            finally:
+                self.writer = None
+
+    async def send(self, data: bytes, wait_for_marker: bool = True) -> None:
+        async with self.lock:
+            if self.writer is None or self.writer.is_closing():
+                return None
+
+            if wait_for_marker:
+                try:
+                    await asyncio.wait_for(self.marker_event.wait(), timeout=TCP.TIMEOUT)
+                except asyncio.TimeoutError:
+                    raise TimeoutError
 
             try:
                 self.writer.write(data)
@@ -162,7 +185,7 @@ class TCP:
             try:
                 chunk = await asyncio.wait_for(
                     self.reader.read(length - len(data)),
-                    TCP.TIMEOUT
+                    timeout=TCP.TIMEOUT
                 )
             except (OSError, asyncio.TimeoutError):
                 return None

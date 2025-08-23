@@ -38,6 +38,7 @@ class TCPIntermediateO(TCP):
         self.decrypt = None
 
     async def connect(self, address: Tuple[str, int]) -> None:
+        self.marker_event.clear()
         await super().connect(address)
 
         while True:
@@ -54,7 +55,8 @@ class TCPIntermediateO(TCP):
 
         nonce[56:64] = aes.ctr256_encrypt(nonce, *self.encrypt)[56:64]
 
-        await super().send(nonce)
+        await super().send(nonce, wait_for_marker=False)
+        self.marker_event.set()
 
     async def send(self, data: bytes, *args) -> None:
         await super().send(

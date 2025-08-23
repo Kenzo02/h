@@ -31,8 +31,10 @@ class TCPIntermediate(TCP):
         super().__init__(ipv6, proxy, loop)
 
     async def connect(self, address: Tuple[str, int]) -> None:
+        self.marker_event.clear()
         await super().connect(address)
-        await super().send(b"\xee" * 4)
+        await super().send(b"\xee" * 4, wait_for_marker=False)
+        self.marker_event.set()
 
     async def send(self, data: bytes, *args) -> None:
         await super().send(pack("<i", len(data)) + data)
