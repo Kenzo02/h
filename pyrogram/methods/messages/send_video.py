@@ -39,6 +39,7 @@ class SendVideo:
         caption_entities: List["types.MessageEntity"] = None,
         has_spoiler: bool = None,
         ttl_seconds: int = None,
+        view_once: bool = None,
         duration: int = 0,
         width: int = 0,
         height: int = 0,
@@ -49,7 +50,7 @@ class SendVideo:
         supports_streaming: bool = True,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -59,7 +60,7 @@ class SendVideo:
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -116,6 +117,10 @@ class SendVideo:
                 If you set a timer, the video will self-destruct in *ttl_seconds*
                 seconds after it was viewed.
 
+            view_once (``bool``, *optional*):
+                Self-Destruct Timer.
+                If True, the photo will self-destruct after it was viewed.
+
             duration (``int``, *optional*):
                 Duration of sent video in seconds.
 
@@ -157,7 +162,7 @@ class SendVideo:
                 Unique identifier for the target message thread (topic) of the forum.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only only.
 
@@ -193,7 +198,7 @@ class SendVideo:
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -237,6 +242,9 @@ class SendVideo:
 
                 # Send self-destructing video
                 await app.send_video("me", "video.mp4", ttl_seconds=10)
+
+                # Send view-once video
+                await app.send_video("me", "video.mp4", view_once=True)
 
                 # Add video_cover to the video
                 await app.send_video(channel_id, "video.mp4", video_cover="photo.jpg")
@@ -349,7 +357,7 @@ class SendVideo:
                     media = raw.types.InputMediaUploadedDocument(
                         mime_type=self.guess_mime_type(video) or "video/mp4",
                         file=file,
-                        ttl_seconds=ttl_seconds,
+                        ttl_seconds=(1 << 31) - 1 if view_once else ttl_seconds,
                         spoiler=has_spoiler,
                         thumb=thumb,
                         video_cover=vcover_file,
@@ -368,13 +376,13 @@ class SendVideo:
                 elif re.match("^https?://", video):
                     media = raw.types.InputMediaDocumentExternal(
                         url=video,
-                        ttl_seconds=ttl_seconds,
+                        ttl_seconds=(1 << 31) - 1 if view_once else ttl_seconds,
                         spoiler=has_spoiler,
                         video_cover=vcover_file,
                         video_timestamp=video_start_timestamp
                     )
                 else:
-                    media = utils.get_input_media_from_file_id(video, FileType.VIDEO, ttl_seconds=ttl_seconds, has_spoiler=has_spoiler)
+                    media = utils.get_input_media_from_file_id(video, FileType.VIDEO, ttl_seconds=(1 << 31) - 1 if view_once else ttl_seconds, has_spoiler=has_spoiler)
                     media.video_cover = vcover_file
                     media.video_timestamp = video_start_timestamp
             else:
@@ -383,7 +391,7 @@ class SendVideo:
                 media = raw.types.InputMediaUploadedDocument(
                     mime_type=self.guess_mime_type(file_name or video.name) or "video/mp4",
                     file=file,
-                    ttl_seconds=ttl_seconds,
+                    ttl_seconds=(1 << 31) - 1 if view_once else ttl_seconds,
                     spoiler=has_spoiler,
                     thumb=thumb,
                     video_cover=vcover_file,
@@ -412,14 +420,14 @@ class SendVideo:
                                 self,
                                 reply_parameters,
                                 message_thread_id,
-                                direct_messages_chat_topic_id
+                                direct_messages_topic_id
                             ),
                             random_id=self.rnd_id(),
                             schedule_date=utils.datetime_to_timestamp(schedule_date),
                             noforwards=protect_content,
                             allow_paid_floodskip=allow_paid_broadcast,
                             allow_paid_stars=paid_message_star_count,
-                            suggested_post=suggested_post_info.write() if suggested_post_info else None,
+                            suggested_post=suggested_post_parameters.write() if suggested_post_parameters else None,
                             reply_markup=await reply_markup.write(self) if reply_markup else None,
                             effect=effect_id,
                             **await utils.parse_text_entities(self, caption, parse_mode, caption_entities)

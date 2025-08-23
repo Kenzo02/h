@@ -153,6 +153,7 @@ DC_ID_INVALID	The provided dc_id is invalid.
 DH_G_A_INVALID	The g_a parameter is invalid.
 DOCUMENT_INVALID	The specified document is invalid.
 EFFECT_ID_INVALID	The specified effect id is invalid.
+EMAIL_CODE_EMPTY	The email code is empty.
 EMAIL_HASH_EXPIRED	The email hash expired and cannot be used to verify it.
 EMAIL_INVALID	The specified email is invalid.
 EMAIL_NOT_ALLOWED	The specified email cannot be used to complete the operation.

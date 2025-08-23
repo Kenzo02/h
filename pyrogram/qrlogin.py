@@ -31,14 +31,14 @@ log = logging.getLogger(__name__)
 
 
 async def get_session(client: "pyrogram.Client", dc_id: int) -> Session:
-    if dc_id == await client.storage.dc_id():
+    if dc_id == client.session.dc_id:
         return client.session
 
-    async with client.media_sessions_lock:
-        if client.media_sessions.get(dc_id):
-            return client.media_sessions[dc_id]
+    async with client.sessions_lock:
+        if client.sessions.get(dc_id):
+            return client.sessions[dc_id]
 
-        session = client.media_sessions[dc_id] = Session(
+        session = client.sessions[dc_id] = Session(
             client,
             dc_id,
             await Auth(client, dc_id, await client.storage.test_mode()).create(),
@@ -66,20 +66,8 @@ class QRLogin:
             )
         )
 
-        if isinstance(self.r, raw.types.auth.LoginTokenMigrateTo):
-            await self.client.storage.dc_id(self.r.dc_id)
-            self.client.session = await get_session(self.client, self.r.dc_id)
-            self.r = await self.client.invoke(
-                raw.functions.auth.ImportLoginToken(token=self.r.token)
-            )
-
-        return self.r
-
     async def wait(self, timeout: float = None) -> Optional["types.User"]:
         if timeout is None:
-            if not self.r:
-                raise asyncio.TimeoutError
-
             timeout = self.r.expires - int(datetime.datetime.now().timestamp())
 
         event = asyncio.Event()
@@ -102,17 +90,31 @@ class QRLogin:
             self.client.remove_handler(*handler)
             await self.client.dispatcher.stop(clear=False)
 
-        await self.recreate()
+        r = await self.client.invoke(
+            raw.functions.auth.ExportLoginToken(
+                api_id=self.client.api_id,
+                api_hash=self.client.api_hash,
+                except_ids=self.except_ids,
+            )
+        )
 
-        if isinstance(self.r, raw.types.auth.LoginTokenSuccess):
-            user = types.User._parse(self.client, self.r.authorization.user)
+        if isinstance(r, raw.types.auth.LoginTokenMigrateTo):
+            await self.client.storage.dc_id(r.dc_id)
+            self.client.session = await get_session(self.client, r.dc_id)
+
+            r = await self.client.invoke(
+                raw.functions.auth.ImportLoginToken(token=r.token)
+            )
+
+        if isinstance(r, raw.types.auth.LoginTokenSuccess):
+            user = types.User._parse(self.client, r.authorization.user)
 
             await self.client.storage.user_id(user.id)
             await self.client.storage.is_bot(False)
 
             return user
 
-        raise TypeError("Unexpected login token response: {}".format(self.r))
+        raise TypeError("Unexpected login token response: {}".format(r))
 
     @property
     def url(self) -> str:

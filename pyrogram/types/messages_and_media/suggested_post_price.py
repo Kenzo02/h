@@ -27,7 +27,7 @@ class SuggestedPostPriceStar(Object):
 
     Parameters:
         star_count (``int``):
-            The amount of Telegram Stars agreed to pay for the post.
+            The amount of Telegram Stars agreed to pay for the post, 5-100000.
     """
     def __init__(
         self, *,
@@ -55,27 +55,27 @@ class SuggestedPostPriceTon(Object):
     """Describes price of a suggested post in Toncoins.
 
     Parameters:
-        toncoin_cent_count (``int``):
-            The amount of 1/100 of Toncoin agreed to pay for the post.
+        toncoin_nano_count (``int``):
+            The amount of Toncoin in nanotons agreed to pay for the post, 10000000-10000000000000.
     """
     def __init__(
         self, *,
-        toncoin_cent_count: int
+        toncoin_nano_count: int
     ):
         super().__init__()
 
-        self.toncoin_cent_count = toncoin_cent_count
+        self.toncoin_nano_count = toncoin_nano_count
 
     @staticmethod
     def _parse(post_price: "raw.types.StarsTonAmount") -> Optional["SuggestedPostPriceTon"]:
         if isinstance(post_price, raw.types.StarsTonAmount):
             return SuggestedPostPriceTon(
-                toncoin_cent_count=post_price.amount
+                toncoin_nano_count=post_price.amount
             )
 
     def write(self) -> "raw.types.StarsTonAmount":
         return raw.types.StarsTonAmount(
-            amount=self.toncoin_cent_count
+            amount=self.toncoin_nano_count
         )
 
 

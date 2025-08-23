@@ -27,16 +27,16 @@ class DeclineSuggestedPost():
         message_id: int,
         comment: str = None
     ) -> bool:
-        """Declines a suggested post in a channel direct messages chat.
+        """Use this method to decline a suggested post in a direct messages chat.
 
-        .. include:: /_includes/usable-by/users.rst
+        .. include:: /_includes/usable-by/users-bots.rst
 
         Parameters:
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
 
             message_id (``int``):
-                Unique identifier (int) of the target message.
+                Identifier of a suggested post message to decline.
 
             comment (``str``, *optional*):
                 Comment for the creator of the suggested post, 0-128 characters.

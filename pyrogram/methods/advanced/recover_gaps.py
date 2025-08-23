@@ -22,7 +22,7 @@ from typing import Tuple
 import pyrogram
 from pyrogram import raw
 from pyrogram.errors import ChannelInvalid, ChannelPrivate, PersistentTimestampInvalid, PersistentTimestampOutdated
-from pyrogram.utils import MIN_MONOFORUM_CHANNEL_ID
+from pyrogram.utils import ZERO_CHANNEL_ID
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class RecoverGaps:
                             pts=local_pts,
                             limit=10000,
                             force=False
-                        ) if id < 0 or id > MIN_MONOFORUM_CHANNEL_ID else
+                        ) if id < ZERO_CHANNEL_ID else
                         raw.functions.updates.GetDifference(
                             pts=local_pts,
                             date=local_date,

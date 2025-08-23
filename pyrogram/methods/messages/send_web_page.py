@@ -38,7 +38,7 @@ class SendWebPage:
         link_preview_options: "types.LinkPreviewOptions" = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -96,7 +96,7 @@ class SendWebPage:
                 Unique identifier for the target message thread (topic) of the forum.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only only.
 
@@ -250,7 +250,7 @@ class SendWebPage:
                     self,
                     reply_parameters,
                     message_thread_id,
-                    direct_messages_chat_topic_id
+                    direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),

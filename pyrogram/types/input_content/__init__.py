@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from .input_chat_photo import InputChatPhoto, InputChatPhotoPrevious, InputChatPhotoStatic, InputChatPhotoAnimation
 from .input_checklist import InputChecklist
 from .input_contact_message_content import InputContactMessageContent
 from .input_credentials import InputCredentials
@@ -49,11 +50,14 @@ from .input_privacy_rule_disallow_bots import InputPrivacyRuleDisallowBots
 from .input_privacy_rule_disallow_chats import InputPrivacyRuleDisallowChats
 from .input_privacy_rule_disallow_contacts import InputPrivacyRuleDisallowContacts
 from .input_privacy_rule_disallow_users import InputPrivacyRuleDisallowUsers
-from .input_suggested_post_info import InputSuggestedPostInfo
 from .input_text_message_content import InputTextMessageContent
 from .input_venue_message_content import InputVenueMessageContent
 
 __all__ = [
+    "InputChatPhoto",
+    "InputChatPhotoPrevious",
+    "InputChatPhotoStatic",
+    "InputChatPhotoAnimation",
     "InputChecklist",
     "InputContactMessageContent",
     "InputCredentials",
@@ -87,7 +91,6 @@ __all__ = [
     "InputPrivacyRuleDisallowChats",
     "InputPrivacyRuleDisallowContacts",
     "InputPrivacyRuleDisallowUsers",
-    "InputSuggestedPostInfo",
     "InputTextMessageContent",
     "InputVenueMessageContent"
 ]

@@ -29,32 +29,35 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from hashlib import sha256
 from importlib import import_module
-from io import StringIO, BytesIO
+from io import BytesIO, StringIO
 from mimetypes import MimeTypes
 from pathlib import Path
-from typing import Union, List, Optional, Callable, AsyncGenerator, Type
+from typing import AsyncGenerator, Callable, List, Optional, Type, Union
 
 import pyrogram
-from pyrogram import __version__, __license__
-from pyrogram import enums
-from pyrogram import raw
-from pyrogram import utils
+from pyrogram import __license__, __version__, enums, raw, utils
 from pyrogram.crypto import aes
-from pyrogram.errors import CDNFileHashMismatch
 from pyrogram.errors import (
+    AuthBytesInvalid,
+    BadRequest,
+    CDNFileHashMismatch,
+    ChannelPrivate,
+    FloodPremiumWait,
+    FloodWait,
+    PersistentTimestampInvalid,
+    PersistentTimestampOutdated,
     SessionPasswordNeeded,
-    VolumeLocNotFound, ChannelPrivate,
-    BadRequest, AuthBytesInvalid,
-    FloodWait, FloodPremiumWait,
-    PersistentTimestampInvalid, PersistentTimestampOutdated
+    Unauthorized,
+    VolumeLocNotFound,
 )
 from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
-from pyrogram.session import Auth, Session
-from pyrogram.storage import Storage, FileStorage, MemoryStorage
-from pyrogram.types import User, TermsOfService, LinkPreviewOptions
-from pyrogram.utils import ainput
 from pyrogram.qrlogin import QRLogin
+from pyrogram.session import Auth, Session
+from pyrogram.storage import FileStorage, MemoryStorage, Storage
+from pyrogram.types import LinkPreviewOptions, TermsOfService, User
+from pyrogram.utils import ainput
+
 from .connection import Connection
 from .connection.transport import TCP, TCPAbridged
 from .dispatcher import Dispatcher
@@ -475,16 +478,65 @@ class Client(Methods):
             else:
                 break
 
-        sent_code_descriptions = {
-            enums.SentCodeType.APP: "Telegram app",
-            enums.SentCodeType.SMS: "SMS",
-            enums.SentCodeType.CALL: "phone call",
-            enums.SentCodeType.FLASH_CALL: "phone flash call",
-            enums.SentCodeType.FRAGMENT_SMS: "Fragment SMS",
-            enums.SentCodeType.EMAIL_CODE: "email code"
-        }
+        if sent_code.type == enums.SentCodeType.SETUP_EMAIL_REQUIRED:
+            print("Setup email required for authorization")
 
-        print(f"The confirmation code has been sent via {sent_code_descriptions[sent_code.type]}")
+            while True:
+                try:
+                    while True:
+                        email = await ainput("Enter email: ", loop=self.loop)
+
+                        if not email:
+                            continue
+
+                        confirm = await ainput(f'Is "{email}" correct? (y/N): ', loop=self.loop)
+
+                        if confirm.lower() == "y":
+                            break
+
+                    await self.invoke(
+                        raw.functions.account.SendVerifyEmailCode(
+                            purpose=raw.types.EmailVerifyPurposeLoginSetup(
+                                phone_number=self.phone_number,
+                                phone_code_hash=sent_code.phone_code_hash,
+                            ),
+                            email=email,
+                        )
+                    )
+
+                    email_code = await ainput("Enter confirmation code: ", loop=self.loop)
+
+                    email_sent_code = await self.invoke(
+                        raw.functions.account.VerifyEmail(
+                            purpose=raw.types.EmailVerifyPurposeLoginSetup(
+                                phone_number=self.phone_number,
+                                phone_code_hash=sent_code.phone_code_hash,
+                            ),
+                            verification=raw.types.EmailVerificationCode(code=email_code),
+                        )
+                    )
+
+                    if isinstance(email_sent_code, raw.types.account.EmailVerifiedLogin):
+                        if isinstance(email_sent_code.sent_code, raw.types.auth.SentCodePaymentRequired):
+                            raise Unauthorized(
+                                "You need to pay for or purchase premium to continue authorization "
+                                "process, which is currently not supported by Pyrogram."
+                            )
+                except BadRequest as e:
+                    print(e.MESSAGE)
+                else:
+                    break
+        else:
+            sent_code_descriptions = {
+                enums.SentCodeType.APP: "Telegram app",
+                enums.SentCodeType.SMS: "SMS",
+                enums.SentCodeType.CALL: "phone call",
+                enums.SentCodeType.FLASH_CALL: "phone flash call",
+                enums.SentCodeType.FRAGMENT_SMS: "Fragment",
+                enums.SentCodeType.EMAIL_CODE: "email code"
+            }
+
+            print(f"The confirmation code has been sent via {sent_code_descriptions[sent_code.type]}")
 
         while True:
             if not self.phone_code:
@@ -564,7 +616,6 @@ class Client(Methods):
         await qr_login.recreate()
 
         qr = QRCode(version=1)
-        signed_in = None
 
         while True:
             try:
@@ -696,7 +747,7 @@ class Client(Methods):
             elif isinstance(peer, raw.types.Channel):
                 peer_id = utils.get_channel_id(peer.id)
                 access_hash = peer.access_hash
-                peer_type = "channel" if peer.broadcast else "supergroup"
+                peer_type = "direct" if peer.monoforum else "channel" if peer.broadcast else "forum" if peer.forum else "supergroup"
 
                 if peer.username:
                     usernames.append(peer.username.lower())
@@ -710,10 +761,14 @@ class Client(Methods):
                 continue
 
             parsed_peers.append((peer_id, access_hash, peer_type, phone_number))
-            parsed_usernames.append((peer_id, usernames))
+
+            if usernames:
+                parsed_usernames.append((peer_id, usernames))
 
         await self.storage.update_peers(parsed_peers)
-        await self.storage.update_usernames(parsed_usernames)
+
+        if parsed_usernames:
+            await self.storage.update_usernames(parsed_usernames)
 
         return is_min
 

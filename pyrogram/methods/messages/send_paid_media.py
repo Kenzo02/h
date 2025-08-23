@@ -44,7 +44,9 @@ class SendPaidMedia:
         parse_mode: Optional["enums.ParseMode"] = None,
         caption_entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
+        direct_messages_topic_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         schedule_date: datetime = None,
         protect_content: bool = None,
         show_caption_above_media: bool = None,
@@ -85,8 +87,15 @@ class SendPaidMedia:
                 Sends the message silently.
                 Users will receive a notification with no sound.
 
+            direct_messages_topic_id (``int``, *optional*):
+                Unique identifier of the topic in a channel direct messages chat administered by the current user.
+                For directs only only.
+
             reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
                 Describes reply parameters for the message that is being sent.
+
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
+                Information about the suggested post.
 
             schedule_date (:py:obj:`~datetime.datetime`, *optional*):
                 Date when the message will be automatically sent.
@@ -359,36 +368,18 @@ class SendPaidMedia:
                 silent=disable_notification or None,
                 reply_to=await utils.get_reply_to(
                     self,
-                    reply_parameters
+                    reply_parameters,
+                    direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 noforwards=protect_content,
                 invert_media=show_caption_above_media,
+                suggested_post=suggested_post_parameters.write() if suggested_post_parameters else None,
                 **await utils.parse_text_entities(self, caption, parse_mode, caption_entities)
             ),
             sleep_threshold=60,
             business_connection_id=business_connection_id
         )
 
-        conn_id = None
-
-        for u in r.updates:
-            if getattr(u, "connection_id", None):
-                conn_id = u.connection_id
-                break
-
-        return await utils.parse_messages(
-            self,
-            raw.types.messages.Messages(
-                messages=[m.message for m in filter(
-                    lambda u: isinstance(u, (raw.types.UpdateNewMessage,
-                                             raw.types.UpdateNewChannelMessage,
-                                             raw.types.UpdateNewScheduledMessage,
-                                             raw.types.UpdateBotNewBusinessMessage)),
-                    r.updates
-                )],
-                users=r.users,
-                chats=r.chats
-            )
-        )
+        return await utils.parse_messages(client=self, messages=r)

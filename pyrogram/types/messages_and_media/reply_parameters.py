@@ -52,6 +52,9 @@ class ReplyParameters(Object):
 
         quote_position (``int``, *optional*):
             Position of the quote in the original message in UTF-16 code units.
+
+        checklist_task_id (``int``, *optional*):
+            Identifier of the specific checklist task to be replied to.
     """
 
     def __init__(
@@ -63,7 +66,8 @@ class ReplyParameters(Object):
         quote: Optional[str] = None,
         quote_parse_mode: Optional["enums.ParseMode"] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-        quote_position: Optional[int] = None
+        quote_position: Optional[int] = None,
+        checklist_task_id: Optional[int] = None
     ):
         super().__init__()
 
@@ -74,3 +78,4 @@ class ReplyParameters(Object):
         self.quote_parse_mode = quote_parse_mode
         self.quote_entities = quote_entities
         self.quote_position = quote_position
+        self.checklist_task_id = checklist_task_id

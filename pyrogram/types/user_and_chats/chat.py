@@ -18,7 +18,7 @@
 
 import logging
 from datetime import datetime
-from typing import AsyncGenerator, BinaryIO, List, Optional, Union
+from typing import AsyncGenerator, BinaryIO, Dict, List, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
@@ -41,8 +41,8 @@ class Chat(Object):
         is_forum (``bool``, *optional*):
             True, if the supergroup chat is a forum.
 
-        is_direct_messages_group (``bool``, *optional*):
-            True, if the supergroup is a direct message group for a channel chat.
+        is_direct_messages (``bool``, *optional*):
+            True, if the chat is the direct messages chat of a channel.
 
         is_min (``bool``, *optional*):
             True, if this chat have reduced set of fields.
@@ -164,9 +164,6 @@ class Chat(Object):
         has_direct_messages_group (``bool``, *optional*):
             True, if the channel has direct messages group.
 
-        direct_messages_chat_id (``int``, *optional*):
-            Chat identifier of a direct messages group for the channel, or a channel, for which the supergroup is the designated direct messages group.
-
         invite_link (``str``, *optional*):
             Chat invite link, for groups, supergroups and channels.
             Returned only in :meth:`~pyrogram.Client.get_chat`.
@@ -209,6 +206,21 @@ class Chat(Object):
 
         personal_channel_message (:obj:`~pyrogram.types.Message`, *optional*):
             The last message in the personal channel of this chat.
+            Returned only in :meth:`~pyrogram.Client.get_chat`.
+
+        linked_chat_id (``int``, *optional*):
+            Chat identifier of a discussion group for the channel,
+            or a channel, for which the supergroup is the designated discussion group.
+            Returned only in :meth:`~pyrogram.Client.get_chat`.
+
+        direct_messages_chat_id (``int``, *optional*):
+            Chat identifier of a direct messages group for the channel,
+            or a channel, for which the supergroup is the designated direct messages group.
+            Returned only in :meth:`~pyrogram.Client.get_chat`.
+
+        parent_chat (:obj:`~pyrogram.types.Chat`, *optional*):
+            Information about the corresponding channel chat.
+            For direct messages chats only.
             Returned only in :meth:`~pyrogram.Client.get_chat`.
 
         linked_chat (:obj:`~pyrogram.types.Chat`, *optional*):
@@ -485,7 +497,7 @@ class Chat(Object):
         id: Optional[int] = None,
         type: Optional["enums.ChatType"] = None,
         is_forum: Optional[bool] = None,
-        is_direct_messages_group: Optional[bool] = None,
+        is_direct_messages: Optional[bool] = None,
         is_min: Optional[bool] = None,
         is_members_hidden: Optional[bool] = None,
         is_restricted: Optional[bool] = None,
@@ -524,7 +536,6 @@ class Chat(Object):
         has_automatic_translation: Optional[bool] = None,
         has_forum_tabs: Optional[bool] = None,
         has_direct_messages_group: Optional[bool] = None,
-        direct_messages_chat_id: Optional[int] = None,
         invite_link: Optional[str] = None,
         pinned_message: Optional["types.Message"] = None,
         sticker_set_name: Optional[str] = None,
@@ -537,6 +548,9 @@ class Chat(Object):
         permissions: Optional["types.ChatPermissions"] = None,
         personal_channel: Optional["types.Chat"] = None,
         personal_channel_message: Optional["types.Message"] = None,
+        linked_chat_id: Optional[int] = None,
+        direct_messages_chat_id: Optional[int] = None,
+        parent_chat: Optional["types.Chat"] = None,
         linked_chat: Optional["types.Chat"] = None,
         send_as_chat: Optional["types.Chat"] = None,
         available_reactions: Optional["types.ChatReactions"] = None,
@@ -613,7 +627,7 @@ class Chat(Object):
         self.id = id
         self.type = type
         self.is_forum = is_forum
-        self.is_direct_messages_group = is_direct_messages_group
+        self.is_direct_messages = is_direct_messages
         self.is_min = is_min
         self.is_members_hidden = is_members_hidden
         self.is_restricted = is_restricted
@@ -652,7 +666,6 @@ class Chat(Object):
         self.has_automatic_translation = has_automatic_translation
         self.has_forum_tabs = has_forum_tabs
         self.has_direct_messages_group = has_direct_messages_group
-        self.direct_messages_chat_id = direct_messages_chat_id
         self.invite_link = invite_link
         self.pinned_message = pinned_message
         self.sticker_set_name = sticker_set_name
@@ -665,6 +678,9 @@ class Chat(Object):
         self.permissions = permissions
         self.personal_channel = personal_channel
         self.personal_channel_message = personal_channel_message
+        self.linked_chat_id = linked_chat_id
+        self.direct_messages_chat_id = direct_messages_chat_id
+        self.parent_chat = parent_chat
         self.linked_chat = linked_chat
         self.send_as_chat = send_as_chat
         self.available_reactions = available_reactions
@@ -862,7 +878,7 @@ class Chat(Object):
             id=peer_id,
             type=chat_type,
             is_forum=channel.forum,
-            is_direct_messages_group=channel.monoforum,
+            is_direct_messages=channel.monoforum,
             is_min=channel.min,
             is_restricted=channel.restricted,
             is_creator=channel.creator,
@@ -892,7 +908,6 @@ class Chat(Object):
             has_automatic_translation=channel.autotranslation,
             has_forum_tabs=channel.forum_tabs,
             has_direct_messages_group=channel.broadcast_messages_allowed,
-            direct_messages_chat_id=channel.linked_monoforum_id,
             raw=channel,
             client=client
         )
@@ -901,8 +916,8 @@ class Chat(Object):
     def _parse(
         client,
         message: Union["raw.types.Message", "raw.types.MessageService"],
-        users: dict,
-        chats: dict,
+        users: Dict[int, "raw.base.User"],
+        chats: Dict[int, "raw.base.Chat"],
         is_chat: bool
     ) -> Optional["Chat"]:
         from_id = utils.get_raw_peer_id(message.from_id)
@@ -926,7 +941,12 @@ class Chat(Object):
             return Chat._parse_channel_chat(client, chats.get(peer.channel_id))
 
     @staticmethod
-    async def _parse_full_user(client: "pyrogram.Client", user: "raw.types.UserFull", users: dict, chats: dict) -> "Chat":
+    async def _parse_full_user(
+        client: "pyrogram.Client",
+        user: "raw.types.UserFull",
+        users: Dict[int, "raw.base.User"],
+        chats: Dict[int, "raw.base.Chat"]
+    ) -> "Chat":
         parsed_chat = Chat._parse_user_chat(client, users[user.id])
         parsed_chat.raw = user
 
@@ -1006,7 +1026,12 @@ class Chat(Object):
         return parsed_chat
 
     @staticmethod
-    async def _parse_full_chat(client: "pyrogram.Client", chat: "raw.types.ChatFull", users: dict, chats: dict) -> "Chat":
+    async def _parse_full_chat(
+        client: "pyrogram.Client",
+        chat: "raw.types.ChatFull",
+        users: Dict[int, "raw.base.User"],
+        chats: Dict[int, "raw.base.Chat"]
+    ) -> "Chat":
         parsed_chat = Chat._parse_chat_chat(client, chats[chat.id])
         parsed_chat.raw = chat
 
@@ -1041,7 +1066,12 @@ class Chat(Object):
         return parsed_chat
 
     @staticmethod
-    async def _parse_full_channel(client: "pyrogram.Client", channel: "raw.types.ChannelFull", users, chats) -> "Chat":
+    async def _parse_full_channel(
+        client: "pyrogram.Client",
+        channel: "raw.types.ChannelFull",
+        users: Dict[int, "raw.base.User"],
+        chats: Dict[int, "raw.base.Chat"]
+    ) -> "Chat":
         parsed_chat = Chat._parse_channel_chat(client, chats[channel.id])
         parsed_chat.raw = channel
 
@@ -1093,7 +1123,12 @@ class Chat(Object):
         parsed_chat.folder_id = channel.folder_id
 
         if chats.get(channel.linked_chat_id):
+            parsed_chat.linked_chat_id = utils.get_channel_id(channel.linked_chat_id)
             parsed_chat.linked_chat = Chat._parse_channel_chat(client, chats[channel.linked_chat_id])
+
+        if chats.get(chats[channel.id].linked_monoforum_id):
+            parsed_chat.direct_messages_chat_id = utils.get_channel_id(chats[channel.id].linked_monoforum_id)
+            parsed_chat.parent_chat = Chat._parse_channel_chat(client, chats[chats[channel.id].linked_monoforum_id])
 
         # parsed_chat.location
         parsed_chat.slow_mode_delay = channel.slowmode_seconds

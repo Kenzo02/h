@@ -16,6 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from typing import Dict, Optional
+
+import pyrogram
 from pyrogram import raw, types
 
 from ..object import Object
@@ -28,22 +31,25 @@ class DirectMessagesTopic(Object):
         id (``int``):
             Unique topic identifier inside this chat.
 
+        user (:obj:`~pyrogram.types.User`, *optional*):
+            Information about the user that created the topic.
+
         can_send_unpaid_messages (``bool``, *optional*):
             True, if the other party can send unpaid messages even if the chat has paid messages enabled.
 
-        is_marked_as_unread (``bool``):
+        is_marked_as_unread (``bool``, *optional*):
             True, if the forum topic is marked as unread.
 
-        unread_count (``int``):
+        unread_count (``int``, *optional*):
             Number of unread messages in the chat.
 
-        last_read_inbox_message_id (``int``):
+        last_read_inbox_message_id (``int``, *optional*):
             Identifier of the last read incoming message.
 
-        last_read_outbox_message_id (``int``):
+        last_read_outbox_message_id (``int``, *optional*):
             Identifier of the last read outgoing message.
 
-        unread_reactions_count (``int``):
+        unread_reactions_count (``int``, *optional*):
             Number of messages with unread reactions in the chat.
 
         last_message (:obj:`~pyrogram.types.Message`, *optional*):
@@ -54,17 +60,19 @@ class DirectMessagesTopic(Object):
         self,
         *,
         id: int,
-        can_send_unpaid_messages: bool = None,
-        is_marked_as_unread: bool = None,
-        unread_count: int = None,
-        last_read_inbox_message_id: int = None,
-        last_read_outbox_message_id: int = None,
-        unread_reactions_count: int = None,
-        last_message: "types.Message" = None
+        user: Optional["types.User"] = None,
+        can_send_unpaid_messages: Optional[bool] = None,
+        is_marked_as_unread: Optional[bool] = None,
+        unread_count: Optional[int] = None,
+        last_read_inbox_message_id: Optional[int] = None,
+        last_read_outbox_message_id: Optional[int] = None,
+        unread_reactions_count: Optional[int] = None,
+        last_message: Optional["types.Message"] = None
     ):
         super().__init__()
 
         self.id = id
+        self.user = user
         self.can_send_unpaid_messages = can_send_unpaid_messages
         self.is_marked_as_unread = is_marked_as_unread
         self.unread_count = unread_count
@@ -74,12 +82,19 @@ class DirectMessagesTopic(Object):
         self.last_message = last_message
 
     @staticmethod
-    def _parse(topic: "raw.types.MonoForumDialog", messages: dict = {},  users: dict = {}, chats: dict = {}) -> "DirectMessagesTopic":
+    def _parse(
+        client: "pyrogram.Client",
+        topic: "raw.types.MonoForumDialog",
+        messages: dict = {},
+        users: Dict[int, "raw.base.User"] = {},
+        chats: Dict[int, "raw.base.Chat"] = {}
+    ) -> "DirectMessagesTopic":
         if not topic:
             return None
 
         return DirectMessagesTopic(
             id=topic.peer.user_id,
+            user=types.User._parse(client, users.get(topic.peer.user_id)),
             can_send_unpaid_messages=topic.nopaid_messages_exception,
             is_marked_as_unread=topic.unread_mark,
             unread_count=topic.unread_count,

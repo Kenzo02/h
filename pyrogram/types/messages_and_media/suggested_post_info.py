@@ -27,18 +27,18 @@ from ..object import Object
 class SuggestedPostInfo(Object):
     """Contains information about a suggested post.
 
-    If the post can be approved or declined, then changes to the post can be also suggested.
-    Use :meth:`~pyrogram.Client.send_message` with reply to the message and suggested post information to suggest message changes.
-
     Parameters:
         price (:obj:`~pyrogram.types.SuggestedPostPrice`, *optional*):
-            Price of the suggested post.
+            Proposed price of the post.
+            If the field is omitted, then the post is unpaid.
 
         send_date (:py:obj:`~datetime.datetime`, *optional*):
-            Point in time when the post will be published.
+            Proposed send date of the post.
+            If the field is omitted, then the post can be published at any time
+            within 30 days at the sole discretion of the user or administrator who approves it.
 
         state (:obj:`~pyrogram.enums.SuggestedPostState`, *optional*):
-            State of the post.
+            State of the suggested post.
     """
     def __init__(
         self, *,
@@ -61,7 +61,7 @@ class SuggestedPostInfo(Object):
 
         if suggested_post.accepted:
             state = enums.SuggestedPostState.APPROVED
-        elif suggested_post.declined:
+        elif suggested_post.rejected:
             state = enums.SuggestedPostState.DECLINED
         else:
             state = enums.SuggestedPostState.PENDING

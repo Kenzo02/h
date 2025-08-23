@@ -36,7 +36,7 @@ class SendMessage:
         link_preview_options: "types.LinkPreviewOptions" = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -45,7 +45,7 @@ class SendMessage:
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -92,7 +92,7 @@ class SendMessage:
                 Unique identifier for the target message thread (topic) of the forum.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only only.
 
@@ -121,9 +121,9 @@ class SendMessage:
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
- 
+
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
                 Additional interface options. An object for an inline keyboard, custom reply keyboard,
                 instructions to remove reply keyboard or to force a reply from the user.
@@ -254,13 +254,13 @@ class SendMessage:
                     self,
                     reply_parameters,
                     message_thread_id,
-                    direct_messages_chat_topic_id
+                    direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 allow_paid_floodskip=allow_paid_broadcast,
                 allow_paid_stars=paid_message_star_count,
-                suggested_post=suggested_post_info.write() if suggested_post_info else None,
+                suggested_post=suggested_post_parameters.write() if suggested_post_parameters else None,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 message=message,
                 entities=entities,

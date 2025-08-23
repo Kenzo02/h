@@ -78,6 +78,10 @@ class ChatPrivileges(Object):
             Supergroups only.
             True, if the user is allowed to create, rename, close, and reopen forum topics.
 
+        can_manage_direct_messages (``bool``, *optional*):
+            Channels only.
+            True, if the administrator can manage direct messages of the channel and decline suggested posts.
+
         is_anonymous (``bool``, *optional*):
             True, if the user's presence in the chat is hidden.
     """
@@ -99,6 +103,7 @@ class ChatPrivileges(Object):
         can_invite_users: bool = False,
         can_pin_messages: bool = False,  # Groups and supergroups only
         can_manage_topics: bool = False, # Supergroups only
+        can_manage_direct_messages: bool = False,  # Channels only
         is_anonymous: bool = False
     ):
         super().__init__(None)
@@ -117,13 +122,14 @@ class ChatPrivileges(Object):
         self.can_invite_users: bool = can_invite_users
         self.can_pin_messages: bool = can_pin_messages
         self.can_manage_topics: bool = can_manage_topics
+        self.can_manage_direct_messages: bool = can_manage_direct_messages
         self.is_anonymous: bool = is_anonymous
 
     @staticmethod
     def _parse(admin_rights: "raw.base.ChatAdminRights") -> "ChatPrivileges":
         if admin_rights is None:
             return None
-        
+
         return ChatPrivileges(
             can_manage_chat=admin_rights.other,
             can_delete_messages=admin_rights.delete_messages,
@@ -139,5 +145,6 @@ class ChatPrivileges(Object):
             can_invite_users=admin_rights.invite_users,
             can_pin_messages=admin_rights.pin_messages,
             can_manage_topics=admin_rights.manage_topics,
+            can_manage_direct_messages=admin_rights.manage_direct_messages,
             is_anonymous=admin_rights.anonymous
         )

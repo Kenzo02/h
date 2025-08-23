@@ -16,56 +16,86 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from pyrogram import raw, types
+from typing import Optional
+
+import pyrogram
+from pyrogram import raw, types, utils
+from pyrogram.errors import MessageIdsEmpty
 
 from ..object import Object
 
 
 class SuggestedPostPaid(Object):
-    """A suggested post was published and payment for the post was received.
+    """Describes a service message about a successful payment for a suggested post.
 
     Parameters:
         suggested_post_message_id (``int``, *optional*):
             Identifier of the message with the suggested post.
 
-        star_amount (:obj:`~pyrogram.types.StarAmount`, *optional*):
-            The amount of received Telegram Stars.
+        suggested_post_message (:obj:`~pyrogram.types.Message`, *optional*):
+            Message containing the suggested post.
 
-        ton_amount (``int``, *optional*):
-            The amount of received Toncoins in the smallest units of the cryptocurrency.
+        amount (``int``, *optional*):
+            The amount of the currency that was received by the channel in nanotoncoins.
+            For payments in toncoins only.
+
+        star_amount (:obj:`~pyrogram.types.StarAmount`, *optional*):
+            The amount of Telegram Stars that was received by the channel.
+            For payments in Telegram Stars only.
     """
     def __init__(
         self, *,
         suggested_post_message_id: int = None,
+        suggested_post_message: Optional["types.Message"] = None,
+        amount: int = None,
         star_amount: "types.StarAmount" = None,
-        ton_amount: int = None
     ):
         super().__init__()
 
         self.suggested_post_message_id = suggested_post_message_id
+        self.suggested_post_message = suggested_post_message
+        self.amount = amount
         self.star_amount = star_amount
-        self.ton_amount = ton_amount
 
     @staticmethod
-    def _parse(action: "raw.types.MessageActionSuggestedPostSuccess", reply_to: "raw.base.MessageReplyHeader") -> "SuggestedPostPaid":
+    async def _parse(
+        client: "pyrogram.Client",
+        message: "raw.types.MessageService"
+    ) -> "SuggestedPostPaid":
+        action: "raw.types.MessageActionSuggestedPostSuccess" = message.action
+
         if not isinstance(action, raw.types.MessageActionSuggestedPostSuccess):
             return None
 
+        from_id = utils.get_peer_id(message.from_id)
+        peer_id = utils.get_peer_id(message.peer_id)
+        chat_id = peer_id or from_id
+
         suggested_post_message_id = None
+        suggested_post_message = None
+        amount = None
         star_amount = None
-        ton_amount = None
 
-        if isinstance(reply_to, raw.types.MessageReplyHeader):
-            suggested_post_message_id = reply_to.reply_to_msg_id
+        if isinstance(message.reply_to, raw.types.MessageReplyHeader):
+            suggested_post_message_id = message.reply_to.reply_to_msg_id
 
-        if isinstance(action.price, raw.types.StarsAmount):
+            if client.fetch_replies:
+                try:
+                    suggested_post_message = await client.get_messages(
+                        chat_id=chat_id,
+                        message_ids=suggested_post_message_id
+                    )
+                except MessageIdsEmpty:
+                    pass
+
+        if isinstance(action.price, raw.types.StarsTonAmount):
+            amount = action.price.ton_amount
+        elif isinstance(action.price, raw.types.StarsAmount):
             star_amount = types.StarAmount._parse(action.price)
-        elif isinstance(action.price, raw.types.StarsTonAmount):
-            ton_amount = action.price.ton_amount
-
 
         return SuggestedPostPaid(
             suggested_post_message_id=suggested_post_message_id,
-            star_amount=star_amount,
-            ton_amount=ton_amount,
+            suggested_post_message=suggested_post_message,
+            amount=amount,
+            star_amount=star_amount
         )

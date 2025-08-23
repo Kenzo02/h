@@ -16,11 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from concurrent.futures.thread import ThreadPoolExecutor
-from datetime import datetime, timezone
-from getpass import getpass
-from io import BytesIO
-from typing import Union, List, Dict, Optional
 import asyncio
 import base64
 import functools
@@ -28,12 +23,16 @@ import hashlib
 import os
 import re
 import struct
+from concurrent.futures.thread import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from getpass import getpass
+from io import BytesIO
+from typing import Dict, List, Optional, Union
 
 import pyrogram
-from pyrogram import raw, enums
-from pyrogram import types
+from pyrogram import enums, raw, types
+from pyrogram.file_id import DOCUMENT_TYPES, PHOTO_TYPES, FileId, FileType
 from pyrogram.types.messages_and_media.message import Str
-from pyrogram.file_id import FileId, FileType, PHOTO_TYPES, DOCUMENT_TYPES
 
 
 async def ainput(prompt: str = "", *, hide: bool = False, loop: Optional[asyncio.AbstractEventLoop] = None):
@@ -293,59 +292,75 @@ def unpack_inline_message_id(inline_message_id: str) -> "raw.base.InputBotInline
             access_hash=unpacked[3]
         )
 
+ZERO_SECRET_CHAT_ID = -2000000000000
+ZERO_CHANNEL_ID = -1000000000000
 
-MIN_CHANNEL_ID = -100999999999999
-MAX_CHANNEL_ID = -1000000000000
-MIN_MONOFORUM_CHANNEL_ID = 1070000000000
-MAX_MONOFORUM_CHANNEL_ID = 107999999999999
-MIN_CHAT_ID = -999999999999
-MAX_USER_ID = 999999999999
+MAX_CHANNEL_ID = 1000000000000 - (1 << 31)
+MIN_MONOFORUM_CHANNEL_ID = 1000000000000 + (1 << 31) + 1
+MAX_MONOFORUM_CHANNEL_ID = 3000000000000
+MAX_USER_ID = (1 << 40) - 1
+MAX_CHAT_ID = 999999999999
 
 
-def get_raw_peer_id(peer: Union[raw.base.Peer, raw.base.InputPeer, raw.base.RequestedPeer]) -> Optional[int]:
-    """Get the raw peer id from a Peer object"""
-    if isinstance(peer, (raw.types.PeerUser, raw.types.InputPeerUser, raw.types.RequestedPeerUser)):
-        return peer.user_id
+def get_raw_peer_id(peer: Union[int, raw.base.Peer, raw.base.InputPeer, raw.base.RequestedPeer]) -> Optional[int]:
+    """Get the raw peer id from a Peer object or high-lvl id"""
 
-    if isinstance(peer, (raw.types.PeerChat, raw.types.InputPeerChat, raw.types.RequestedPeerChat)):
-        return peer.chat_id
+    if isinstance(peer, int):
+        if peer < 0:
+            if -MAX_CHAT_ID <= peer:
+                return -peer
 
-    if isinstance(peer, (raw.types.PeerChannel, raw.types.InputPeerChannel, raw.types.RequestedPeerChannel)):
-        return peer.channel_id
+            if ZERO_CHANNEL_ID - MAX_CHANNEL_ID <= peer and peer != ZERO_CHANNEL_ID:
+                return ZERO_CHANNEL_ID - peer
+
+            if ZERO_CHANNEL_ID - MAX_MONOFORUM_CHANNEL_ID <= peer:
+                return ZERO_CHANNEL_ID - peer
+
+        elif 0 < peer <= MAX_USER_ID:
+            return peer
+    else:
+        if hasattr(peer, "user_id"):
+            return peer.user_id
+
+        if hasattr(peer, "chat_id"):
+            return peer.chat_id
+
+        if hasattr(peer, "channel_id"):
+            return peer.channel_id
 
     return None
 
 
 def get_peer_id(peer: Union[raw.base.Peer, raw.base.InputPeer, raw.base.RequestedPeer]) -> int:
     """Get the non-raw peer id from a Peer object"""
-    if isinstance(peer, (raw.types.PeerUser, raw.types.InputPeerUser, raw.types.RequestedPeerUser)):
+    if hasattr(peer, "user_id"):
         return peer.user_id
 
-    if isinstance(peer, (raw.types.PeerChat, raw.types.InputPeerChat, raw.types.RequestedPeerChat)):
+    if hasattr(peer, "chat_id"):
         return -peer.chat_id
 
-    if isinstance(peer, (raw.types.PeerChannel, raw.types.InputPeerChannel, raw.types.RequestedPeerChannel)):
-        if MIN_MONOFORUM_CHANNEL_ID <= peer.channel_id < MAX_MONOFORUM_CHANNEL_ID:
-            return peer.channel_id
-
-        return MAX_CHANNEL_ID - peer.channel_id
+    if hasattr(peer, "channel_id"):
+        return ZERO_CHANNEL_ID - peer.channel_id
 
     raise ValueError(f"Peer type invalid: {peer}")
 
 
 def get_peer_type(peer_id: int) -> str:
     if peer_id < 0:
-        if MIN_CHAT_ID <= peer_id:
+        if -MAX_CHAT_ID <= peer_id:
             return "chat"
 
-        if MIN_CHANNEL_ID <= peer_id < MAX_CHANNEL_ID:
+        if ZERO_CHANNEL_ID - MAX_CHANNEL_ID <= peer_id and peer_id != ZERO_CHANNEL_ID:
             return "channel"
+
+        if ZERO_SECRET_CHAT_ID + (-1 << 31) <= peer_id and peer_id != ZERO_SECRET_CHAT_ID:
+            return "secret_chat"
+
+        if ZERO_CHANNEL_ID - MAX_MONOFORUM_CHANNEL_ID <= peer_id:
+            return "monoforum"
 
     elif 0 < peer_id <= MAX_USER_ID:
         return "user"
-
-    elif MIN_MONOFORUM_CHANNEL_ID <= peer_id < MAX_MONOFORUM_CHANNEL_ID:
-        return "monoforum"
 
     raise ValueError(f"Peer id invalid: {peer_id}")
 
@@ -354,7 +369,7 @@ async def get_reply_to(
     client: "pyrogram.Client",
     reply_parameters: Optional["types.ReplyParameters"] = None,
     message_thread_id: Optional[int] = None,
-    direct_messages_chat_topic_id: Optional[int] = None
+    direct_messages_topic_id: Optional[int] = None
 ) -> Optional[Union[raw.types.InputReplyToMessage, raw.types.InputReplyToStory, raw.types.InputReplyToMonoForum]]:
     """Get InputReply for reply_to argument"""
     if reply_parameters:
@@ -385,28 +400,25 @@ async def get_reply_to(
                 quote_text=message,
                 quote_entities=entities,
                 quote_offset=reply_parameters.quote_position,
-                monoforum_peer_id=await client.resolve_peer(direct_messages_chat_topic_id)
+                monoforum_peer_id=await client.resolve_peer(direct_messages_topic_id),
+                todo_item_id=reply_parameters.checklist_task_id
             )
-
 
     if message_thread_id:
         return raw.types.InputReplyToMessage(
             reply_to_msg_id=message_thread_id
         )
 
-    if direct_messages_chat_topic_id:
+    if direct_messages_topic_id:
         return raw.types.InputReplyToMonoForum(
-            monoforum_peer_id=await client.resolve_peer(direct_messages_chat_topic_id)
+            monoforum_peer_id=await client.resolve_peer(direct_messages_topic_id)
         )
 
     return None
 
 
 def get_channel_id(peer_id: int) -> int:
-    if MIN_MONOFORUM_CHANNEL_ID <= peer_id < MAX_MONOFORUM_CHANNEL_ID:
-        return peer_id
-
-    return MAX_CHANNEL_ID - peer_id
+    return ZERO_CHANNEL_ID - peer_id
 
 
 def btoi(b: bytes) -> int:
@@ -530,8 +542,11 @@ def timestamp_to_datetime(ts: Optional[int]) -> Optional[datetime]:
     return datetime.fromtimestamp(ts) if ts else None
 
 
-def datetime_to_timestamp(dt: Optional[datetime]) -> Optional[int]:
-    return int(dt.timestamp()) if dt else None
+def datetime_to_timestamp(dt: Optional[Union[datetime, timedelta]]) -> Optional[int]:
+    if isinstance(dt, timedelta):
+        return int((datetime.now() + dt).timestamp())
+    elif isinstance(dt, datetime):
+        return int(dt.timestamp())
 
 
 def get_first_url(text):

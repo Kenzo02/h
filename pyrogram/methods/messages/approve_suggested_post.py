@@ -29,19 +29,21 @@ class ApproveSuggestedPost():
         message_id: int,
         send_date: datetime = None
     ) -> bool:
-        """Approves a suggested post in a channel direct messages chat.
+        """Use this method to approve a suggested post in a direct messages chat.
 
-        .. include:: /_includes/usable-by/users.rst
+        .. include:: /_includes/usable-by/users-bots.rst
 
         Parameters:
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
 
             message_id (``int``):
-                Unique identifier (int) of the target message.
+                Identifier of a suggested post message to approve.
 
             send_date (:py:obj:`~datetime.datetime`, *optional*):
-                Date when the message was sent.
+                Date when the post is expected to be published.
+                Omit if the date has already been specified when the suggested post was created.
+                If specified, then the date must be not more than 2678400 seconds (30 days) in the future.
 
         Returns:
             ``bool``: True on success.

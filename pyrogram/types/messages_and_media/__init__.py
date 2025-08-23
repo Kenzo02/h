@@ -33,7 +33,7 @@ from .contact_registered import ContactRegistered
 from .contact import Contact
 from .dice import Dice
 from .direct_message_price_changed import DirectMessagePriceChanged
-from .direct_topic import DirectMessagesTopic
+from .direct_messages_topic import DirectMessagesTopic
 from .document import Document
 from .external_reply_info import ExternalReplyInfo
 from .fact_check import FactCheck
@@ -103,6 +103,7 @@ from .suggested_post_approved import SuggestedPostApproved
 from .suggested_post_declined import SuggestedPostDeclined
 from .suggested_post_info import SuggestedPostInfo
 from .suggested_post_paid import SuggestedPostPaid
+from .suggested_post_parameters import SuggestedPostParameters
 from .suggested_post_refunded import SuggestedPostRefunded
 from .suggested_post_price import SuggestedPostPrice, SuggestedPostPriceStar, SuggestedPostPriceTon
 from .text_quote import TextQuote
@@ -208,6 +209,7 @@ __all__ = [
     "SuggestedPostDeclined",
     "SuggestedPostRefunded",
     "SuggestedPostPaid",
+    "SuggestedPostParameters",
     "SuggestedPostPrice",
     "SuggestedPostPriceStar",
     "SuggestedPostPriceTon",

@@ -33,7 +33,7 @@ class SendInlineBotResult:
         result_id: str,
         disable_notification: Optional[bool] = None,
         message_thread_id: Optional[int] = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
         paid_message_star_count: int = None,
         schedule_date: datetime = None,
@@ -71,7 +71,7 @@ class SendInlineBotResult:
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only only.
 
@@ -159,7 +159,7 @@ class SendInlineBotResult:
                     self,
                     reply_parameters,
                     message_thread_id,
-                    direct_messages_chat_topic_id
+                    direct_messages_topic_id
                 ),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 allow_paid_stars=paid_message_star_count

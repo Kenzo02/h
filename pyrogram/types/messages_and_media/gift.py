@@ -122,6 +122,9 @@ class Gift(Object):
             Total amount of gifts.
             Returned only if is_limited is True.
 
+        publisher_chat (:obj:`~pyrogram.types.Chat`, *optional*):
+            Information about the chat that published the gift.
+
         can_upgrade (``bool``, *optional*):
             True, if the gift can be upgraded.
 
@@ -206,6 +209,7 @@ class Gift(Object):
         available_resale_amount: Optional[int] = None,
         available_amount: Optional[int] = None,
         total_amount: Optional[int] = None,
+        publisher_chat: Optional["types.Chat"] = None,
         can_upgrade: Optional[bool] = None,
         can_export_at: Optional[datetime] = None,
         can_transfer_at: Optional[datetime] = None,
@@ -253,6 +257,7 @@ class Gift(Object):
         self.available_resale_amount = available_resale_amount
         self.available_amount = available_amount
         self.total_amount = total_amount
+        self.publisher_chat = publisher_chat
         self.can_upgrade = can_upgrade
         self.can_export_at = can_export_at
         self.can_transfer_at = can_transfer_at
@@ -272,7 +277,7 @@ class Gift(Object):
     @staticmethod
     async def _parse(client, gift, users: Dict[int, "raw.base.User"] = {}, chats: Dict[int, "raw.base.Chat"] = {}):
         if isinstance(gift, raw.types.StarGift):
-            return await Gift._parse_regular(client, gift)
+            return await Gift._parse_regular(client, gift, users, chats)
         elif isinstance(gift, raw.types.StarGiftUnique):
             return await Gift._parse_unique(client, gift, users, chats)
         elif isinstance(gift, raw.types.StarGiftSaved):
@@ -282,6 +287,8 @@ class Gift(Object):
     async def _parse_regular(
         client,
         star_gift: "raw.types.StarGift",
+        users: Dict[int, "raw.base.User"],
+        chats: Dict[int, "raw.base.Chat"]
     ) -> "Gift":
         if not isinstance(star_gift, raw.types.StarGift):
             return
@@ -305,6 +312,7 @@ class Gift(Object):
             is_birthday=star_gift.birthday,
             first_sale_date=utils.timestamp_to_datetime(star_gift.first_sale_date),
             last_sale_date=utils.timestamp_to_datetime(star_gift.last_sale_date),
+            publisher_chat=types.Chat._parse_chat(client, chats.get(utils.get_raw_peer_id(star_gift.released_by))),
             raw=star_gift,
             client=client
         )
@@ -347,6 +355,7 @@ class Gift(Object):
             gift_address=star_gift.gift_address,
             last_resale_star_count=last_resale_star_count,
             last_resale_ton_count=last_resale_ton_count,
+            publisher_chat=types.Chat._parse_chat(client, chats.get(utils.get_raw_peer_id(star_gift.released_by))),
             is_upgraded=True,
             raw=star_gift,
             client=client
@@ -369,7 +378,7 @@ class Gift(Object):
         ).values()
 
         if isinstance(saved_gift.gift, raw.types.StarGift):
-            parsed_gift = await Gift._parse_regular(client, saved_gift.gift)
+            parsed_gift = await Gift._parse_regular(client, saved_gift.gift, users, chats)
         elif isinstance(saved_gift.gift, raw.types.StarGiftUnique):
             parsed_gift = await Gift._parse_unique(client, saved_gift.gift, users, chats)
 
@@ -400,7 +409,7 @@ class Gift(Object):
         action = message.action
 
         if isinstance(action, raw.types.MessageActionStarGift):
-            parsed_gift = await Gift._parse_regular(client, action.gift)
+            parsed_gift = await Gift._parse_regular(client, action.gift, users, chats)
 
             caption, caption_entities = (
                 utils.parse_text_with_entities(
@@ -432,11 +441,10 @@ class Gift(Object):
             parsed_gift.transfer_price = action.transfer_stars
 
             if action.resale_amount:
-                for currency in action.resale_amount:
-                    if isinstance(currency, raw.types.StarsAmount):
-                        parsed_gift.last_resale_star_count = currency.amount
-                    elif isinstance(currency, raw.types.StarsTonAmount):
-                        parsed_gift.last_resale_ton_count = currency.amount
+                if isinstance(action.resale_amount, raw.types.StarsAmount):
+                    parsed_gift.last_resale_star_count = action.resale_amount.amount
+                elif isinstance(action.resale_amount, raw.types.StarsTonAmount):
+                    parsed_gift.last_resale_ton_count = action.resale_amount.amount
 
             parsed_gift.upgrade_message_id = message.id
 
@@ -455,9 +463,6 @@ class Gift(Object):
 
     @property
     def owned_gift_id(self) -> Optional[str]:
-        if not self.is_upgraded:
-            return None
-
         if self.owner and self.owner.type != enums.ChatType.PRIVATE:
             return f"{self.owner.id}_{self.message_id}"
         elif self.message_id:

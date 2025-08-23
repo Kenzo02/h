@@ -72,6 +72,6 @@ class GetDirectMessagesTopicsByID:
         topics = types.List()
 
         for i in r.dialogs:
-            topics.append(types.DirectMessagesTopic._parse(topic=i, users=users, chats=chats))
+            topics.append(types.DirectMessagesTopic._parse(client=self, topic=i, users=users, chats=chats))
 
         return topics if is_iterable else topics[0] if topics else None

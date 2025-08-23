@@ -42,7 +42,7 @@ class SendMediaGroup:
         ]],
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         schedule_date: datetime = None,
@@ -81,7 +81,7 @@ class SendMediaGroup:
                 Unique identifier for the target message thread (topic) of the forum.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only only.
 
@@ -500,17 +500,16 @@ class SendMediaGroup:
                 )
             )
 
-        peer = await self.resolve_peer(chat_id)
         r = await self.invoke(
             raw.functions.messages.SendMultiMedia(
-                peer=peer,
+                peer=await self.resolve_peer(chat_id),
                 multi_media=multi_media,
                 silent=disable_notification or None,
                 reply_to=await utils.get_reply_to(
                     self,
                     reply_parameters,
                     message_thread_id,
-                    direct_messages_chat_topic_id
+                    direct_messages_topic_id
                 ),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 noforwards=protect_content,

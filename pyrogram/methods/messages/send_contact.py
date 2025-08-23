@@ -35,9 +35,10 @@ class SendContact:
         vcard: str = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         schedule_date: datetime = None,
         protect_content: bool = None,
         business_connection_id: str = None,
@@ -87,7 +88,7 @@ class SendContact:
                 Unique identifier for the target message thread (topic) of the forum.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only only.
 
@@ -97,6 +98,9 @@ class SendContact:
 
             reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
                 Describes reply parameters for the message that is being sent.
+
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
+                Information about the suggested post.
 
             schedule_date (:py:obj:`~datetime.datetime`, *optional*):
                 Date when the message will be automatically sent.
@@ -193,7 +197,7 @@ class SendContact:
                     self,
                     reply_parameters,
                     message_thread_id,
-                    direct_messages_chat_topic_id
+                    direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
@@ -202,6 +206,7 @@ class SendContact:
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 effect=effect_id,
                 allow_paid_stars=paid_message_star_count,
+                suggested_post=suggested_post_parameters.write() if suggested_post_parameters else None,
             ),
             business_connection_id=business_connection_id
         )

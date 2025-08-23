@@ -103,7 +103,7 @@ class Message(Object, Update):
             Unique identifier of a message thread to which the message belongs.
             For forums only.
 
-        direct_messages_chat_topic_id (``int``, *optional*):
+        direct_messages_topic_id (``int``, *optional*):
             Unique identifier of a topic in a channel direct messages chat administered by the current user.
             For direct chats only.
 
@@ -129,6 +129,9 @@ class Message(Object, Update):
 
         reply_to_story (:obj:`~pyrogram.types.Story`, *optional*):
             For replies, the original story.
+
+        reply_to_checklist_task_id (``int``, *optional*):
+            Identifier of the specific checklist task that is being replied to.
 
         mentioned (``bool``, *optional*):
             The message contains a mention.
@@ -169,6 +172,10 @@ class Message(Object, Update):
         author_signature (``str``, *optional*):
             Signature of the post author for messages in channels, or the custom title of an anonymous group
             administrator.
+
+        is_paid_post (``bool``, *optional*):
+            True, if the message is a paid post.
+            Note that such posts must not be deleted for 24 hours to receive the payment and can't be edited.
 
         has_protected_content (``bool``, *optional*):
             True, if the message can't be forwarded.
@@ -552,7 +559,7 @@ class Message(Object, Update):
         topic: Optional["types.ForumTopic"] = None,
         forward_origin: Optional["types.MessageOrigin"] = None,
         message_thread_id: Optional[int] = None,
-        direct_messages_chat_topic_id: Optional[int] = None,
+        direct_messages_topic_id: Optional[int] = None,
         effect_id: Optional[int] = None,
         reply_to_message_id: Optional[int] = None,
         reply_to_story_id: Optional[int] = None,
@@ -560,6 +567,7 @@ class Message(Object, Update):
         reply_to_top_message_id: Optional[int] = None,
         reply_to_message: Optional["Message"] = None,
         reply_to_story: Optional["types.Story"] = None,
+        reply_to_checklist_task_id: Optional[int] = None,
         mentioned: Optional[bool] = None,
         empty: Optional[bool] = None,
         service: Optional["enums.MessageServiceType"] = None,
@@ -572,6 +580,7 @@ class Message(Object, Update):
         edit_hidden: Optional[bool] = None,
         media_group_id: Optional[int] = None,
         author_signature: Optional[str] = None,
+        is_paid_post: Optional[bool] = None,
         has_protected_content: Optional[bool] = None,
         has_media_spoiler: Optional[bool] = None,
         text: Optional[Str] = None,
@@ -703,7 +712,7 @@ class Message(Object, Update):
         self.topic = topic
         self.forward_origin = forward_origin
         self.message_thread_id = message_thread_id
-        self.direct_messages_chat_topic_id = direct_messages_chat_topic_id
+        self.direct_messages_topic_id = direct_messages_topic_id
         self.effect_id = effect_id
         self.reply_to_message_id = reply_to_message_id
         self.reply_to_story_id = reply_to_story_id
@@ -711,6 +720,7 @@ class Message(Object, Update):
         self.reply_to_top_message_id = reply_to_top_message_id
         self.reply_to_message = reply_to_message
         self.reply_to_story = reply_to_story
+        self.reply_to_checklist_task_id = reply_to_checklist_task_id
         self.mentioned = mentioned
         self.empty = empty
         self.service = service
@@ -723,6 +733,7 @@ class Message(Object, Update):
         self.edit_hidden = edit_hidden
         self.media_group_id = media_group_id
         self.author_signature = author_signature
+        self.is_paid_post = is_paid_post
         self.has_protected_content = has_protected_content
         self.has_media_spoiler = has_media_spoiler
         self.text = text
@@ -1060,19 +1071,19 @@ class Message(Object, Update):
         elif isinstance(action, raw.types.MessageActionSuggestedPostApproval):
             if action.balance_too_low:
                 service_type = enums.MessageServiceType.SUGGESTED_POST_APPROVAL_FAILED
-                suggested_post_approval_failed = types.SuggestedPostApprovalFailed._parse(action, message.reply_to)
+                suggested_post_approval_failed = await types.SuggestedPostApprovalFailed._parse(client, message)
             elif action.rejected:
                 service_type = enums.MessageServiceType.SUGGESTED_POST_DECLINED
-                suggested_post_declined = types.SuggestedPostDeclined._parse(action, message.reply_to)
+                suggested_post_declined = await types.SuggestedPostDeclined._parse(client, message)
             else:
                 service_type = enums.MessageServiceType.SUGGESTED_POST_APPROVED
-                suggested_post_approved = types.SuggestedPostApproved._parse(action, message.reply_to)
+                suggested_post_approved = await types.SuggestedPostApproved._parse(client, message)
         elif isinstance(action, raw.types.MessageActionSuggestedPostSuccess):
             service_type = enums.MessageServiceType.SUGGESTED_POST_PAID
-            suggested_post_paid = types.SuggestedPostPaid._parse(action, message.reply_to)
+            suggested_post_paid = await types.SuggestedPostPaid._parse(client, message)
         elif isinstance(action, raw.types.MessageActionSuggestedPostRefund):
             service_type = enums.MessageServiceType.SUGGESTED_POST_REFUNDED
-            suggested_post_refunded = types.SuggestedPostRefunded._parse(action, message.reply_to)
+            suggested_post_refunded = await types.SuggestedPostRefunded._parse(client, message)
         elif isinstance(action, raw.types.MessageActionPhoneCall):
             if action.reason:
                 service_type = enums.MessageServiceType.PHONE_CALL_ENDED
@@ -1491,6 +1502,7 @@ class Message(Object, Update):
                 else None
             ),
             author_signature=message.post_author,
+            is_paid_post=bool(getattr(message.suggested_post, "price", None)),
             has_protected_content=message.noforwards,
             has_media_spoiler=has_media_spoiler,
             forward_origin=forward_origin,
@@ -1573,6 +1585,7 @@ class Message(Object, Update):
             if isinstance(message.reply_to, raw.types.MessageReplyHeader):
                 parsed_message.reply_to_message_id = message.reply_to.reply_to_msg_id
                 parsed_message.reply_to_top_message_id = message.reply_to.reply_to_top_id
+                parsed_message.reply_to_checklist_task_id = message.reply_to.todo_item_id
 
                 if message.reply_to.forum_topic:
                     parsed_message.topic_message = True
@@ -1658,17 +1671,17 @@ class Message(Object, Update):
                     pass
 
         if chat.type == enums.ChatType.DIRECT:
-            parsed_message.direct_messages_chat_topic_id = message.saved_peer_id.user_id
+            parsed_message.direct_messages_topic_id = message.saved_peer_id.user_id
 
-            parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.direct_messages_chat_topic_id)]
+            parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.direct_messages_topic_id)]
 
             if parsed_topic:
                 parsed_message.topic = parsed_topic
-            elif client.fetch_topics:
+            elif client.fetch_topics and client.me and not client.me.is_bot:
                 try:
                     parsed_message.topic = await client.get_direct_messages_topics_by_id(
                         chat_id=parsed_message.chat.id,
-                        topic_ids=parsed_message.direct_messages_chat_topic_id
+                        topic_ids=parsed_message.direct_messages_topic_id
                     )
 
                     if parsed_message.topic:
@@ -1837,7 +1850,7 @@ class Message(Object, Update):
         link_preview_options: "types.LinkPreviewOptions" = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -1846,7 +1859,7 @@ class Message(Object, Update):
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup=None,
 
         disable_web_page_preview: bool = None,
@@ -1900,7 +1913,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -1932,7 +1945,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -1956,8 +1969,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -1970,7 +1983,7 @@ class Message(Object, Update):
             link_preview_options=link_preview_options,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             show_caption_above_media=show_caption_above_media,
             reply_parameters=reply_parameters,
@@ -1979,7 +1992,7 @@ class Message(Object, Update):
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
 
             disable_web_page_preview=disable_web_page_preview,
@@ -2007,7 +2020,7 @@ class Message(Object, Update):
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -2015,7 +2028,7 @@ class Message(Object, Update):
             "types.ForceReply"
         ] = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         progress: Callable = None,
@@ -2092,7 +2105,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -2115,7 +2128,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -2163,8 +2176,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -2183,13 +2196,13 @@ class Message(Object, Update):
             thumb=thumb,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -2212,13 +2225,13 @@ class Message(Object, Update):
         thumb: Union[str, BinaryIO] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -2293,7 +2306,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -2316,7 +2329,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -2364,8 +2377,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -2382,13 +2395,13 @@ class Message(Object, Update):
             thumb=thumb,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -2407,12 +2420,12 @@ class Message(Object, Update):
         caption_entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -2468,7 +2481,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -2487,7 +2500,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -2511,8 +2524,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -2525,12 +2538,12 @@ class Message(Object, Update):
             caption_entities=caption_entities,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
 
             reply_to_message_id=reply_to_message_id,
@@ -2595,7 +2608,7 @@ class Message(Object, Update):
         vcard: str = "",
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -2656,7 +2669,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -2700,8 +2713,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -2714,7 +2727,7 @@ class Message(Object, Update):
             vcard=vcard,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -2740,7 +2753,7 @@ class Message(Object, Update):
         force_document: bool = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         schedule_date: datetime = None,
@@ -2748,7 +2761,7 @@ class Message(Object, Update):
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -2823,7 +2836,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -2852,7 +2865,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -2900,8 +2913,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -2917,7 +2930,7 @@ class Message(Object, Update):
             force_document=force_document,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             schedule_date=schedule_date,
@@ -2925,7 +2938,7 @@ class Message(Object, Update):
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -3040,7 +3053,7 @@ class Message(Object, Update):
         quote: bool = None,
         disable_notification: bool = None,
         message_thread_id: bool = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         paid_message_star_count: int = None,
 
@@ -3086,7 +3099,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -3113,8 +3126,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         return await self._client.send_inline_bot_result(
             chat_id=self.chat.id,
@@ -3122,7 +3135,7 @@ class Message(Object, Update):
             result_id=result_id,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             reply_parameters=reply_parameters,
             paid_message_star_count=paid_message_star_count,
 
@@ -3139,7 +3152,7 @@ class Message(Object, Update):
         quote: bool = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -3193,7 +3206,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -3237,8 +3250,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -3249,7 +3262,7 @@ class Message(Object, Update):
             longitude=longitude,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -3268,7 +3281,7 @@ class Message(Object, Update):
         quote: bool = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         allow_paid_broadcast: bool = None,
@@ -3315,7 +3328,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -3356,8 +3369,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -3367,7 +3380,7 @@ class Message(Object, Update):
             media=media,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             allow_paid_broadcast=allow_paid_broadcast,
@@ -3392,14 +3405,14 @@ class Message(Object, Update):
         ttl_seconds: int = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         view_once: bool = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -3470,7 +3483,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -3497,7 +3510,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -3545,8 +3558,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -3562,14 +3575,14 @@ class Message(Object, Update):
             ttl_seconds=ttl_seconds,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             view_once=view_once,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -3802,13 +3815,13 @@ class Message(Object, Update):
         caption_entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -3871,7 +3884,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -3894,7 +3907,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -3942,8 +3955,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -3957,13 +3970,13 @@ class Message(Object, Update):
             caption_entities=caption_entities,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -3984,7 +3997,7 @@ class Message(Object, Update):
         foursquare_type: str = "",
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         business_connection_id: str = None,
@@ -4054,7 +4067,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -4098,8 +4111,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -4114,7 +4127,7 @@ class Message(Object, Update):
             foursquare_type=foursquare_type,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             business_connection_id=business_connection_id,
@@ -4138,6 +4151,7 @@ class Message(Object, Update):
         has_spoiler: bool = None,
         show_caption_above_media: bool = None,
         ttl_seconds: int = None,
+        view_once: bool = None,
         duration: int = 0,
         width: int = 0,
         height: int = 0,
@@ -4147,14 +4161,14 @@ class Message(Object, Update):
         supports_streaming: bool = True,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         no_sound: bool = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -4217,6 +4231,10 @@ class Message(Object, Update):
                 If you set a timer, the video will self-destruct in *ttl_seconds*
                 seconds after it was viewed.
 
+            view_once (``bool``, *optional*):
+                Self-Destruct Timer.
+                If True, the photo will self-destruct after it was viewed.
+
             duration (``int``, *optional*):
                 Duration of sent video in seconds.
 
@@ -4253,7 +4271,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -4280,7 +4298,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -4328,8 +4346,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -4343,6 +4361,7 @@ class Message(Object, Update):
             has_spoiler=has_spoiler,
             show_caption_above_media=show_caption_above_media,
             ttl_seconds=ttl_seconds,
+            view_once=view_once,
             duration=duration,
             width=width,
             height=height,
@@ -4352,14 +4371,14 @@ class Message(Object, Update):
             supports_streaming=supports_streaming,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             no_sound=no_sound,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -4378,7 +4397,7 @@ class Message(Object, Update):
         thumb: Union[str, BinaryIO] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         protect_content: bool = None,
@@ -4386,7 +4405,7 @@ class Message(Object, Update):
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -4449,7 +4468,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -4479,7 +4498,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -4527,8 +4546,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -4541,7 +4560,7 @@ class Message(Object, Update):
             thumb=thumb,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             protect_content=protect_content,
@@ -4549,7 +4568,7 @@ class Message(Object, Update):
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -4570,14 +4589,14 @@ class Message(Object, Update):
         duration: int = 0,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         reply_parameters: "types.ReplyParameters" = None,
         view_once: bool = None,
         business_connection_id: str = None,
         allow_paid_broadcast: bool = None,
         paid_message_star_count: int = None,
-        suggested_post_info: "types.InputSuggestedPostInfo" = None,
+        suggested_post_parameters: "types.SuggestedPostParameters" = None,
         reply_markup: Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
@@ -4640,7 +4659,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -4667,7 +4686,7 @@ class Message(Object, Update):
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
-            suggested_post_info (:obj:`~pyrogram.types.InputSuggestedPostInfo`, *optional*):
+            suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardMarkup` | :obj:`~pyrogram.types.ReplyKeyboardRemove` | :obj:`~pyrogram.types.ForceReply`, *optional*):
@@ -4715,8 +4734,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
@@ -4730,14 +4749,14 @@ class Message(Object, Update):
             duration=duration,
             disable_notification=disable_notification,
             message_thread_id=message_thread_id,
-            direct_messages_chat_topic_id=direct_messages_chat_topic_id,
+            direct_messages_topic_id=direct_messages_topic_id,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             view_once=view_once,
             business_connection_id=business_connection_id,
             allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            suggested_post_info=suggested_post_info,
+            suggested_post_parameters=suggested_post_parameters,
             reply_markup=reply_markup,
             progress=progress,
             progress_args=progress_args,
@@ -4758,7 +4777,7 @@ class Message(Object, Update):
         entities: List["types.MessageEntity"] = None,
         disable_notification: bool = None,
         message_thread_id: int = None,
-        direct_messages_chat_topic_id: int = None,
+        direct_messages_topic_id: int = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -4836,7 +4855,7 @@ class Message(Object, Update):
                 Unique identifier of a message thread to which the message belongs.
                 For forums only.
 
-            direct_messages_chat_topic_id (``int``, *optional*):
+            direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For directs only.
 
@@ -4883,8 +4902,8 @@ class Message(Object, Update):
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
-        if direct_messages_chat_topic_id is None:
-            direct_messages_chat_topic_id = self.direct_messages_chat_topic_id
+        if direct_messages_topic_id is None:
+            direct_messages_topic_id = self.direct_messages_topic_id
 
         if business_connection_id is None:
             business_connection_id = self.business_connection_id
