@@ -37,6 +37,7 @@ class Connection:
         proxy: dict,
         media: bool = False,
         protocol_factory: Type[TCP] = TCPAbridged,
+        crypto_executor_workers: int = 1,
         loop: Optional[asyncio.AbstractEventLoop] = None
     ) -> None:
         self.dc_id = dc_id
@@ -45,6 +46,7 @@ class Connection:
         self.proxy = proxy
         self.media = media
         self.protocol_factory = protocol_factory
+        self.crypto_executor_workers = crypto_executor_workers
 
         self.address = DataCenter(dc_id, test_mode, ipv6, media)
         self.protocol: Optional[TCP] = None
@@ -56,7 +58,7 @@ class Connection:
 
     async def connect(self) -> None:
         for i in range(Connection.MAX_CONNECTION_ATTEMPTS):
-            self.protocol = self.protocol_factory(ipv6=self.ipv6, proxy=self.proxy, loop=self.loop)
+            self.protocol = self.protocol_factory(ipv6=self.ipv6, proxy=self.proxy, crypto_executor_workers=self.crypto_executor_workers, loop=self.loop)
 
             try:
                 log.info("Connecting...")

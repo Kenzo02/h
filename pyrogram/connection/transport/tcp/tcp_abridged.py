@@ -26,12 +26,20 @@ log = logging.getLogger(__name__)
 
 
 class TCPAbridged(TCP):
-    def __init__(self, ipv6: bool, proxy: Proxy, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
-        super().__init__(ipv6, proxy, loop)
+    def __init__(
+        self,
+        ipv6: bool = False,
+        proxy: Proxy = None,
+        crypto_executor_workers: int = 1,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+    ) -> None:
+        super().__init__(ipv6, proxy, crypto_executor_workers, loop)
 
     async def connect(self, address: Tuple[str, int]) -> None:
+        self.marker_event.clear()
         await super().connect(address)
-        await super().send(b"\xef")
+        await super().send(b"\xef", wait_for_marker=False)
+        self.marker_event.set()
 
     async def send(self, data: bytes, *args) -> None:
         length = len(data) // 4
