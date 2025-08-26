@@ -274,7 +274,7 @@ class Dispatcher:
             if not self.client.skip_updates:
                 await self.client.recover_gaps()
 
-    async def stop(self, clear: bool = True):
+    async def stop(self, clear_handlers: bool = True):
         if callable(self.client.stop_handler):
             try:
                 await self.client.stop_handler(self.client)
@@ -288,7 +288,7 @@ class Dispatcher:
             for i in self.handler_worker_tasks:
                 await i
 
-            if clear:
+            if clear_handlers:
                 self.handler_worker_tasks.clear()
                 self.groups.clear()
 

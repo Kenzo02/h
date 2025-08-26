@@ -22,7 +22,8 @@ import pyrogram
 class Stop:
     async def stop(
         self: "pyrogram.Client",
-        block: bool = True
+        block: bool = True,
+        clear_handlers: bool = True
     ):
         """Stop the Client.
 
@@ -33,6 +34,10 @@ class Stop:
                 Blocks the code execution until the client has been stopped. It is useful with ``block=False`` in case
                 you want to stop the own client *within* a handler in order not to cause a deadlock.
                 Defaults to True.
+
+            clear_handlers (``bool``, *optional*):
+                Clear the already existing handlers on stop the client.
+                Default to True.
 
         Returns:
             :obj:`~pyrogram.Client`: The stopped client itself.
@@ -60,7 +65,7 @@ class Stop:
         """
 
         async def do_it():
-            await self.terminate()
+            await self.terminate(clear_handlers=clear_handlers)
             await self.disconnect()
 
         if block:

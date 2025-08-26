@@ -25,7 +25,7 @@ class UpgradedGiftAttributeIdSymbol(UpgradedGiftAttributeId):
 
     Parameters:
         sticker_id (``int``):
-            Identifier of the sticker representing the symnbol.
+            Identifier of the sticker representing the symbol.
     """
     def __init__(
         self,

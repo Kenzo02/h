@@ -34,6 +34,7 @@ class Invoke:
         retries: int = Session.MAX_RETRIES,
         timeout: float = Session.WAIT_TIMEOUT,
         sleep_threshold: float = None,
+        retry_delay: float = Session.RETRY_DELAY,
         business_connection_id: str = None
     ):
         """Invoke raw Telegram functions.
@@ -54,14 +55,17 @@ class Invoke:
             query (``RawFunction``):
                 The API Schema function filled with proper arguments.
 
-            retries (``int``):
+            retries (``int``, *optional*):
                 Number of retries.
 
-            timeout (``float``):
+            timeout (``float`, *optional*`):
                 Timeout in seconds.
 
-            sleep_threshold (``float``):
+            sleep_threshold (``float``, *optional*):
                 Sleep threshold in seconds.
+
+            retry_delay (``float``, *optional*):
+                Retry delay in seconds on errors.
 
             business_connection_id (``str``, *optional*):
                 Unique identifier of the business connection.
@@ -92,10 +96,11 @@ class Invoke:
             query = raw.functions.InvokeWithTakeout(takeout_id=self.takeout_id, query=query)
 
         r = await session.invoke(
-            query, retries, timeout,
-            (sleep_threshold
-             if sleep_threshold is not None
-             else self.sleep_threshold)
+            query=query, retries=retries, timeout=timeout,
+            sleep_threshold=(
+                sleep_threshold if sleep_threshold is not None else self.sleep_threshold
+            ),
+            retry_delay=retry_delay
         )
 
         await self.fetch_peers(getattr(r, "users", []))

@@ -27,11 +27,17 @@ log = logging.getLogger(__name__)
 class Terminate:
     async def terminate(
         self: "pyrogram.Client",
+        clear_handlers: bool = True
     ):
         """Terminate the client by shutting down workers.
 
         This method does the opposite of :meth:`~pyrogram.Client.initialize`.
         It will stop the dispatcher and shut down updates and download workers.
+
+        Parameters:
+            clear_handlers (``bool``, *optional*):
+                Clear the already existing handlers on restart the client.
+                Default to True.
 
         Raises:
             ConnectionError: In case you try to terminate a client that is already terminated.
@@ -44,7 +50,7 @@ class Terminate:
             log.info("Takeout session %s finished", self.takeout_id)
 
         await self.storage.save()
-        await self.dispatcher.stop()
+        await self.dispatcher.stop(clear_handlers=clear_handlers)
 
         for media_session in self.media_sessions.values():
             await media_session.stop()

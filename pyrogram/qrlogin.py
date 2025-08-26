@@ -88,7 +88,7 @@ class QRLogin:
             await asyncio.wait_for(event.wait(), timeout=timeout)
         finally:
             self.client.remove_handler(*handler)
-            await self.client.dispatcher.stop(clear=False)
+            await self.client.dispatcher.stop(clear_handlers=False)
 
         r = await self.client.invoke(
             raw.functions.auth.ExportLoginToken(

@@ -86,8 +86,10 @@ class Session:
     MAX_RETRIES = 10
     ACKS_THRESHOLD = 10
     PING_INTERVAL = 5
+    RETRY_DELAY = 1
     STORED_MSG_IDS_MAX_SIZE = 1000 * 2
     CRYPTO_EXECUTOR_WORKERS = 1
+    MAX_CONSECUTIVE_IGNORED = 30
 
     def __init__(
         self,
@@ -117,11 +119,14 @@ class Session:
 
         self.salt = 0
 
+        self.ignore_count = 0
+
         self.pending_acks: Set[int] = set()
 
         self.results: Dict[int, Result] = {}
 
         self.stored_msg_ids: List[int] = []
+        self.recent_msg_ids: List[int] = []
 
         self.ping_task: Optional[asyncio.Task] = None
         self.ping_task_event = asyncio.Event()
@@ -151,61 +156,60 @@ class Session:
 
         await self._set_state(SessionState.STARTING)
 
-        while True:
-            self.connection = self.client.connection_factory(
-                dc_id=self.dc_id,
-                test_mode=self.test_mode,
-                ipv6=self.client.ipv6,
-                proxy=self.client.proxy,
-                media=self.is_media,
-                protocol_factory=self.client.protocol_factory,
-                crypto_executor_workers=self.CRYPTO_EXECUTOR_WORKERS,
-                loop=self.client.loop
-            )
+        self.connection = self.client.connection_factory(
+            dc_id=self.dc_id,
+            test_mode=self.test_mode,
+            ipv6=self.client.ipv6,
+            proxy=self.client.proxy,
+            media=self.is_media,
+            protocol_factory=self.client.protocol_factory,
+            crypto_executor_workers=self.CRYPTO_EXECUTOR_WORKERS,
+            loop=self.client.loop
+        )
 
-            try:
-                await self.connection.connect()
+        try:
+            await self.connection.connect()
 
-                self.recv_task = self.client.loop.create_task(self.recv_worker())
+            self.recv_task = self.client.loop.create_task(self.recv_worker())
 
-                await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
+            await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
 
-                if not self.is_cdn:
-                    await self.send(
-                        raw.functions.InvokeWithLayer(
-                            layer=layer,
-                            query=raw.functions.InitConnection(
-                                api_id=await self.client.storage.api_id(),
-                                app_version=self.client.app_version,
-                                device_model=self.client.device_model,
-                                system_version=self.client.system_version,
-                                system_lang_code=self.client.system_lang_code,
-                                lang_pack=self.client.lang_pack,
-                                lang_code=self.client.lang_code,
-                                query=raw.functions.help.GetConfig(),
-                                params=self.client.init_connection_params,
-                            )
-                        ),
-                        timeout=self.START_TIMEOUT
-                    )
-
-                self.ping_task = self.client.loop.create_task(self.ping_worker())
-
-                log.info(
-                    "Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer
+            if not self.is_cdn:
+                await self.send(
+                    raw.functions.InvokeWithLayer(
+                        layer=layer,
+                        query=raw.functions.InitConnection(
+                            api_id=await self.client.storage.api_id(),
+                            app_version=self.client.app_version,
+                            device_model=self.client.device_model,
+                            system_version=self.client.system_version,
+                            system_lang_code=self.client.system_lang_code,
+                            lang_pack=self.client.lang_pack,
+                            lang_code=self.client.lang_code,
+                            query=raw.functions.help.GetConfig(),
+                            params=self.client.init_connection_params,
+                        )
+                    ),
+                    timeout=self.START_TIMEOUT
                 )
-                log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
-                log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
-            except (AuthKeyDuplicated, Unauthorized) as e:
-                await self.stop()
-                raise e
-            except (OSError, RPCError):
-                await self.stop()
-            except Exception as e:
-                await self.stop()
-                raise e
-            else:
-                break
+
+            self.ping_task = self.client.loop.create_task(self.ping_worker())
+
+            log.info(
+                "Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer
+            )
+            log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
+            log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
+        except (AuthKeyDuplicated, Unauthorized) as e:
+            await self.stop()
+            raise e
+        except (OSError, RPCError) as e:
+            log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
+            self.client.loop.create_task(self.restart())
+            return
+        except Exception as e:
+            await self.stop()
+            raise e
 
         await self._set_state(SessionState.STARTED)
         self.is_started.set()
@@ -224,6 +228,8 @@ class Session:
             return
 
         await self._set_state(SessionState.STOPPING)
+
+        self.ignore_count = 0
 
         self.is_started.clear()
 
@@ -254,7 +260,9 @@ class Session:
 
     async def restart(self):
         async with self.restart_lock:
-            log.info("Restarting session")
+            if self.stored_msg_ids:
+               self.recent_msg_ids = self.stored_msg_ids[:30]
+
             await self.stop()
             await self.start()
 
@@ -270,6 +278,7 @@ class Session:
             )
         except ValueError as e:
             log.debug(e)
+            log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
             self.client.loop.create_task(self.restart())
             return
 
@@ -291,6 +300,12 @@ class Session:
             try:
                 if len(self.stored_msg_ids) > Session.STORED_MSG_IDS_MAX_SIZE:
                     del self.stored_msg_ids[:Session.STORED_MSG_IDS_MAX_SIZE // 2]
+
+                if msg.msg_id in self.recent_msg_ids:
+                   self.recent_msg_ids.remove(msg.msg_id)
+                   raise SecurityCheckMismatch(
+                         "The msg_id is belong to most recent closed connection."
+                   )
 
                 if self.stored_msg_ids:
                     if msg.msg_id < self.stored_msg_ids[0]:
@@ -316,8 +331,17 @@ class Session:
                             "The msg_id belongs to over 300 seconds in the past. "
                             "Most likely the client time has to be synchronized."
                         )
+
+                    self.ignore_count = 0
             except SecurityCheckMismatch as e:
                 log.info("Discarding packet: %s", e)
+
+                self.ignore_count += 1
+
+                if self.ignore_count >= self.MAX_CONSECUTIVE_IGNORED:
+                    log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
+                    self.client.loop.create_task(self.restart())
+
                 return
             else:
                 bisect.insort(self.stored_msg_ids, msg.msg_id)
@@ -374,7 +398,8 @@ class Session:
                     ),
                     wait_response=False
                 )
-            except OSError:
+            except OSError as e:
+                log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
                 self.client.loop.create_task(self.restart())
                 break
             except RPCError:
@@ -413,7 +438,14 @@ class Session:
 
                     log.warning("Server sent transport error: %s (%s)", error_code, error_msg)
 
+
                 if self.is_started.is_set():
+                    if packet:
+                        error = f"Server sent transport error - {error_code} - ({error_msg})."
+                    else:
+                        error = "Server sent a null packet."
+
+                    log.info("Restarting session due to - %s", error)
                     self.client.loop.create_task(self.restart())
 
                 break
@@ -440,7 +472,7 @@ class Session:
             self.salt,
             self.session_id,
             self.auth_key,
-            self.auth_key_id,
+            self.auth_key_id
         )
 
         try:
@@ -484,7 +516,8 @@ class Session:
         query: TLObject,
         retries: int = MAX_RETRIES,
         timeout: float = WAIT_TIMEOUT,
-        sleep_threshold: float = SLEEP_THRESHOLD
+        sleep_threshold: float = SLEEP_THRESHOLD,
+        retry_delay: float = RETRY_DELAY
     ):
         try:
             await asyncio.wait_for(self.is_started.wait(), self.WAIT_TIMEOUT)
@@ -522,8 +555,9 @@ class Session:
                     '[%s] Retrying "%s" due to: %s', attempt, query_name, str(e) or repr(e)
                 )
 
+                await asyncio.sleep(retry_delay)
+
         raise TimeoutError(f'Failed to invoke "{query_name}" after {retries} retries')
 
     def __str__(self) -> str:
-        """String representation of the session"""
         return f"Session(dc_id={self.dc_id}, test_mode={self.test_mode}, is_media={self.is_media}, is_cdn={self.is_cdn}, state={self._state.name})"
