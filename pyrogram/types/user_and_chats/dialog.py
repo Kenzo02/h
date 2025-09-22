@@ -33,6 +33,12 @@ class Dialog(Object):
         top_message (:obj:`~pyrogram.types.Message`):
             The last message sent in the dialog at this time.
 
+        last_read_inbox_message_id (``int``):
+            Identifier of the last read incoming message.
+
+        last_read_outbox_message_id (``int``):
+            Identifier of the last read outgoing message.
+
         unread_messages_count (``int``):
             Amount of unread messages in this dialog.
 
@@ -64,6 +70,8 @@ class Dialog(Object):
         client: "pyrogram.Client" = None,
         chat: "types.Chat",
         top_message: "types.Message",
+        last_read_inbox_message_id: int,
+        last_read_outbox_message_id: int,
         unread_messages_count: int,
         unread_mentions_count: int,
         unread_reactions_count: int,
@@ -77,6 +85,8 @@ class Dialog(Object):
 
         self.chat = chat
         self.top_message = top_message
+        self.last_read_inbox_message_id = last_read_inbox_message_id
+        self.last_read_outbox_message_id = last_read_outbox_message_id
         self.unread_messages_count = unread_messages_count
         self.unread_mentions_count = unread_mentions_count
         self.unread_reactions_count = unread_reactions_count
@@ -91,6 +101,8 @@ class Dialog(Object):
         return Dialog(
             chat=types.Chat._parse_dialog(client, dialog.peer, users, chats),
             top_message=messages.get(utils.get_peer_id(dialog.peer)),
+            last_read_inbox_message_id=dialog.read_inbox_max_id,
+            last_read_outbox_message_id=dialog.read_outbox_max_id,
             unread_messages_count=dialog.unread_count,
             unread_mentions_count=dialog.unread_mentions_count,
             unread_reactions_count=dialog.unread_reactions_count,

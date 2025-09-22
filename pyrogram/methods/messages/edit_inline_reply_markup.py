@@ -20,7 +20,6 @@ import pyrogram
 from pyrogram import raw
 from pyrogram import types
 from pyrogram import utils
-from .inline_session import get_session
 
 
 class EditInlineReplyMarkup:
@@ -58,7 +57,7 @@ class EditInlineReplyMarkup:
         unpacked = utils.unpack_inline_message_id(inline_message_id)
         dc_id = unpacked.dc_id
 
-        session = await get_session(self, dc_id)
+        session = await self.get_session(dc_id, is_media=True)
 
         return await session.invoke(
             raw.functions.messages.EditInlineBotMessage(

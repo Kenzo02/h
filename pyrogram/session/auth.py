@@ -30,7 +30,6 @@ from pyrogram.connection import Connection
 from pyrogram.crypto import aes, rsa, prime
 from pyrogram.errors import SecurityCheckMismatch
 from pyrogram.raw.core import TLObject, Long, Int
-from .internals import MsgId
 
 log = logging.getLogger(__name__)
 
@@ -42,9 +41,14 @@ class Auth:
         self,
         client: "pyrogram.Client",
         dc_id: int,
+        server_address: str,
+        port: int,
         test_mode: bool
     ):
+        self.client = client
         self.dc_id = dc_id
+        self.server_address = server_address
+        self.port = port
         self.test_mode = test_mode
         self.ipv6 = client.ipv6
         self.proxy = client.proxy
@@ -55,10 +59,10 @@ class Auth:
         self.connection: Optional[Connection] = None
 
     @staticmethod
-    def pack(data: TLObject) -> bytes:
+    def pack(data: TLObject, server_time: float) -> bytes:
         return (
             bytes(8)
-            + Long(MsgId())
+            + Long(int(server_time * (2**32)) & ~0b11)
             + Int(len(data.write()))
             + data.write()
         )
@@ -69,7 +73,7 @@ class Auth:
         return TLObject.read(b)
 
     async def invoke(self, data: TLObject):
-        data = self.pack(data)
+        data = self.pack(data, server_time=self.client.server_time)
         await self.connection.send(data)
         response = BytesIO(await self.connection.recv())
 
@@ -87,8 +91,9 @@ class Auth:
         while True:
             self.connection = self.connection_factory(
                 dc_id=self.dc_id,
+                server_address=self.server_address,
+                port=self.port,
                 test_mode=self.test_mode,
-                ipv6=self.ipv6,
                 proxy=self.proxy,
                 media=False,
                 protocol_factory=self.protocol_factory,

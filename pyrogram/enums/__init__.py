@@ -39,6 +39,7 @@ from .poll_type import PollType
 from .privacy_key import PrivacyKey
 from .privacy_rule_type import PrivacyRuleType
 from .profile_color import ProfileColor
+from .profile_tab import ProfileTab
 from .reply_color import ReplyColor
 from .sent_code_type import SentCodeType
 from .sticker_type import StickerType
@@ -75,6 +76,7 @@ __all__ = [
     'PrivacyKey',
     'PrivacyRuleType',
     'ProfileColor',
+    'ProfileTab',
     'ReplyColor',
     'SentCodeType',
     'StickerType',

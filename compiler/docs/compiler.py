@@ -374,13 +374,16 @@ def pyrogram_api():
             transfer_chat_ownership
             get_suitable_discussion_chats
             set_chat_discussion_group
+            set_main_profile_tab
         """,
         users="""
         Users
             get_me
             get_users
             get_chat_photos
+            get_chat_audios
             get_chat_photos_count
+            get_chat_audios_count
             set_profile_photo
             set_personal_channel
             delete_profile_photos
@@ -427,14 +430,25 @@ def pyrogram_api():
         payments="""
         Payments
             apply_gift_code
+            buy_gift_upgrade
             check_gift_code
             convert_gift_to_stars
             get_available_gifts
             get_chat_gifts
             get_chat_gifts_count
+            add_collection_gifts
+            create_gift_collection
+            delete_gift_collection
+            get_gift_collections
+            remove_collection_gifts
+            reorder_collection_gifts
+            reorder_gift_collections
+            set_gift_collection_name
             get_gift_upgrade_preview
             get_payment_form
             get_stars_balance
+            get_ton_balance
+            get_upgraded_gift_value_info
             get_upgraded_gift
             gift_premium_with_stars
             hide_gift
@@ -557,6 +571,9 @@ def pyrogram_api():
         """,
         account="""
         Account
+            add_profile_audio
+            remove_profile_audio
+            set_profile_audio_position
             get_account_ttl
             set_account_ttl
             set_privacy
@@ -636,6 +653,7 @@ def pyrogram_api():
             FoundContacts
             PrivacyRule
             StoriesStealthMode
+            UserRating
             BotVerification
             BusinessBotRights
             ChatSettings
@@ -708,7 +726,13 @@ def pyrogram_api():
             GiveawayWinners
             Invoice
             LinkPreviewOptions
+            GiftCollection
             GiftCode
+            GiftPurchaseLimit
+            GiftResaleParameters
+            GiftResalePrice
+            GiftResalePriceStar
+            GiftResalePriceTon
             GiftUpgradePreview
             CheckedGiftCode
             ChecklistTask
@@ -752,6 +776,8 @@ def pyrogram_api():
             ChatTheme
             GiftedStars
             GiftedTon
+            UpgradedGiftValueInfo
+            UpgradedGiftAttributeId
             UpgradedGiftAttributeIdModel
             UpgradedGiftAttributeIdSymbol
             UpgradedGiftAttributeIdBackdrop
@@ -1115,6 +1141,7 @@ def pyrogram_api():
             PollType
             PrivacyKey
             ProfileColor
+            ProfileTab
             ReplyColor
             SentCodeType
             StoriesPrivacyRules

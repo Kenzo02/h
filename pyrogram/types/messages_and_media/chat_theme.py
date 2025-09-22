@@ -36,4 +36,5 @@ class ChatTheme(Object):
 
     @staticmethod
     def _parse(action: "raw.types.MessageActionSetChatTheme") -> "ChatTheme":
-        return ChatTheme(name=action.emoticon)
+        if isinstance(action.theme, raw.types.ChatTheme):
+            return ChatTheme(name=action.theme.emoticon)

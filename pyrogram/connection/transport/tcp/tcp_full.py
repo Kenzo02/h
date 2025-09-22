@@ -40,17 +40,17 @@ class TCPFull(TCP):
         self.seq_no: int = 0
 
     async def connect(self, address: Tuple[str, int]) -> None:
+        self.marker_event.clear()
         await super().connect(address)
         self.seq_no = 0
+        self.marker_event.set()
 
     async def send(self, data: bytes, *args) -> None:
-        self.marker_event.clear()
         data = pack("<II", len(data) + 12, self.seq_no) + data
         data += pack("<I", crc32(data))
         self.seq_no += 1
 
         await super().send(data, wait_for_marker=False)
-        self.marker_event.set()
 
     async def recv(self, length: int = 0) -> Optional[bytes]:
         length = await super().recv(4)

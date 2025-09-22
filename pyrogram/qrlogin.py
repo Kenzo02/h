@@ -24,31 +24,8 @@ from typing import List, Optional
 
 import pyrogram
 from pyrogram import filters, handlers, raw, types
-from pyrogram.session import Session
-from pyrogram.session.auth import Auth
 
 log = logging.getLogger(__name__)
-
-
-async def get_session(client: "pyrogram.Client", dc_id: int) -> Session:
-    if dc_id == client.session.dc_id:
-        return client.session
-
-    async with client.sessions_lock:
-        if client.sessions.get(dc_id):
-            return client.sessions[dc_id]
-
-        session = client.sessions[dc_id] = Session(
-            client,
-            dc_id,
-            await Auth(client, dc_id, await client.storage.test_mode()).create(),
-            await client.storage.test_mode(),
-            is_media=False,
-        )
-
-        await session.start()
-
-        return session
 
 
 class QRLogin:
@@ -99,8 +76,21 @@ class QRLogin:
         )
 
         if isinstance(r, raw.types.auth.LoginTokenMigrateTo):
+            dc_option = await self.client.get_dc_option(r.dc_id, ipv6=self.client.ipv6)
+            await self.client.session.stop()
+
+            self.client.session = await self.client.get_session(
+                dc_id=r.dc_id,
+                server_address=dc_option.ip_address,
+                port=dc_option.port,
+                export_authorization=False,
+                temporary=True
+            )
+
             await self.client.storage.dc_id(r.dc_id)
-            self.client.session = await get_session(self.client, r.dc_id)
+            await self.client.storage.server_address(dc_option.ip_address)
+            await self.client.storage.port(dc_option.port)
+            await self.client.storage.auth_key(self.client.session.auth_key)       
 
             r = await self.client.invoke(
                 raw.functions.auth.ImportLoginToken(token=r.token)

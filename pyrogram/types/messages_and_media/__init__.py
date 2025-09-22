@@ -46,7 +46,11 @@ from .forum_topic_reopened import ForumTopicReopened
 from .game import Game
 from .general_forum_topic_hidden import GeneralForumTopicHidden
 from .general_forum_topic_unhidden import GeneralForumTopicUnhidden
+from .gift_collection import GiftCollection
 from .gift_code import GiftCode
+from .gift_purchase_limit import GiftPurchaseLimit
+from .gift_resale_parameters import GiftResaleParameters
+from .gift_resale_price import GiftResalePrice, GiftResalePriceStar, GiftResalePriceTon
 from .gift_upgrade_preview import GiftUpgradePreview
 from .invoice import Invoice
 from .link_preview_options import LinkPreviewOptions
@@ -112,6 +116,7 @@ from .upgraded_gift_attribute_id_backdrop import UpgradedGiftAttributeIdBackdrop
 from .upgraded_gift_attribute_id_model import UpgradedGiftAttributeIdModel
 from .upgraded_gift_attribute_id_symbol import UpgradedGiftAttributeIdSymbol
 from .upgraded_gift_attribute_id import UpgradedGiftAttributeId
+from .upgraded_gift_value_info import UpgradedGiftValueInfo
 from .venue import Venue
 from .video import Video
 from .video_note import VideoNote
@@ -151,7 +156,13 @@ __all__ = [
     "Game",
     "GeneralForumTopicHidden",
     "GeneralForumTopicUnhidden",
+    "GiftCollection",
     "GiftCode",
+    "GiftPurchaseLimit",
+    "GiftResaleParameters",
+    "GiftResalePrice",
+    "GiftResalePriceStar",
+    "GiftResalePriceTon",
     "GiftUpgradePreview",
     "Giveaway",
     "InputChecklistTask",
@@ -219,6 +230,7 @@ __all__ = [
     "UpgradedGiftAttributeIdModel",
     "UpgradedGiftAttributeIdSymbol",
     "UpgradedGiftAttributeId",
+    "UpgradedGiftValueInfo",
     "Venue",
     "Video",
     "VideoNote",

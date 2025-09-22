@@ -1,4 +1,5 @@
 id	message
+API_GIFT_RESTRICTED_UPDATE_APP	Please update your Telegram app to send this gift.
 AUTH_KEY_DUPLICATED	The same authorization key (session file) was used in more than one place simultaneously, the current session was invalidated by the server for security reasons! You must delete your session file and log in again with your phone number or bot token.
 BANNED_RIGHTS_INVALID	You provided some invalid flags in the banned rights.
 BOT_PRECHECKOUT_FAILED	Bot precheckout is failed.
@@ -21,7 +22,7 @@ PREMIUM_CURRENTLY_UNAVAILABLE	You cannot currently purchase a Premium subscripti
 PREVIOUS_CHAT_IMPORT_ACTIVE_WAIT_XMIN	Import for this chat is already in progress, wait {value} minutes before starting a new one.
 PRIVACY_PREMIUM_REQUIRED	You need a [Telegram Premium subscription](https://core.telegram.org/api/premium) to send a message to this user.
 SEND_CODE_UNAVAILABLE	Returned when all available options for this type of number were already used (e.g. flash-call, then SMS, then this error might be returned to trigger a second resend).
-STARGIFT_EXPORT_IN_PROGRESS	Gift export in progress.
+STARGIFT_EXPORT_IN_PROGRESS	You can't send this gift at the moment as the withdrawal process to the blockchain has already started.
 STARGIFT_MESSAGE_INVALID	The provided message for this gift is invalid.
 STARGIFT_USAGE_LIMITED	Star gift usage limited.
 STARS_FORM_AMOUNT_MISMATCH	Stars form amount mismatch.

@@ -295,6 +295,23 @@ class Chat(Object):
         bot_verification (:obj:`~pyrogram.types.BotVerification`, *optional*):
             Information about bot verification.
 
+        main_profile_tab (:obj:`~pyrogram.enums.ProfileTab`, *optional*):
+            The main tab chosen by the administrators of the channel.
+            Returned only in :meth:`~pyrogram.Client.get_chat`.
+
+        first_profile_audio (:obj:`~pyrogram.types.Audio`, *optional*):
+            The first audio file added to the user's profile.
+            Returned only in :meth:`~pyrogram.Client.get_chat`.
+
+        rating (:obj:`~pyrogram.types.UserRating`, *optional*):
+            Description of the current rating of the user.
+
+        pending_rating (:obj:`~pyrogram.types.UserRating`, *optional*):
+            Description of the rating of the user after the next change.
+
+        pending_rating_date (:py:obj:`~datetime.datetime`, *optional*):
+            Date when rating of the user will change to pending_rating.
+
         settings (:obj:`~pyrogram.types.ChatSettings`, *optional*):
             Chat settings.
             Returned only in :meth:`~pyrogram.Client.get_chat`.
@@ -574,6 +591,11 @@ class Chat(Object):
         reactions_limit: Optional[int] = None,
         gift_count: Optional[int] = None,
         bot_verification: Optional["types.BotVerification"] = None,
+        main_profile_tab: Optional["enums.ProfileTab"] = None,
+        first_profile_audio: Optional["types.Audio"] = None,
+        rating: Optional["types.UserRating"] = None,
+        pending_rating: Optional["types.UserRating"] = None,
+        pending_rating_date: Optional[datetime] = None,
         settings: Optional["types.ChatSettings"] = None,
         admins_count: Optional[int] = None,
         kicked_count: Optional[int] = None,
@@ -704,6 +726,11 @@ class Chat(Object):
         self.reactions_limit = reactions_limit
         self.gift_count = gift_count
         self.bot_verification = bot_verification
+        self.main_profile_tab = main_profile_tab
+        self.first_profile_audio = first_profile_audio
+        self.rating = rating
+        self.pending_rating = pending_rating
+        self.pending_rating_date = pending_rating_date
         self.settings = settings
         self.admins_count = admins_count
         self.kicked_count = kicked_count
@@ -980,7 +1007,10 @@ class Chat(Object):
 
         parsed_chat.folder_id = user.folder_id
         parsed_chat.message_auto_delete_time = user.ttl_period
-        parsed_chat.theme_emoji = user.theme_emoticon
+
+        if isinstance(user.theme, raw.types.ChatTheme):
+            parsed_chat.theme_emoji = user.theme.emoticon
+
         parsed_chat.private_forward_name = user.private_forward_name
         parsed_chat.chat_admin_rights = types.ChatPrivileges._parse(user.bot_group_admin_rights)
         parsed_chat.channel_admin_rights = types.ChatPrivileges._parse(user.bot_broadcast_admin_rights)
@@ -1019,6 +1049,26 @@ class Chat(Object):
             user.bot_verification,
             users
         )
+        parsed_chat.main_profile_tab = enums.ProfileTab(type(user.main_tab)) if user.main_tab else None
+
+        if user.saved_music:
+            attributes = {type(i): i for i in user.saved_music.attributes}
+
+            if raw.types.DocumentAttributeAudio in attributes:
+                parsed_chat.first_profile_audio = types.Audio._parse(
+                    client,
+                    user.saved_music,
+                    attributes[raw.types.DocumentAttributeAudio],
+                    getattr(
+                        attributes.get(raw.types.DocumentAttributeFilename, None),
+                        "file_name",
+                        None,
+                    ),
+                )
+
+        parsed_chat.rating = types.UserRating._parse(user.stars_rating)
+        parsed_chat.pending_rating = types.UserRating._parse(user.stars_my_pending_rating)
+        parsed_chat.pending_rating_date = utils.timestamp_to_datetime(user.stars_my_pending_rating_date)
         parsed_chat.paid_message_star_count = user.send_paid_messages_stars
         parsed_chat.display_gifts_button = user.display_gifts_button
         parsed_chat.accepted_gift_types = types.AcceptedGiftTypes._parse(user.disallowed_gifts)
@@ -1174,6 +1224,7 @@ class Chat(Object):
             channel.bot_verification,
             users
         )
+        parsed_chat.main_profile_tab = enums.ProfileTab(type(channel.main_tab)) if channel.main_tab else None
         parsed_chat.gift_count = channel.stargifts_count
         parsed_chat.sticker_set_name = getattr(channel.stickerset, "short_name", None)
         parsed_chat.is_paid_messages_available = channel.paid_messages_available

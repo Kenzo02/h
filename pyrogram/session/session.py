@@ -26,7 +26,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set
 
 import pyrogram
-from pyrogram import raw
+from pyrogram import raw, utils
 from pyrogram.connection import Connection
 from pyrogram.crypto import mtproto
 from pyrogram.errors import (
@@ -95,6 +95,8 @@ class Session:
         self,
         client: "pyrogram.Client",
         dc_id: int,
+        server_address: str,
+        port: int,
         auth_key: bytes,
         test_mode: bool,
         is_media: bool = False,
@@ -102,6 +104,8 @@ class Session:
     ):
         self.client = client
         self.dc_id = dc_id
+        self.server_address = server_address
+        self.port = port
         self.auth_key = auth_key
         self.test_mode = test_mode
         self.is_media = is_media
@@ -115,7 +119,7 @@ class Session:
         self.auth_key_id = sha1(auth_key).digest()[-8:]
 
         self.session_id = os.urandom(8)
-        self.msg_factory = MsgFactory()
+        self.msg_factory = MsgFactory(self.client)
 
         self.salt = 0
 
@@ -158,8 +162,9 @@ class Session:
 
         self.connection = self.client.connection_factory(
             dc_id=self.dc_id,
+            server_address=self.server_address,
+            port=self.port,
             test_mode=self.test_mode,
-            ipv6=self.client.ipv6,
             proxy=self.client.proxy,
             media=self.is_media,
             protocol_factory=self.client.protocol_factory,
@@ -174,6 +179,11 @@ class Session:
 
             await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
 
+            init_connection_params = self.client.init_connection_params
+
+            if isinstance(init_connection_params, dict):
+                init_connection_params = utils.obj_to_jsonvalue(init_connection_params)
+
             if not self.is_cdn:
                 await self.send(
                     raw.functions.InvokeWithLayer(
@@ -187,7 +197,7 @@ class Session:
                             lang_pack=self.client.lang_pack,
                             lang_code=self.client.lang_code,
                             query=raw.functions.help.GetConfig(),
-                            params=self.client.init_connection_params,
+                            params=init_connection_params,
                         )
                     ),
                     timeout=self.START_TIMEOUT
@@ -291,6 +301,9 @@ class Session:
         log.debug("Received: %s", data)
 
         for msg in messages:
+            if msg.seq_no == 0:
+                self.client._set_server_time(msg.msg_id)
+
             if msg.seq_no % 2 != 0:
                 if msg.msg_id in self.pending_acks:
                     continue

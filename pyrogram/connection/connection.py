@@ -21,7 +21,6 @@ import logging
 from typing import Optional, Type
 
 from .transport import TCP, TCPAbridged
-from ..session.internals import DataCenter
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +31,9 @@ class Connection:
     def __init__(
         self,
         dc_id: int,
+        server_address: str,
+        port: int,
         test_mode: bool,
-        ipv6: bool,
         proxy: dict,
         media: bool = False,
         protocol_factory: Type[TCP] = TCPAbridged,
@@ -41,14 +41,15 @@ class Connection:
         loop: Optional[asyncio.AbstractEventLoop] = None
     ) -> None:
         self.dc_id = dc_id
+        self.server_address = server_address
+        self.port = port
         self.test_mode = test_mode
-        self.ipv6 = ipv6
+        self.ipv6 = ":" in server_address
         self.proxy = proxy
         self.media = media
         self.protocol_factory = protocol_factory
         self.crypto_executor_workers = crypto_executor_workers
 
-        self.address = DataCenter(dc_id, test_mode, ipv6, media)
         self.protocol: Optional[TCP] = None
 
         if isinstance(loop, asyncio.AbstractEventLoop):
@@ -62,7 +63,7 @@ class Connection:
 
             try:
                 log.info("Connecting...")
-                await self.protocol.connect(self.address)
+                await self.protocol.connect((self.server_address, self.port))
             except OSError as e:
                 log.warning("Unable to connect due to network issues: %s", e)
                 await self.protocol.close()

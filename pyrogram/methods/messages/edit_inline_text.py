@@ -22,8 +22,6 @@ from typing import List, Optional
 import pyrogram
 from pyrogram import enums, raw, types, utils
 
-from .inline_session import get_session
-
 log = logging.getLogger(__name__)
 
 class EditInlineText:
@@ -90,7 +88,7 @@ class EditInlineText:
         unpacked = utils.unpack_inline_message_id(inline_message_id)
         dc_id = unpacked.dc_id
 
-        session = await get_session(self, dc_id)
+        session = await self.get_session(dc_id, is_media=True)
 
         return await session.invoke(
             raw.functions.messages.EditInlineBotMessage(

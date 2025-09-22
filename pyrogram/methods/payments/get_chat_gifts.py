@@ -26,10 +26,12 @@ class GetChatGifts:
     async def get_chat_gifts(
         self: "pyrogram.Client",
         chat_id: Union[int, str],
+        collection_id: Optional[int] = None,
         exclude_unsaved: Optional[bool] = None,
         exclude_saved: Optional[bool] = None,
         exclude_unlimited: Optional[bool] = None,
-        exclude_limited: Optional[bool] = None,
+        exclude_upgradable: Optional[bool] = None,
+        exclude_non_upgradable: Optional[bool] = None,
         exclude_upgraded: Optional[bool] = None,
         sort_by_price: Optional[bool] = None,
         limit: int = 0,
@@ -45,6 +47,9 @@ class GetChatGifts:
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
 
+            collection_id (``int``, *optional*):
+                Pass collection identifier to get gifts only from the specified collection.
+
             exclude_unsaved (``bool``, *optional*):
                 Pass True to exclude gifts that aren’t saved to the account’s profile page.
 
@@ -54,8 +59,11 @@ class GetChatGifts:
             exclude_unlimited (``bool``, *optional*):
                 Pass True to exclude gifts that can be purchased an unlimited number of times.
 
-            exclude_limited (``bool``, *optional*):
-                Pass True to exclude gifts that can be purchased a limited number of times.
+            exclude_upgradable (``bool``, *optional*):
+                Pass true to exclude gifts that can be purchased limited number of times and can be upgraded.
+
+            exclude_non_upgradable (``bool``, *optional*):
+                Pass true to exclude gifts that can be purchased limited number of times and can't be upgraded.
 
             exclude_upgraded (``bool``, *optional*):
                 Pass True to exclude upgraded gifts.
@@ -93,9 +101,11 @@ class GetChatGifts:
                     exclude_unsaved=exclude_unsaved,
                     exclude_saved=exclude_saved,
                     exclude_unlimited=exclude_unlimited,
-                    exclude_limited=exclude_limited,
                     exclude_unique=exclude_upgraded,
-                    sort_by_value=sort_by_price
+                    exclude_upgradable=exclude_upgradable,
+                    exclude_unupgradable=exclude_non_upgradable,
+                    sort_by_value=sort_by_price,
+                    collection_id=collection_id
                 ),
                 sleep_threshold=60
             )
@@ -123,3 +133,5 @@ class GetChatGifts:
 
             if not offset:
                 return
+
+    get_received_gifts = get_chat_gifts

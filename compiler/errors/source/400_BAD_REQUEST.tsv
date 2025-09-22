@@ -183,6 +183,7 @@ EXTENDED_MEDIA_AMOUNT_INVALID	The specified `stars_amount` of the passed [inputM
 EXTENDED_MEDIA_PEER_INVALID	The specified chat type is invalid.
 EXTENDED_MEDIA_TYPE_INVALID	The specified extended media type is unsupported.
 EXTERNAL_URL_INVALID	The external media URL is invalid.
+FEATURE_DISABLED	This feature is disabled.
 FIELD_NAME_EMPTY	The field with the name FIELD_NAME is missing.
 FIELD_NAME_INVALID	The field with the name FIELD_NAME is invalid.
 FILE_CONTENT_TYPE_INVALID	File content-type is invalid.
@@ -278,6 +279,7 @@ INVITE_REVOKED_MISSING	The action required a chat invite link to be revoked firs
 INVITE_SLUG_EMPTY	The specified invite slug is empty.
 INVITE_SLUG_EXPIRED	The specified invite slug has expired.
 INVITE_SLUG_INVALID	The specified invite slug is invalid.
+INVOICE_INVALID	The specified invoice is invalid.
 INVOICE_PAYLOAD_INVALID	The specified invoice payload is invalid.
 JOIN_AS_PEER_INVALID	The specified peer cannot be used to join a group call.
 LANGUAGE_INVALID	The specified lang_code is invalid.

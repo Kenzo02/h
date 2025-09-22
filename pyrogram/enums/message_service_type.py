@@ -33,8 +33,8 @@ class MessageServiceType(AutoName):
     NEW_CHAT_MEMBERS = auto()
     "New members join"
 
-    LEFT_CHAT_MEMBERS = auto()
-    "Left chat members"
+    LEFT_CHAT_MEMBER = auto()
+    "Left chat member"
 
     NEW_CHAT_TITLE = auto()
     "New chat title"
@@ -150,11 +150,11 @@ class MessageServiceType(AutoName):
     SUGGESTED_POST_REFUNDED = auto()
     "Suggested post refunded"
 
-    CHAT_TTL_CHANGED = auto()
+    SET_MESSAGE_AUTO_DELETE_TIME = auto()
     "Chat TTL changed"
 
-    BOOST_APPLY = auto()
-    "Boost apply"
+    CHAT_BOOST = auto()
+    "Boost applied to the chat"
 
     GIFT = auto()
     "Star gift"
@@ -175,7 +175,7 @@ class MessageServiceType(AutoName):
     "Proximity alert triggered"
 
     HISTORY_CLEARED = auto()
-    "History clear"
+    "Chat history cleared"
 
     SUGGEST_PROFILE_PHOTO = auto()
     "Suggest profile photo"

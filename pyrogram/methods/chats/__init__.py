@@ -68,6 +68,7 @@ from .set_chat_description import SetChatDescription
 from .set_chat_direct_messages_group import SetChatDirectMessagesGroup
 from .set_chat_permissions import SetChatPermissions
 from .set_chat_discussion_group import SetChatDiscussionGroup
+from .set_main_profile_tab import SetMainProfileTab
 from .set_chat_photo import SetChatPhoto
 from .set_chat_protected_content import SetChatProtectedContent
 from .set_chat_title import SetChatTitle
@@ -124,6 +125,7 @@ class Chats(
     SetChatUsername,
     SetChatPermissions,
     SetChatDiscussionGroup,
+    SetMainProfileTab,
     GetDialogsCount,
     GetFolders,
     GetForumTopics,

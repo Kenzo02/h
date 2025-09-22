@@ -22,7 +22,6 @@ import pyrogram
 from pyrogram import raw
 from pyrogram.raw.core import TLObject
 from pyrogram.session import Session
-from pyrogram.methods.messages.business_session import get_session
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +57,7 @@ class Invoke:
             retries (``int``, *optional*):
                 Number of retries.
 
-            timeout (``float`, *optional*`):
+            timeout (``float``, *optional*):
                 Timeout in seconds.
 
             sleep_threshold (``float``, *optional*):
@@ -87,7 +86,7 @@ class Invoke:
                 query=query
             )
 
-            session = await get_session(self, business_connection_id)
+            session = await self.get_session(business_connection_id=business_connection_id)
 
         if self.no_updates:
             query = raw.functions.InvokeWithoutUpdates(query=query)
