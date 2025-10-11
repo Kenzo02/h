@@ -34,6 +34,7 @@ class Invoke:
         timeout: float = Session.WAIT_TIMEOUT,
         sleep_threshold: float = None,
         retry_delay: float = Session.RETRY_DELAY,
+        recaptcha_token: str = None,
         business_connection_id: str = None
     ):
         """Invoke raw Telegram functions.
@@ -66,6 +67,9 @@ class Invoke:
             retry_delay (``float``, *optional*):
                 Retry delay in seconds on errors.
 
+            recaptcha_token (``str``, *optional*):
+                ReCaptcha token.
+
             business_connection_id (``str``, *optional*):
                 Unique identifier of the business connection.
 
@@ -87,6 +91,9 @@ class Invoke:
             )
 
             session = await self.get_session(business_connection_id=business_connection_id)
+
+        if recaptcha_token:
+            query = raw.functions.InvokeWithReCaptcha(token=recaptcha_token, query=query)
 
         if self.no_updates:
             query = raw.functions.InvokeWithoutUpdates(query=query)

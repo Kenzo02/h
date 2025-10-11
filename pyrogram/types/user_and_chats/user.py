@@ -281,19 +281,19 @@ class User(Object, Update):
             The time after which all messages sent to the chat will be automatically deleted; in seconds.
             Returned only in :meth:`~pyrogram.Client.get_me`.
 
-        theme_emoji (``str``, *optional*):
-            Emoji representing a specific chat theme.
+        theme (:obj:`~pyrogram.types.ChatTheme`, *optional*):
+            Theme set for the chat.
             Returned only in :meth:`~pyrogram.Client.get_me`
 
         private_forward_name (``str``, *optional*):
             Anonymized text to be shown instead of the user's name on forwarded messages.
             Returned only in :meth:`~pyrogram.Client.get_me`
 
-        chat_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
+        chat_admin_rights (:obj:`~pyrogram.types.ChatAdministratorRights`, *optional*):
             A suggested set of administrator rights for the bot, to be shown when adding the bot as admin to a group.
             Returned only in :meth:`~pyrogram.Client.get_me`
 
-        channel_admin_rights (:obj:`~pyrogram.types.ChatPrivileges`, *optional*):
+        channel_admin_rights (:obj:`~pyrogram.types.ChatAdministratorRights`, *optional*):
             A suggested set of administrator rights for the bot, to be shown when adding the bot as admin to a channel.
             Returned only in :meth:`~pyrogram.Client.get_me`
 
@@ -446,10 +446,10 @@ class User(Object, Update):
         pinned_message: Optional["types.Message"] = None,
         folder_id: Optional[int] = None,
         message_auto_delete_time: Optional[int] = None,
-        theme_emoji: Optional[str] = None,
+        theme: Optional[str] = None,
         private_forward_name: Optional[str] = None,
-        chat_admin_rights: Optional["types.ChatPrivileges"] = None,
-        channel_admin_rights: Optional["types.ChatPrivileges"] = None,
+        chat_admin_rights: Optional["types.ChatAdministratorRights"] = None,
+        channel_admin_rights: Optional["types.ChatAdministratorRights"] = None,
         chat_background: Optional["types.ChatBackground"] = None,
         stories: Optional[List["types.Story"]] = None,
         business_away_message: Optional["types.BusinessMessage"] = None,
@@ -535,7 +535,7 @@ class User(Object, Update):
         self.pinned_message = pinned_message
         self.folder_id = folder_id
         self.message_auto_delete_time = message_auto_delete_time
-        self.theme_emoji = theme_emoji
+        self.theme = theme
         self.private_forward_name = private_forward_name
         self.chat_admin_rights = chat_admin_rights
         self.channel_admin_rights = channel_admin_rights
@@ -681,13 +681,10 @@ class User(Object, Update):
 
         parsed_user.folder_id = user.folder_id
         parsed_user.message_auto_delete_time = user.ttl_period
-
-        if isinstance(user.theme, raw.types.ChatTheme):
-            parsed_user.theme_emoji = user.theme.emoticon
-
+        parsed_user.theme = await types.ChatTheme._parse(client, user.theme)
         parsed_user.private_forward_name = user.private_forward_name
-        parsed_user.bot_group_admin_rights = types.ChatPrivileges._parse(user.bot_group_admin_rights)
-        parsed_user.bot_broadcast_admin_rights = types.ChatPrivileges._parse(user.bot_broadcast_admin_rights)
+        parsed_user.bot_group_admin_rights = types.ChatAdministratorRights._parse(user.bot_group_admin_rights)
+        parsed_user.bot_broadcast_admin_rights = types.ChatAdministratorRights._parse(user.bot_broadcast_admin_rights)
         parsed_user.chat_background = types.ChatBackground._parse(client, user.wallpaper)
 
         if user.stories:

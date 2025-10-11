@@ -1120,7 +1120,7 @@ class Message(Object, Update):
             # passport_data_received = ...
         elif isinstance(action, raw.types.MessageActionSetChatTheme):
             service_type = enums.MessageServiceType.CHAT_SET_THEME
-            chat_set_theme = types.ChatTheme._parse(action)
+            chat_set_theme = await types.ChatTheme._parse(client, action.theme)
         elif isinstance(action, raw.types.MessageActionSetChatWallPaper):
             service_type = enums.MessageServiceType.CHAT_SET_BACKGROUND
             chat_set_background = types.ChatBackground._parse(client, action.wallpaper, action.same, action.for_both)
@@ -1882,11 +1882,13 @@ class Message(Object, Update):
         Use as a shortcut for:
 
         .. code-block:: python
+        
+            from pyrogram import types
 
             await client.send_message(
                 chat_id=message.chat.id,
                 text="hello",
-                reply_to_message_id=message.id
+                reply_parameters=types.ReplyParameters(message_id=message.id)
             )
 
         Example:
@@ -5974,16 +5976,13 @@ class Message(Object, Update):
                         "This button requires a bot as the sender"
                     )
 
-                r = await self._client.invoke(
-                    raw.functions.messages.RequestWebView(
-                        peer=await self._client.resolve_peer(self.chat.id),
-                        bot=await self._client.resolve_peer(bot_peer_id),
-                        url=web_app.url,
-                        platform=self._client.client_platform.value,
-                        # TODO
-                    )
+                return await self._client.open_web_app(
+                    chat_id=self.chat.id,
+                    bot_user_id=bot_peer_id,
+                    url=web_app.url,
+                    message_thread_id=self.message_thread_id,
+                    direct_messages_topic_id=self.direct_messages_topic_id,
                 )
-                return r.url
             elif button.user_id:
                 return await self._client.get_chat(
                     button.user_id,
