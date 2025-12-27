@@ -81,8 +81,6 @@ class GiftAttribute(Object):
 
         sticker (:obj:`~pyrogram.types.Sticker`, *optional*):
             Information about the sticker.
-
-
     """
 
     def __init__(

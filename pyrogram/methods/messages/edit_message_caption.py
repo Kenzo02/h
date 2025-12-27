@@ -32,6 +32,7 @@ class EditMessageCaption:
         parse_mode: Optional["enums.ParseMode"] = None,
         caption_entities: List["types.MessageEntity"] = None,
         schedule_date: datetime = None,
+        business_connection_id: str = None,
         reply_markup: "types.InlineKeyboardMarkup" = None
     ) -> "types.Message":
         """Edit the caption of media messages.
@@ -60,6 +61,9 @@ class EditMessageCaption:
             schedule_date (:py:obj:`~datetime.datetime`, *optional*):
                 Date when the message will be automatically sent.
 
+            business_connection_id (``str``, *optional*):
+                Unique identifier of the business connection on behalf of which the message will be sent.
+
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup`, *optional*):
                 An InlineKeyboardMarkup object.
 
@@ -78,5 +82,6 @@ class EditMessageCaption:
             parse_mode=parse_mode,
             entities=caption_entities,
             schedule_date=schedule_date,
+            business_connection_id=business_connection_id,
             reply_markup=reply_markup
         )

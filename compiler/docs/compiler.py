@@ -298,7 +298,6 @@ def pyrogram_api():
             get_direct_messages_chat_topic_history
             delete_direct_messages_chat_topic_history
             set_direct_messages_chat_topic_is_marked_as_unread
-            send_web_page
             start_bot
             delete_chat_history
             send_paid_media
@@ -362,6 +361,7 @@ def pyrogram_api():
             get_forum_topics
             get_forum_topics_by_id
             update_color
+            set_upgraded_gift_colors
             update_chat_notifications
             toggle_forum_topics
             create_folder_invite_link
@@ -434,6 +434,7 @@ def pyrogram_api():
             get_contacts
             get_contacts_count
             search_contacts
+            set_contact_note
         """,
         payments="""
         Payments
@@ -443,16 +444,21 @@ def pyrogram_api():
             convert_gift_to_stars
             get_available_gifts
             get_chat_gifts
+            get_gift_auction_state
             get_chat_gifts_count
             add_collection_gifts
             create_gift_collection
             delete_gift_collection
+            drop_gift_original_details
+            edit_star_subscription
             get_gift_collections
             remove_collection_gifts
             reorder_collection_gifts
             reorder_gift_collections
+            reuse_star_subscription
             set_gift_collection_name
             get_gift_upgrade_preview
+            get_gift_upgrade_variants
             get_payment_form
             get_stars_balance
             get_ton_balance
@@ -460,6 +466,8 @@ def pyrogram_api():
             get_upgraded_gift
             gift_premium_with_stars
             hide_gift
+            increase_gift_auction_bid
+            place_gift_auction_bid
             search_gifts_for_resale
             send_gift
             send_payment_form
@@ -467,8 +475,11 @@ def pyrogram_api():
             set_gift_resale_price
             set_pinned_gifts
             show_gift
+            suggest_birthday
             transfer_gift
             upgrade_gift
+            process_gift_purchase_offer
+            send_gift_purchase_offer
         """,
         phone="""
         Phone
@@ -494,6 +505,7 @@ def pyrogram_api():
             set_bot_commands
             get_bot_commands
             delete_bot_commands
+            edit_user_star_subscription
             set_bot_default_privileges
             get_bot_default_privileges
             set_chat_menu_button
@@ -743,6 +755,8 @@ def pyrogram_api():
             GiftResalePriceStar
             GiftResalePriceTon
             GiftUpgradePreview
+            GiftUpgradePrice
+            GiftUpgradeVariants
             CheckedGiftCode
             ChecklistTask
             ChecklistTasksAdded
@@ -787,6 +801,7 @@ def pyrogram_api():
             GiftedTon
             UpgradedGiftValueInfo
             UpgradedGiftAttributeId
+            UpgradedGiftPurchaseOffer
             UpgradedGiftAttributeIdModel
             UpgradedGiftAttributeIdSymbol
             UpgradedGiftAttributeIdBackdrop
@@ -794,6 +809,13 @@ def pyrogram_api():
             InputChatPhotoPrevious
             InputChatPhotoStatic
             InputChatPhotoAnimation
+            AuctionBid
+            AuctionRound
+            AuctionState
+            AuctionStateActive
+            AuctionStateFinished
+            GiftAuctionState
+            GiftAuction
         """,
         bot_keyboards="""
         Bot keyboards
@@ -941,43 +963,68 @@ def pyrogram_api():
     categories = dict(
         message="""
         Message
-            Message.click
-            Message.delete
-            Message.download
-            Message.forward
-            Message.copy
-            Message.copy_media_group
-            Message.pin
-            Message.unpin
-            Message.edit
+            Message.reply_animation
+            Message.answer_animation
+            Message.reply_audio
+            Message.answer_audio
+            Message.reply_contact
+            Message.answer_contact
+            Message.reply_document
+            Message.answer_document
+            Message.reply_game
+            Message.answer_game
+            Message.reply_invoice
+            Message.answer_invoice
+            Message.reply_location
+            Message.answer_location
+            Message.reply_media_group
+            Message.answer_media_group
+            Message.reply
+            Message.reply_text
+            Message.answer
+            Message.reply_photo
+            Message.answer_photo
+            Message.reply_poll
+            Message.answer_poll
+            Message.reply_dice
+            Message.answer_dice
+            Message.reply_sticker
+            Message.answer_sticker
+            Message.reply_venue
+            Message.answer_venue
+            Message.reply_video
+            Message.answer_video
+            Message.reply_video_note
+            Message.answer_video_note
+            Message.reply_voice
+            Message.answer_voice
+            Message.reply_paid_media
+            Message.answer_paid_media
+            Message.reply_cached_media
+            Message.answer_cached_media
+            Message.get_media_group
+            Message.reply_chat_action
+            Message.reply_inline_bot_result
+            Message.answer_inline_bot_result
+            Message.reply_checklist
+            Message.answer_checklist
             Message.edit_text
+            Message.edit
             Message.edit_caption
             Message.edit_media
             Message.edit_checklist
             Message.edit_reply_markup
-            Message.reply
-            Message.reply_text
-            Message.reply_animation
-            Message.reply_audio
-            Message.reply_cached_media
-            Message.reply_chat_action
-            Message.reply_contact
-            Message.reply_document
-            Message.reply_game
-            Message.reply_inline_bot_result
-            Message.reply_location
-            Message.reply_media_group
-            Message.reply_photo
-            Message.reply_poll
-            Message.reply_sticker
-            Message.reply_venue
-            Message.reply_video
-            Message.reply_video_note
-            Message.reply_voice
-            Message.reply_web_page
-            Message.reply_checklist
-            Message.get_media_group
+            Message.forward
+            Message.copy
+            Message.copy_media_group
+            Message.delete
+            Message.click
             Message.react
+            Message.retract_vote
+            Message.download
+            Message.vote
+            Message.pin
+            Message.unpin
             Message.read
             Message.view
             Message.pay
@@ -1088,6 +1135,8 @@ def pyrogram_api():
             Gift.wear
             Gift.buy
             Gift.send
+            Gift.get_auction_state
+            Gift.send_purchase_offer
         """,
         animation="""
         Animation
@@ -1145,6 +1194,7 @@ def pyrogram_api():
             MessageServiceType
             MessagesFilter
             NextCodeType
+            PaidReactionPrivacy
             ParseMode
             PhoneCallDiscardReason
             PollType
@@ -1159,6 +1209,7 @@ def pyrogram_api():
             MediaAreaType
             PrivacyRuleType
             GiftForResaleOrder
+            GiftPurchaseOfferState
             PaymentFormType
             StickerType
             MaskPointType

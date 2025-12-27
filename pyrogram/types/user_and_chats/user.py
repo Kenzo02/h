@@ -147,8 +147,19 @@ class User(Object, Update):
         phone_number (``str``, *optional*):
             User's phone number.
 
+        personal_photo (:obj:`~pyrogram.types.ChatPhoto`, *optional*):
+            Personal profile photo, to be shown instead of profile photo.
+            This photo isn't returned in the list of user photos.
+            Suitable for downloads only.
+
         photo (:obj:`~pyrogram.types.ChatPhoto`, *optional*):
-            User's or bot's current profile photo. Suitable for downloads only.
+            User's or bot's current profile photo.
+            Suitable for downloads only.
+
+        public_photo (:obj:`~pyrogram.types.ChatPhoto`, *optional*):
+            Fallback profile photo, displayed if no photo is present in photo or personal_photo, due to privacy settings.
+            This photo isn't returned in the list of user photos.
+            Suitable for downloads only.
 
         restrictions (List of :obj:`~pyrogram.types.Restriction`, *optional*):
             The list of reasons why this bot might be unavailable to some users.
@@ -366,6 +377,9 @@ class User(Object, Update):
             Information about gifts that can be received by the user.
             Returned only in :meth:`~pyrogram.Client.get_me`
 
+        note (:obj:`~pyrogram.types.FormattedText`, *optional*):
+            Note added to the user's contact.
+
         raw (:obj:`~pyrogram.raw.base.User` | :obj:`~pyrogram.raw.base.UserStatus`, *optional*):
             The raw user or user status object, as received from the Telegram API.
 
@@ -409,7 +423,9 @@ class User(Object, Update):
         emoji_status: Optional["types.EmojiStatus"] = None,
         dc_id: Optional[int] = None,
         phone_number: Optional[str] = None,
+        personal_photo: Optional["types.ChatPhoto"] = None,
         photo: Optional["types.ChatPhoto"] = None,
+        public_photo: Optional["types.ChatPhoto"] = None,
         restrictions: Optional[List["types.Restriction"]] = None,
         reply_color: Optional["types.ChatColor"] = None,
         profile_color: Optional["types.ChatColor"] = None,
@@ -468,6 +484,7 @@ class User(Object, Update):
         pending_rating: Optional["types.UserRating"] = None,
         pending_rating_date: Optional[datetime] = None,
         accepted_gift_types: Optional["types.AcceptedGiftTypes"] = None,
+        note: Optional["types.FormattedText"] = None,
         raw: Optional[Union["raw.base.User", "raw.base.UserStatus"]] = None
     ):
         super().__init__(client)
@@ -498,7 +515,9 @@ class User(Object, Update):
         self.emoji_status = emoji_status
         self.dc_id = dc_id
         self.phone_number = phone_number
+        self.personal_photo = personal_photo
         self.photo = photo
+        self.public_photo = public_photo
         self.restrictions = restrictions
         self.reply_color = reply_color
         self.profile_color = profile_color
@@ -557,6 +576,7 @@ class User(Object, Update):
         self.pending_rating = pending_rating
         self.pending_rating_date = pending_rating_date
         self.accepted_gift_types = accepted_gift_types
+        self.note = note
         self.raw = raw
 
     @property
@@ -671,10 +691,11 @@ class User(Object, Update):
         parsed_user.bot_can_manage_emoji_status = user.bot_can_manage_emoji_status
         parsed_user.display_gifts_button = user.display_gifts_button
         parsed_user.bio = user.about or None
-        # parsed_user.personal_photo = user.personal_photo
-        # parsed_user.profile_photo = user.profile_photo
-        # parsed_user.fallback_photo = user.fallback_photo
+        parsed_user.personal_photo = types.ChatPhoto._parse(client, user.personal_photo, users[user.id].id, users[user.id].access_hash)
+        # parsed_user.photo = types.ChatPhoto._parse(client, user.profile_photo, users[user.id].id, users[user.id].access_hash)
+        parsed_user.public_photo = types.ChatPhoto._parse(client, user.fallback_photo, users[user.id].id, users[user.id].access_hash)
         # parsed_user.bot_info = user.bot_info
+        # parsed_user.bot_forum_view
 
         if user.pinned_msg_id:
             parsed_user.pinned_message = await client.get_messages(chat_id=parsed_user.id, pinned=True)
@@ -698,7 +719,7 @@ class User(Object, Update):
             ) or None
 
         parsed_user.business_work_hours = types.BusinessWorkingHours._parse(user.business_work_hours)
-        parsed_user.business_location = types.Location._parse(client, user.business_location)
+        parsed_user.business_location = types.Location._parse_business(user.business_location)
         parsed_user.business_greeting_message = types.BusinessMessage._parse(client, user.business_greeting_message, users)
         parsed_user.business_away_message = types.BusinessMessage._parse(client, user.business_away_message, users)
         parsed_user.business_intro = await types.BusinessIntro._parse(client, user.business_intro)
@@ -739,6 +760,7 @@ class User(Object, Update):
         parsed_user.pending_rating = types.UserRating._parse(user.stars_my_pending_rating)
         parsed_user.pending_rating_date = utils.timestamp_to_datetime(user.stars_my_pending_rating_date)
         parsed_user.accepted_gift_types = types.AcceptedGiftTypes._parse(user.disallowed_gifts)
+        parsed_user.note = types.FormattedText._parse(client, user.note)
 
         return parsed_user
 

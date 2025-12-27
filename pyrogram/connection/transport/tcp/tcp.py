@@ -25,6 +25,8 @@ from typing import Dict, Optional, Tuple, TypedDict
 
 import socks
 
+from pyrogram import utils
+
 log = logging.getLogger(__name__)
 
 proxy_type_by_scheme: Dict[str, int] = {
@@ -68,7 +70,7 @@ class TCP:
         if isinstance(loop, asyncio.AbstractEventLoop):
             self.loop = loop
         else:
-            self.loop = asyncio.get_event_loop()
+            self.loop = utils.get_event_loop()
 
     async def _connect_via_proxy(
         self,

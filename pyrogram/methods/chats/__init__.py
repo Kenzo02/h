@@ -76,6 +76,7 @@ from .set_chat_ttl import SetChatTTL
 from .set_chat_username import SetChatUsername
 from .set_send_as_chat import SetSendAsChat
 from .set_slow_mode import SetSlowMode
+from .set_upgraded_gift_colors import SetUpgradedGiftColors
 from .toggle_folder_tags import ToggleFolderTags
 from .toggle_forum_topics import ToggleForumTopics
 from .toggle_join_to_send import ToggleJoinToSend
@@ -149,6 +150,7 @@ class Chats(
     GetPersonalChannels,
     SetAdministratorTitle,
     SetSlowMode,
+    SetUpgradedGiftColors,
     ToggleFolderTags,
     ToggleForumTopics,
     ToggleJoinToSend,

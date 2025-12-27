@@ -20,6 +20,8 @@ import asyncio
 import logging
 from typing import Optional, Type
 
+from pyrogram import utils
+
 from .transport import TCP, TCPAbridged
 
 log = logging.getLogger(__name__)
@@ -55,7 +57,7 @@ class Connection:
         if isinstance(loop, asyncio.AbstractEventLoop):
             self.loop = loop
         else:
-            self.loop = asyncio.get_event_loop()
+            self.loop = utils.get_event_loop()
 
     async def connect(self) -> None:
         for i in range(Connection.MAX_CONNECTION_ATTEMPTS):

@@ -230,16 +230,4 @@ class CopyMediaGroup:
             sleep_threshold=60
         )
 
-        return await utils.parse_messages(
-            self,
-            raw.types.messages.Messages(
-                messages=[m.message for m in filter(
-                    lambda u: isinstance(u, (raw.types.UpdateNewMessage,
-                                             raw.types.UpdateNewChannelMessage,
-                                             raw.types.UpdateNewScheduledMessage)),
-                    r.updates
-                )],
-                users=r.users,
-                chats=r.chats
-            )
-        )
+        return await utils.parse_messages(client=self, messages=r)

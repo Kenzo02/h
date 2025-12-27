@@ -470,11 +470,22 @@ contact = create(contact_filter)
 
 # region location_filter
 async def location_filter(_, __, m: Message):
-    return bool(m.location)
+    return bool(m.location and not m.location.live_period)
 
 
 location = create(location_filter)
 """Filter messages that contain :obj:`~pyrogram.types.Location` objects."""
+
+
+# endregion
+
+# region live_location_filter
+async def live_location_filter(_, __, m: Message):
+    return bool(m.location and m.location.live_period)
+
+
+live_location = create(live_location_filter)
+"""Filter messages that contain :obj:`~pyrogram.types.Location` objects with a live period."""
 
 
 # endregion
@@ -933,9 +944,48 @@ linked_channel = create(linked_channel_filter)
 
 # endregion
 
+# region gift_offer_filter
+async def gift_offer_filter(_, __, m: Message):
+    return bool(
+        m.upgraded_gift_purchase_offer and m.upgraded_gift_purchase_offer.state == enums.GiftPurchaseOfferState.PENDING
+    )
+
+
+gift_offer = create(gift_offer_filter)
+"""Filter new gift offers."""
+
+
+# endregion
+
+# region gift_offer_accepted_filter
+async def gift_offer_accepted_filter(_, __, m: Message):
+    return bool(
+        m.upgraded_gift_purchase_offer and m.upgraded_gift_purchase_offer.state == enums.GiftPurchaseOfferState.ACCEPTED
+    )
+
+
+gift_offer_accepted = create(gift_offer_accepted_filter)
+"""Filter accepted gift offers."""
+
+
+# endregion
+
+# region gift_offer_rejected_filter
+async def gift_offer_rejected_filter(_, __, m: Message):
+    return bool(
+        (m.upgraded_gift_purchase_offer and m.upgraded_gift_purchase_offer.state == enums.GiftPurchaseOfferState.REJECTED)
+        or m.upgraded_gift_purchase_offer_declined
+    )
+
+
+gift_offer_rejected = create(gift_offer_rejected_filter)
+"""Filter rejected gift offers."""
+
+
+# endregion
 
 # region command_filter
-def command(commands: Union[str, List[str]], prefixes: Union[str, List[str]] = "/", case_sensitive: bool = False):
+def command(commands: Union[str, List[str]], prefixes: Optional[Union[str, List[str]]] = "/", case_sensitive: bool = False):
     """Filter commands, i.e.: text messages starting with "/" or any other custom prefix.
 
     Parameters:

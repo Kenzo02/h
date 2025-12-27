@@ -258,6 +258,7 @@ class Client(Methods):
 
     INVITE_LINK_RE = re.compile(r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/(?:joinchat/|\+))([\w-]+)$")
     UPGRADED_GIFT_RE = re.compile(r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/(?:nft/|\+))([\w-]+)$")
+    SAVED_GIFT_RE = re.compile(r"^(-\d+)_(\d+)$")
     CHANNEL_MESSAGE_LINK_RE = re.compile(r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/(?:c/)?)([\w]+)(?:.+)?$")
     WORKERS = min(32, (os.cpu_count() or 0) + 4)  # os.cpu_count() can be None
     WORKDIR = PARENT_DIR
@@ -422,7 +423,7 @@ class Client(Methods):
         if isinstance(loop, asyncio.AbstractEventLoop):
             self.loop = loop
         else:
-            self.loop = asyncio.get_event_loop()
+            self.loop = utils.get_event_loop()
 
         self.__config: "raw.types.Config" = None
 
@@ -533,8 +534,9 @@ class Client(Methods):
 
                     if isinstance(email_sent_code, raw.types.account.EmailVerifiedLogin):
                         if isinstance(email_sent_code.sent_code, raw.types.auth.SentCodePaymentRequired):
+                            # TODO: raw.functions.auth.CheckPaidAuth
                             raise Unauthorized(
-                                "You need to pay for or purchase premium to continue authorization "
+                                f"You need to pay {email_sent_code.sent_code.amount}{email_sent_code.sent_code.currency} or purchase premium to continue authorization "
                                 "process, which is currently not supported by Pyrogram."
                             )
                 except BadRequest as e:

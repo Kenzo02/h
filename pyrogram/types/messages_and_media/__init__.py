@@ -17,6 +17,9 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from .animation import Animation
+from .auction_bid import AuctionBid
+from .auction_round import AuctionRound
+from .auction_state import AuctionState, AuctionStateActive, AuctionStateFinished
 from .audio import Audio
 from .available_effect import AvailableEffect
 from .boosts_status import BoostsStatus
@@ -52,6 +55,8 @@ from .gift_purchase_limit import GiftPurchaseLimit
 from .gift_resale_parameters import GiftResaleParameters
 from .gift_resale_price import GiftResalePrice, GiftResalePriceStar, GiftResalePriceTon
 from .gift_upgrade_preview import GiftUpgradePreview
+from .gift_upgrade_price import GiftUpgradePrice
+from .gift_upgrade_variants import GiftUpgradeVariants
 from .invoice import Invoice
 from .link_preview_options import LinkPreviewOptions
 from .giveaway import Giveaway
@@ -93,6 +98,8 @@ from .saved_credentials import SavedCredentials
 from .screenshot_taken import ScreenshotTaken
 from .star_amount import StarAmount
 from .gift_attribute import GiftAttribute
+from .gift_auction_state import GiftAuctionState
+from .gift_auction import GiftAuction
 from .gift import Gift
 from .gifted_premium import GiftedPremium
 from .gifted_stars import GiftedStars
@@ -116,6 +123,7 @@ from .upgraded_gift_attribute_id_backdrop import UpgradedGiftAttributeIdBackdrop
 from .upgraded_gift_attribute_id_model import UpgradedGiftAttributeIdModel
 from .upgraded_gift_attribute_id_symbol import UpgradedGiftAttributeIdSymbol
 from .upgraded_gift_attribute_id import UpgradedGiftAttributeId
+from .upgraded_gift_purchase_offer import UpgradedGiftPurchaseOffer, UpgradedGiftPurchaseOfferDeclined
 from .upgraded_gift_value_info import UpgradedGiftValueInfo
 from .venue import Venue
 from .video import Video
@@ -127,6 +135,11 @@ from .write_access_allowed import WriteAccessAllowed
 
 __all__ = [
     "Animation",
+    "AuctionBid",
+    "AuctionRound",
+    "AuctionState",
+    "AuctionStateActive",
+    "AuctionStateFinished",
     "Audio",
     "AvailableEffect",
     "BoostsStatus",
@@ -164,6 +177,8 @@ __all__ = [
     "GiftResalePriceStar",
     "GiftResalePriceTon",
     "GiftUpgradePreview",
+    "GiftUpgradePrice",
+    "GiftUpgradeVariants",
     "Giveaway",
     "InputChecklistTask",
     "Invoice",
@@ -205,6 +220,8 @@ __all__ = [
     "ScreenshotTaken",
     "StarAmount",
     "GiftAttribute",
+    "GiftAuctionState",
+    "GiftAuction",
     "Gift",
     "GiftedPremium",
     "GiftedStars",
@@ -230,6 +247,8 @@ __all__ = [
     "UpgradedGiftAttributeIdModel",
     "UpgradedGiftAttributeIdSymbol",
     "UpgradedGiftAttributeId",
+    "UpgradedGiftPurchaseOffer",
+    "UpgradedGiftPurchaseOfferDeclined",
     "UpgradedGiftValueInfo",
     "Venue",
     "Video",

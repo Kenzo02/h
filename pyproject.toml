@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
@@ -49,27 +50,29 @@ keywords = [
 ]
 
 [project.urls]
-Homepage = "https://kurigram.live"
-Documentation = "https://docs.kurigram.live"
+Homepage = "https://kurigram.icu"
+Documentation = "https://docs.kurigram.icu"
 Source = "https://github.com/KurimuzonAkuma/pyrogram"
 Issues = "https://github.com/KurimuzonAkuma/pyrogram/issues"
 Community = "https://t.me/kurigram_chat"
 
 [project.optional-dependencies]
 dev = [
-    "keyring<=25.1.0",
-    "hatch<=1.7.0",
-    "pytest<=7.4.3",
-    "pytest-asyncio<=0.21.1",
-    "pytest-cov<=4.1.0",
-    "twine<=4.0.2",
+    "keyring<=25.7.0",
+    "hatch<=1.16.2",
+    "pytest<=9.0.2",
+    "pytest-asyncio<=1.3.0",
+    "pytest-cov<=7.0.0",
+    "twine<=6.2.0",
 ]
 
 docs = [
-    "Sphinx<=8.2.3",
-    "furo<=2025.7.19",
-    "sphinx-autobuild<=2024.10.3",
+    "Sphinx<=9.0.4",
+    "shibuya<=2025.12.19",
+    "sphinx-autobuild<=2025.8.25",
     "sphinx-copybutton<=0.5.2",
+    "sphinx-iconify<=0.2.1",
+    "sphinx-design<=0.6.1",
     "pygments<=2.19.2",
 ]
 
