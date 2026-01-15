@@ -26,10 +26,23 @@ import pyrogram
 from pyrogram import raw
 from pyrogram.enums import MessageEntityType
 from pyrogram.errors import PeerIdInvalid
-from pyrogram.utils import normalize_int64
 from . import utils
 
 log = logging.getLogger(__name__)
+
+
+def _normalize_int64(value: int) -> int:
+    """Convert unsigned 64-bit integer to signed for MTProto serialization."""
+    try:
+        if value is None:
+            return value
+        if not isinstance(value, int):
+            return int(value)
+        if value >= (1 << 63):
+            return value - (1 << 64)
+        return value
+    except Exception:
+        return value
 
 
 class Parser(HTMLParser):
@@ -79,7 +92,7 @@ class Parser(HTMLParser):
                 extra["url"] = url
         elif tag == "emoji":
             try:
-                extra["document_id"] = normalize_int64(int(attrs["id"]))
+                extra["document_id"] = _normalize_int64(int(attrs["id"]))
                 entity = raw.types.MessageEntityCustomEmoji
             except (KeyError, ValueError, TypeError):
                 return
