@@ -122,6 +122,6 @@ class EmojiStatus(Object):
             )
 
         return raw.types.EmojiStatus(
-            document_id=self.custom_emoji_id,
+            document_id=utils.normalize_int64(self.custom_emoji_id),
             until=utils.datetime_to_timestamp(self.until_date)
         )

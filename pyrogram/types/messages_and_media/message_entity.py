@@ -19,7 +19,7 @@
 from typing import Optional
 
 import pyrogram
-from pyrogram import raw, enums
+from pyrogram import raw, enums, utils
 from pyrogram import types
 from ..object import Object
 
@@ -126,14 +126,16 @@ class MessageEntity(Object):
                 raise ValueError(
                     "MessageEntityType.CUSTOM_EMOJI requires a 'custom_emoji_id'."
                 )
-            
-            min_val = -9223372036854775808
-            max_val = 9223372036854775807
+
+            # Accept both signed (-2^63 to 2^63-1) and unsigned (0 to 2^64-1) range
+            min_val = -9223372036854775808  # -2^63
+            max_val = 18446744073709551615  # 2^64-1 (unsigned max)
             if not (min_val <= current_custom_emoji_id <= max_val):
                 raise ValueError(
                     f"custom_emoji_id {current_custom_emoji_id} is out of 64-bit integer range for MessageEntityType.CUSTOM_EMOJI."
                 )
-            args["document_id"] = current_custom_emoji_id
+            # Normalize unsigned to signed for MTProto serialization
+            args["document_id"] = utils.normalize_int64(current_custom_emoji_id)
 
         args.pop("expandable", None)
         if self.expandable is not None:

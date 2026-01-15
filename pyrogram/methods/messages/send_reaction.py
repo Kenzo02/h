@@ -19,7 +19,7 @@
 from typing import Union, List
 
 import pyrogram
-from pyrogram import raw
+from pyrogram import raw, utils
 
 
 class SendReaction:
@@ -81,14 +81,14 @@ class SendReaction:
         """
         if isinstance(emoji, list):
             emoji = [
-                    raw.types.ReactionCustomEmoji(document_id=i)
+                    raw.types.ReactionCustomEmoji(document_id=utils.normalize_int64(i))
                     if isinstance(i, int)
                     else raw.types.ReactionEmoji(emoticon=i)
                     for i in emoji
             ] if emoji else None
         else:
             if isinstance(emoji, int):
-                emoji = [raw.types.ReactionCustomEmoji(document_id=emoji)]
+                emoji = [raw.types.ReactionCustomEmoji(document_id=utils.normalize_int64(emoji))]
             else:
                 emoji = [raw.types.ReactionEmoji(emoticon=emoji)] if emoji else None
 

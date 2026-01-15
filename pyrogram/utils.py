@@ -35,6 +35,31 @@ from pyrogram.file_id import DOCUMENT_TYPES, PHOTO_TYPES, FileId, FileType
 from pyrogram.types.messages_and_media.message import Str
 
 
+def normalize_int64(value: int) -> int:
+    """Convert unsigned 64-bit integer to signed for MTProto serialization.
+
+    Telegram uses signed 64-bit integers, but some document IDs can appear
+    as unsigned values when parsed from external sources.
+
+    Args:
+        value: Integer value to normalize
+
+    Returns:
+        Normalized signed 64-bit integer
+    """
+    try:
+        if value is None:
+            return value
+        if not isinstance(value, int):
+            return int(value)
+        if value >= (1 << 63):
+            return value - (1 << 64)
+        return value
+    except Exception:
+        # Fail-safe: return original value if normalization fails
+        return value
+
+
 def get_event_loop() -> asyncio.AbstractEventLoop:
     try:
         loop = asyncio.get_event_loop()

@@ -19,7 +19,7 @@
 from typing import Optional, Union
 
 import pyrogram
-from pyrogram import enums, raw, types
+from pyrogram import enums, raw, types, utils
 from pyrogram.errors import ChannelInvalid, ChannelPrivate
 
 from ..object import Object
@@ -255,7 +255,7 @@ class MediaArea(Object):
         elif self.type == enums.MediaAreaType.REACTION:
             if self.reaction.custom_emoji_id:
                 reaction = raw.types.ReactionCustomEmoji(
-                    document_id=self.reaction.custom_emoji_id
+                    document_id=utils.normalize_int64(self.reaction.custom_emoji_id)
                 )
             else:
                 reaction = raw.types.ReactionEmoji(

@@ -26,6 +26,7 @@ import pyrogram
 from pyrogram import raw
 from pyrogram.enums import MessageEntityType
 from pyrogram.errors import PeerIdInvalid
+from pyrogram.utils import normalize_int64
 from . import utils
 
 log = logging.getLogger(__name__)
@@ -78,9 +79,9 @@ class Parser(HTMLParser):
                 extra["url"] = url
         elif tag == "emoji":
             try:
-                extra["document_id"] = int(attrs["id"])
+                extra["document_id"] = normalize_int64(int(attrs["id"]))
                 entity = raw.types.MessageEntityCustomEmoji
-            except (KeyError, ValueError):
+            except (KeyError, ValueError, TypeError):
                 return
         else:
             return
