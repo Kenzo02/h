@@ -399,7 +399,7 @@ class Gift(Object):
             last_sale_date=utils.timestamp_to_datetime(star_gift.last_sale_date),
             locked_until_date=utils.timestamp_to_datetime(star_gift.locked_until_date),
             publisher_chat=types.Chat._parse_chat(client, chats.get(utils.get_raw_peer_id(star_gift.released_by))),
-            auction_info=await types.GiftAuction._parse(star_gift),
+            auction_info=types.GiftAuction._parse(star_gift),
             upgrade_variant_count=star_gift.upgrade_variants,
             raw=star_gift,
             client=client
