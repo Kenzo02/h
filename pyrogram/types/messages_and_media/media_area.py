@@ -19,10 +19,24 @@
 from typing import Optional, Union
 
 import pyrogram
-from pyrogram import enums, raw, types, utils
+from pyrogram import enums, raw, types
 from pyrogram.errors import ChannelInvalid, ChannelPrivate
 
 from ..object import Object
+
+
+def _normalize_int64(value: int) -> int:
+    """Convert unsigned 64-bit integer to signed for MTProto serialization."""
+    try:
+        if value is None:
+            return value
+        if not isinstance(value, int):
+            return int(value)
+        if value >= (1 << 63):
+            return value - (1 << 64)
+        return value
+    except Exception:
+        return value
 
 
 class MediaArea(Object):
@@ -255,7 +269,7 @@ class MediaArea(Object):
         elif self.type == enums.MediaAreaType.REACTION:
             if self.reaction.custom_emoji_id:
                 reaction = raw.types.ReactionCustomEmoji(
-                    document_id=utils.normalize_int64(self.reaction.custom_emoji_id)
+                    document_id=_normalize_int64(self.reaction.custom_emoji_id)
                 )
             else:
                 reaction = raw.types.ReactionEmoji(

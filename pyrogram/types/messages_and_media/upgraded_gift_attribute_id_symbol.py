@@ -15,9 +15,23 @@
 #
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
-from pyrogram import raw, utils
+from pyrogram import raw
 
 from .upgraded_gift_attribute_id import UpgradedGiftAttributeId
+
+
+def _normalize_int64(value: int) -> int:
+    """Convert unsigned 64-bit integer to signed for MTProto serialization."""
+    try:
+        if value is None:
+            return value
+        if not isinstance(value, int):
+            return int(value)
+        if value >= (1 << 63):
+            return value - (1 << 64)
+        return value
+    except Exception:
+        return value
 
 
 class UpgradedGiftAttributeIdSymbol(UpgradedGiftAttributeId):
@@ -37,5 +51,5 @@ class UpgradedGiftAttributeIdSymbol(UpgradedGiftAttributeId):
 
     def write(self) -> "raw.types.StarGiftAttributeIdPattern":
         return raw.types.StarGiftAttributeIdPattern(
-            document_id=utils.normalize_int64(self.sticker_id)
+            document_id=_normalize_int64(self.sticker_id)
         )

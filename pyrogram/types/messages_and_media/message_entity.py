@@ -19,9 +19,23 @@
 from typing import Optional
 
 import pyrogram
-from pyrogram import raw, enums, utils
+from pyrogram import raw, enums
 from pyrogram import types
 from ..object import Object
+
+
+def _normalize_int64(value: int) -> int:
+    """Convert unsigned 64-bit integer to signed for MTProto serialization."""
+    try:
+        if value is None:
+            return value
+        if not isinstance(value, int):
+            return int(value)
+        if value >= (1 << 63):
+            return value - (1 << 64)
+        return value
+    except Exception:
+        return value
 
 
 class MessageEntity(Object):
@@ -135,7 +149,7 @@ class MessageEntity(Object):
                     f"custom_emoji_id {current_custom_emoji_id} is out of 64-bit integer range for MessageEntityType.CUSTOM_EMOJI."
                 )
             # Normalize unsigned to signed for MTProto serialization
-            args["document_id"] = utils.normalize_int64(current_custom_emoji_id)
+            args["document_id"] = _normalize_int64(current_custom_emoji_id)
 
         args.pop("expandable", None)
         if self.expandable is not None:

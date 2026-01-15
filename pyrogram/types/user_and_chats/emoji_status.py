@@ -25,6 +25,20 @@ from pyrogram import raw, utils
 from ..object import Object
 
 
+def _normalize_int64(value: int) -> int:
+    """Convert unsigned 64-bit integer to signed for MTProto serialization."""
+    try:
+        if value is None:
+            return value
+        if not isinstance(value, int):
+            return int(value)
+        if value >= (1 << 63):
+            return value - (1 << 64)
+        return value
+    except Exception:
+        return value
+
+
 class EmojiStatus(Object):
     """A user emoji status.
 
@@ -122,6 +136,6 @@ class EmojiStatus(Object):
             )
 
         return raw.types.EmojiStatus(
-            document_id=utils.normalize_int64(self.custom_emoji_id),
+            document_id=_normalize_int64(self.custom_emoji_id),
             until=utils.datetime_to_timestamp(self.until_date)
         )
