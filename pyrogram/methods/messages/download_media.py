@@ -19,7 +19,7 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Union, Optional, Callable, BinaryIO, List
+from typing import Union, Optional, Callable, BinaryIO, List, Literal, overload
 
 import pyrogram
 from pyrogram import types, utils
@@ -29,6 +29,91 @@ DEFAULT_DOWNLOAD_DIR = "downloads/"
 
 
 class DownloadMedia:
+    @overload
+    async def download_media(
+        self: "pyrogram.Client",
+        message: Union[
+            str,
+            "types.Message",
+            "types.Story",
+            "types.Audio",
+            "types.Document",
+            "types.Photo",
+            "types.Sticker",
+            "types.Animation",
+            "types.Video",
+            "types.Voice",
+            "types.VideoNote",
+            "types.PaidMediaInfo",
+            "types.Thumbnail",
+            "types.StrippedThumbnail",
+            "types.PaidMediaPreview",
+        ],
+        file_name: str = DEFAULT_DOWNLOAD_DIR,
+        *,
+        in_memory: bool = False,
+        block: Literal[False],
+        progress: Callable = None,
+        progress_args: tuple = (),
+    ) -> None: ...
+
+    @overload
+    async def download_media(
+        self: "pyrogram.Client",
+        message: Union[
+            str,
+            "types.Message",
+            "types.Story",
+            "types.Audio",
+            "types.Document",
+            "types.Photo",
+            "types.Sticker",
+            "types.Animation",
+            "types.Video",
+            "types.Voice",
+            "types.VideoNote",
+            "types.PaidMediaInfo",
+            "types.Thumbnail",
+            "types.StrippedThumbnail",
+            "types.PaidMediaPreview",
+        ],
+        file_name: str = DEFAULT_DOWNLOAD_DIR,
+        *,
+        in_memory: Literal[True],
+        block: bool = True,
+        progress: Callable = None,
+        progress_args: tuple = (),
+    ) -> Union[BinaryIO, list[BinaryIO]]: ...
+
+    @overload
+    async def download_media(
+        self: "pyrogram.Client",
+        message: Union[
+            str,
+            "types.Message",
+            "types.Story",
+            "types.Audio",
+            "types.Document",
+            "types.Photo",
+            "types.Sticker",
+            "types.Animation",
+            "types.Video",
+            "types.Voice",
+            "types.VideoNote",
+            "types.PaidMediaInfo",
+            "types.Thumbnail",
+            "types.StrippedThumbnail",
+            "types.PaidMediaPreview",
+        ],
+        file_name: str = DEFAULT_DOWNLOAD_DIR,
+        *,
+        in_memory: Literal[False],
+        block: bool = True,
+        progress: Callable = None,
+        progress_args: tuple = (),
+    ) -> Union[str, list[str]]:
+        ...
+
     async def download_media(
         self: "pyrogram.Client",
         message: Union[
@@ -53,7 +138,7 @@ class DownloadMedia:
         block: bool = True,
         progress: Callable = None,
         progress_args: tuple = ()
-    ) -> Optional[Union[Union[str, BinaryIO], List[Union[str, BinaryIO]]]]:
+    ) -> Union[str, BinaryIO, List[Union[str, BinaryIO]], None]:
         """Download the media from a message.
 
         .. include:: /_includes/usable-by/users-bots.rst

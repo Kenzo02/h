@@ -50,7 +50,7 @@ from .game import Game
 from .general_forum_topic_hidden import GeneralForumTopicHidden
 from .general_forum_topic_unhidden import GeneralForumTopicUnhidden
 from .gift_collection import GiftCollection
-from .gift_code import GiftCode
+from .premium_gift_code import PremiumGiftCode
 from .gift_purchase_limit import GiftPurchaseLimit
 from .gift_resale_parameters import GiftResaleParameters
 from .gift_resale_price import GiftResalePrice, GiftResalePriceStar, GiftResalePriceTon
@@ -123,7 +123,8 @@ from .upgraded_gift_attribute_id_backdrop import UpgradedGiftAttributeIdBackdrop
 from .upgraded_gift_attribute_id_model import UpgradedGiftAttributeIdModel
 from .upgraded_gift_attribute_id_symbol import UpgradedGiftAttributeIdSymbol
 from .upgraded_gift_attribute_id import UpgradedGiftAttributeId
-from .upgraded_gift_purchase_offer import UpgradedGiftPurchaseOffer, UpgradedGiftPurchaseOfferDeclined
+from .upgraded_gift_original_details import UpgradedGiftOriginalDetails
+from .upgraded_gift_purchase_offer import UpgradedGiftPurchaseOffer, UpgradedGiftPurchaseOfferRejected
 from .upgraded_gift_value_info import UpgradedGiftValueInfo
 from .venue import Venue
 from .video import Video
@@ -170,7 +171,7 @@ __all__ = [
     "GeneralForumTopicHidden",
     "GeneralForumTopicUnhidden",
     "GiftCollection",
-    "GiftCode",
+    "PremiumGiftCode",
     "GiftPurchaseLimit",
     "GiftResaleParameters",
     "GiftResalePrice",
@@ -247,8 +248,9 @@ __all__ = [
     "UpgradedGiftAttributeIdModel",
     "UpgradedGiftAttributeIdSymbol",
     "UpgradedGiftAttributeId",
+    "UpgradedGiftOriginalDetails",
     "UpgradedGiftPurchaseOffer",
-    "UpgradedGiftPurchaseOfferDeclined",
+    "UpgradedGiftPurchaseOfferRejected",
     "UpgradedGiftValueInfo",
     "Venue",
     "Video",

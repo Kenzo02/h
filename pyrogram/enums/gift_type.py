@@ -16,32 +16,16 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-import pyrogram
-from pyrogram import raw
+from enum import auto
+
+from .auto_name import AutoName
 
 
-class SetUpgradedGiftColors:
-    async def set_upgraded_gift_colors(
-        self: "pyrogram.Client",
-        upgraded_gift_colors_id: int
-    ) -> bool:
-        """Changes color scheme for the current user based on an owned or a hosted upgraded gift.
+class GiftType(AutoName):
+    """Gift type enumeration used in :obj:`~pyrogram.types.Gift`."""
 
-        .. include:: /_includes/usable-by/users.rst
+    REGULAR = auto()
+    "Gift is a regular gift"
 
-        Parameters:
-            upgraded_gift_colors_id (``int``):
-                Identifier of the color scheme to use.
-
-        Returns:
-            ``bool``: On success, True is returned.
-        """
-        r = await self.invoke(
-            raw.functions.account.UpdateColor(
-                color=raw.types.InputPeerColorCollectible(
-                    collectible_id=upgraded_gift_colors_id
-                )
-            )
-        )
-
-        return r
+    UPGRADED = auto()
+    "Gift is an upgraded gift"

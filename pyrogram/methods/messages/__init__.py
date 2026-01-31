@@ -91,6 +91,7 @@ from .set_direct_messages_chat_topic_is_marked_as_unread import SetDirectMessage
 from .start_bot import StartBot
 from .stop_poll import StopPoll
 from .stream_media import StreamMedia
+from .summarize_message import SummarizeMessage
 from .translate_message_text import TranslateMessageText
 from .translate_text import TranslateText
 from .view_messages import ViewMessages
@@ -173,6 +174,7 @@ class Messages(
     GetDiscussionRepliesCount,
     GetMainWebApp,
     StreamMedia,
+    SummarizeMessage,
     TranslateMessageText,
     TranslateText,
     GetCustomEmojiStickers,

@@ -88,7 +88,7 @@ class SearchGiftsForResale:
             chats = {i.id: i for i in r.chats}
 
             gifts = [
-                await types.Gift._parse(self, gift, users, chats)
+                await types.Gift._parse(self, gift, users=users, chats=chats)
                 for gift in r.gifts
             ]
 

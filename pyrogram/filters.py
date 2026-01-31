@@ -371,7 +371,7 @@ giveaway_winners = create(giveaway_winners_filter)
 
 # region gift_code_filter
 async def gift_code_filter(_, __, m: Message):
-    return bool(m.gift_code)
+    return bool(m.premium_gift_code)
 
 
 gift_code = create(gift_code_filter)
@@ -974,7 +974,7 @@ gift_offer_accepted = create(gift_offer_accepted_filter)
 async def gift_offer_rejected_filter(_, __, m: Message):
     return bool(
         (m.upgraded_gift_purchase_offer and m.upgraded_gift_purchase_offer.state == enums.GiftPurchaseOfferState.REJECTED)
-        or m.upgraded_gift_purchase_offer_declined
+        or m.upgraded_gift_purchase_offer_rejected
     )
 
 

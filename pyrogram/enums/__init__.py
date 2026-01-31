@@ -46,11 +46,13 @@ from .sticker_type import StickerType
 from .gift_attribute_type import GiftAttributeType
 from .gift_for_resale_order import GiftForResaleOrder
 from .gift_purchase_offer_state import GiftPurchaseOfferState
+from .gift_type import GiftType
 from .mask_point_type import MaskPointType
 from .media_area_type import MediaAreaType
 from .stories_privacy_rules import StoriesPrivacyRules
 from .suggested_post_refund_reason import SuggestedPostRefundReason
 from .suggested_post_state import SuggestedPostState
+from .upgraded_gift_origin import UpgradedGiftOrigin
 from .user_status import UserStatus
 
 __all__ = [
@@ -84,10 +86,12 @@ __all__ = [
     'GiftAttributeType',
     'GiftForResaleOrder',
     'GiftPurchaseOfferState',
+    'GiftType',
     'MaskPointType',
     'MediaAreaType',
     'StoriesPrivacyRules',
     'SuggestedPostRefundReason',
     'SuggestedPostState',
+    'UpgradedGiftOrigin',
     'UserStatus'
 ]

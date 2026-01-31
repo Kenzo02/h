@@ -90,7 +90,7 @@ class MessageServiceType(AutoName):
     GIVEAWAY_COMPLETED = auto()
     "Giveaway completed"
 
-    GIFT_CODE = auto()
+    PREMIUM_GIFT_CODE = auto()
     "Gift code"
 
     GIFTED_PREMIUM = auto()
@@ -210,5 +210,5 @@ class MessageServiceType(AutoName):
     UPGRADED_GIFT_PURCHASE_OFFER = auto()
     "Upgraded gift purchase offer"
 
-    UPGRADED_GIFT_PURCHASE_OFFER_DECLINED = auto()
+    UPGRADED_GIFT_PURCHASE_OFFER_REJECTED = auto()
     "Upgraded gift purchase offer declined"

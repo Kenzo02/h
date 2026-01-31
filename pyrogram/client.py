@@ -178,6 +178,7 @@ class Client(Methods):
 
         skip_updates (``bool``, *optional*):
             Pass True to skip pending updates that arrived while the client was offline.
+            Doesn't work if *in_memory* is set to True.
             Defaults to True.
 
         takeout (``bool``, *optional*):
@@ -816,7 +817,7 @@ class Client(Methods):
                 pts = getattr(update, "pts", None)
                 pts_count = getattr(update, "pts_count", None)
 
-                if pts and not self.skip_updates:
+                if pts:
                     await self.storage.update_state(
                         (
                             utils.get_channel_id(channel_id) if channel_id else 0,
@@ -858,16 +859,15 @@ class Client(Methods):
 
                 self.dispatcher.updates_queue.put_nowait((update, users, chats))
         elif isinstance(updates, (raw.types.UpdateShortMessage, raw.types.UpdateShortChatMessage)):
-            if not self.skip_updates:
-                await self.storage.update_state(
-                    (
-                        0,
-                        updates.pts,
-                        None,
-                        updates.date,
-                        None
-                    )
+            await self.storage.update_state(
+                (
+                    0,
+                    updates.pts,
+                    None,
+                    updates.date,
+                    None
                 )
+            )
 
             diff = await self.invoke(
                 raw.functions.updates.GetDifference(

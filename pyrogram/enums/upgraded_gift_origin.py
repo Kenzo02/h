@@ -16,32 +16,28 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-import pyrogram
-from pyrogram import raw
+from enum import auto
+
+from .auto_name import AutoName
 
 
-class SetUpgradedGiftColors:
-    async def set_upgraded_gift_colors(
-        self: "pyrogram.Client",
-        upgraded_gift_colors_id: int
-    ) -> bool:
-        """Changes color scheme for the current user based on an owned or a hosted upgraded gift.
+class UpgradedGiftOrigin(AutoName):
+    """Origin from which the upgraded gift was obtained. Used in :obj:`~pyrogram.types.Gift`."""
 
-        .. include:: /_includes/usable-by/users.rst
+    UPGRADE = auto()
+    "The gift was obtained by upgrading of a previously received gift."
 
-        Parameters:
-            upgraded_gift_colors_id (``int``):
-                Identifier of the color scheme to use.
+    TRANSFER = auto()
+    "The gift was transferred from another owner."
 
-        Returns:
-            ``bool``: On success, True is returned.
-        """
-        r = await self.invoke(
-            raw.functions.account.UpdateColor(
-                color=raw.types.InputPeerColorCollectible(
-                    collectible_id=upgraded_gift_colors_id
-                )
-            )
-        )
+    RESALE = auto()
+    "The gift was bought from another user."
 
-        return r
+    BLOCKCHAIN = auto()
+    "The gift was assigned from blockchain and isn't owned by the current user. The gift can't be transferred, resold or withdrawn to blockchain."
+
+    GIFTED_UPGRADE = auto()
+    "The sender or receiver of the message has paid for upgraid of the gift, which has been completed."
+
+    OFFER = auto()
+    "The gift was bought through an offer ."

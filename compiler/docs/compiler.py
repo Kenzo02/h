@@ -306,6 +306,7 @@ def pyrogram_api():
             approve_suggested_post
             decline_suggested_post
             add_checklist_tasks
+            summarize_message
         """,
         chats="""
         Chats
@@ -748,7 +749,7 @@ def pyrogram_api():
             Invoice
             LinkPreviewOptions
             GiftCollection
-            GiftCode
+            PremiumGiftCode
             GiftPurchaseLimit
             GiftResaleParameters
             GiftResalePrice
@@ -802,9 +803,11 @@ def pyrogram_api():
             UpgradedGiftValueInfo
             UpgradedGiftAttributeId
             UpgradedGiftPurchaseOffer
+            UpgradedGiftPurchaseOfferRejected
             UpgradedGiftAttributeIdModel
             UpgradedGiftAttributeIdSymbol
             UpgradedGiftAttributeIdBackdrop
+            UpgradedGiftOriginalDetails
             InputChatPhoto
             InputChatPhotoPrevious
             InputChatPhotoStatic
@@ -1014,6 +1017,8 @@ def pyrogram_api():
             Message.edit_media
             Message.edit_checklist
             Message.edit_reply_markup
+            Message.edit_live_location
+            Message.stop_live_location
             Message.forward
             Message.copy
             Message.copy_media_group
@@ -1028,6 +1033,9 @@ def pyrogram_api():
             Message.read
             Message.view
             Message.pay
+            Message.accept_gift_purchase_offer
+            Message.reject_gift_purchase_offer
+            Message.summarize
         """,
         chat="""
         Chat
@@ -1205,11 +1213,13 @@ def pyrogram_api():
             SentCodeType
             StoriesPrivacyRules
             UserStatus
+            UpgradedGiftOrigin
             GiftAttributeType
             MediaAreaType
             PrivacyRuleType
             GiftForResaleOrder
             GiftPurchaseOfferState
+            GiftType
             PaymentFormType
             StickerType
             MaskPointType
