@@ -16,31 +16,45 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable
+from typing import Callable, Optional, Sequence, Union
+
+import pyrogram
+from pyrogram.filters import Filter
+from pyrogram.types import Update
 
 from .handler import Handler
 
 
-class RawUpdateHandler(Handler):
-    """The Raw Update handler class. Used to handle raw updates. It is intended to be used with
-    :meth:`~pyrogram.Client.add_handler`
+class ErrorHandler(Handler):
+    """The Error handler class. Used to handle unexpected errors.
 
-    For a nicer way to register this handler, have a look at the
-    :meth:`~pyrogram.Client.on_raw_update` decorator.
+    It is intended to be used with :meth:`~pyrogram.Client.add_handler`.
+
+    For a more convenient way to register this handler, see the
+    :meth:`~pyrogram.Client.on_error` decorator.
 
     Parameters:
         callback (``Callable``):
-            A function that will be called when a new update is received from the server. It takes
-            *(client, update, users, chats)* as positional arguments (look at the section below for
-            a detailed description).
+            A function that will be called whenever an unexpected error is raised.
+            It takes the following positional arguments: *(exception, handler, client, *args)*.
 
-        filters (:obj:`Filters`):
+        exceptions (``Exception`` | List of ``Exception``, *optional*):
+            An exception type or a sequence of exception types that this handler should handle.
+            If None, the handler will catch any exception that is a subclass of ``Exception``.
+
+        filters (:obj:`Filter`, *optional*):
             Pass one or more filters to allow only a subset of updates to be passed
             in your callback function.
 
-    Other Parameters:
+    Other parameters passed to the callback:
         client (:obj:`~pyrogram.Client`):
-            The Client itself, useful when you want to call other API methods inside the update handler.
+            The Client instance, useful when calling other API methods inside the error handler.
+
+        exception (``Exception``):
+            The Exception instance that was raised.
+
+        handler (:obj:`~pyrogram.handlers.handler.Handler`):
+            The Handler instance from which the exception was raised.
 
         update (:obj:`~pyrogram.raw.base.Update`):
             The received update, which can be one of the many single Updates listed in the
@@ -56,16 +70,19 @@ class RawUpdateHandler(Handler):
             You can access extra info about the chat (such as *title*, *participants_count*, etc...)
             by using the IDs you find in the *update* argument (e.g.: *chats[1701277281]*).
 
-    .. note::
-
-        The following Empty or Forbidden types may exist inside the *users* and *chats* dictionaries.
-        They mean you have been blocked by the user or banned from the group/channel.
-
-        - :obj:`~pyrogram.raw.types.UserEmpty`
-        - :obj:`~pyrogram.raw.types.ChatEmpty`
-        - :obj:`~pyrogram.raw.types.ChatForbidden`
-        - :obj:`~pyrogram.raw.types.ChannelForbidden`
     """
 
-    def __init__(self, callback: Callable, filters=None):
+    def __init__(
+        self,
+        callback: Callable,
+        exceptions: Optional[Union[Exception, Sequence[Exception]]] = None,
+        filters: Optional[Filter] = None,
+    ):
         super().__init__(callback, filters)
+
+        if exceptions is None:
+            self.exceptions = (Exception,)
+        elif isinstance(exceptions, Sequence):
+            self.exceptions = tuple(exceptions)
+        else:
+            self.exceptions = (exceptions,)

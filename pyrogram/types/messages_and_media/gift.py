@@ -67,6 +67,9 @@ class Gift(Object):
         locked_until_date (:py:obj:`~datetime.datetime`, *optional*):
             Date when the gift will be available for purchase.
 
+        craft_date (:py:obj:`~datetime.datetime`, *optional*):
+            Date when the gift can be used to craft another gift can be in the past.
+
         sender (:obj:`~pyrogram.types.Chat`, *optional*):
             User or a chat that sent the gift.
 
@@ -198,6 +201,9 @@ class Gift(Object):
         used_theme_chat_id (``int``, *optional*):
             Identifier of the chat for which the gift is used to set a theme.
 
+        craft_probability_per_mille (``int``, *optional*):
+            Probability that the gift adds to the chance of successful crafting of a new gift.
+
         has_colors (``bool``, *optional*):
             True, if the gift can be used to customize user's name and backgrounds.
 
@@ -221,6 +227,12 @@ class Gift(Object):
 
         is_sold_out (``bool``, *optional*):
             True, if the gift is sold out.
+
+        is_burned (``bool``, *optional*):
+            True, if the gift was used to craft another gift.
+
+        is_crafted (``bool``, *optional*):
+            True, if the gift was craft from another gifts.
 
         is_premium (``bool``, *optional*):
             True, if the gift can be bought only by Telegram Premium subscribers.
@@ -283,6 +295,7 @@ class Gift(Object):
         first_sale_date: Optional[datetime] = None,
         last_sale_date: Optional[datetime] = None,
         locked_until_date: Optional[datetime] = None,
+        craft_date: Optional[datetime] = None,
         sender: Optional["types.Chat"] = None,
         receiver: Optional["types.Chat"] = None,
         host: Optional["types.Chat"] = None,
@@ -326,6 +339,7 @@ class Gift(Object):
         export_date: Optional[datetime] = None,
         collection_ids: Optional[List[int]] = None,
         used_theme_chat_id: Optional[int] = None,
+        craft_probability_per_mille: Optional[int] = None,
         has_colors: Optional[bool] = None,
         is_auction: Optional[bool] = None,
         is_private: Optional[bool] = None,
@@ -334,6 +348,8 @@ class Gift(Object):
         is_limited: Optional[bool] = None,
         is_limited_per_user: Optional[bool] = None,
         is_sold_out: Optional[bool] = None,
+        is_burned: Optional[bool] = None,
+        is_crafted: Optional[bool] = None,
         is_premium: Optional[bool] = None,
         is_for_birthday: Optional[bool] = None,
         is_theme_available: Optional[bool] = None,
@@ -366,6 +382,7 @@ class Gift(Object):
         self.first_sale_date = first_sale_date
         self.last_sale_date = last_sale_date
         self.locked_until_date = locked_until_date
+        self.craft_date = craft_date
         self.sender = sender
         self.receiver = receiver
         self.host = host
@@ -409,6 +426,7 @@ class Gift(Object):
         self.export_date = export_date
         self.collection_ids = collection_ids
         self.used_theme_chat_id = used_theme_chat_id
+        self.craft_probability_per_mille = craft_probability_per_mille
         self.has_colors = has_colors
         self.is_auction = is_auction
         self.is_private = is_private
@@ -417,6 +435,8 @@ class Gift(Object):
         self.is_limited = is_limited
         self.is_limited_per_user = is_limited_per_user
         self.is_sold_out = is_sold_out
+        self.is_burned = is_burned
+        self.is_crafted = is_crafted
         self.is_premium = is_premium
         self.is_for_birthday = is_for_birthday
         self.is_theme_available = is_theme_available
@@ -537,6 +557,8 @@ class Gift(Object):
             can_send_purchase_offer=star_gift.offer_min_stars is not None,
             gift_address=star_gift.gift_address,
             host=types.Chat._parse_chat(client, users.get(raw_host_id) or chats.get(raw_host_id)),
+            is_burned=star_gift.burned,
+            is_crafted=star_gift.crafted,
             is_premium=star_gift.require_premium,
             is_theme_available=star_gift.theme_available,
             max_upgraded_count=star_gift.availability_total,
@@ -556,6 +578,7 @@ class Gift(Object):
             resale_parameters=types.GiftResaleParameters._parse(star_gift.resell_amount, star_gift.resale_ton_only),
             total_upgraded_count=star_gift.availability_issued,
             used_theme_chat_id=utils.get_peer_id(star_gift.theme_peer) if star_gift.theme_peer else None,
+            craft_probability_per_mille=star_gift.craft_chance_permille,
             value_amount=star_gift.value_amount,
             value_currency=star_gift.value_currency,
             value_usd_amount=star_gift.value_usd_amount,
@@ -602,10 +625,12 @@ class Gift(Object):
         parsed_gift.transfer_star_count = saved_gift.transfer_stars or parsed_gift.transfer_star_count
         parsed_gift.next_transfer_date = utils.timestamp_to_datetime(saved_gift.can_transfer_at) or parsed_gift.next_transfer_date
         parsed_gift.next_resale_date = utils.timestamp_to_datetime(saved_gift.can_resell_at) or parsed_gift.next_resale_date
-        parsed_gift.collection_ids = types.List(saved_gift.collection_id) or None or parsed_gift.collection_ids
+        parsed_gift.craft_date = utils.timestamp_to_datetime(saved_gift.can_craft_at) or parsed_gift.craft_date
+        parsed_gift.collection_ids = list(saved_gift.collection_id) if saved_gift.collection_id else parsed_gift.collection_ids
         parsed_gift.prepaid_upgrade_hash = saved_gift.prepaid_upgrade_hash or parsed_gift.prepaid_upgrade_hash
         parsed_gift.drop_original_details_star_count = saved_gift.drop_original_details_stars or parsed_gift.drop_original_details_star_count
         parsed_gift.unique_gift_number = saved_gift.gift_num or parsed_gift.unique_gift_number
+        parsed_gift.raw = saved_gift
 
         return parsed_gift
 
@@ -672,6 +697,8 @@ class Gift(Object):
                 parsed_gift.origin = enums.UpgradedGiftOrigin.UPGRADE
             elif action_gift.transferred:
                 parsed_gift.origin = enums.UpgradedGiftOrigin.TRANSFER
+            elif action_gift.craft:
+                parsed_gift.origin = enums.UpgradedGiftOrigin.CRAFT
 
             if action_gift.saved_id:
                 parsed_gift.received_gift_id = str(action_gift.saved_id)
@@ -692,6 +719,7 @@ class Gift(Object):
             parsed_gift.receiver = types.Chat._parse_chat(client, users.get(raw_receiver_id) or chats.get(raw_receiver_id)) or parsed_gift.receiver
             parsed_gift.next_transfer_date = utils.timestamp_to_datetime(action_gift.can_transfer_at) or parsed_gift.next_transfer_date
             parsed_gift.next_resale_date = utils.timestamp_to_datetime(action_gift.can_resell_at) or parsed_gift.next_resale_date
+            parsed_gift.craft_date = utils.timestamp_to_datetime(action_gift.can_craft_at) or parsed_gift.craft_date
             parsed_gift.drop_original_details_star_count = action_gift.drop_original_details_stars or parsed_gift.drop_original_details_star_count
             parsed_gift.raw = action_gift
 

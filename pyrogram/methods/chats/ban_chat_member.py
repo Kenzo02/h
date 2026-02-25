@@ -20,8 +20,7 @@ from datetime import datetime
 from typing import Union
 
 import pyrogram
-from pyrogram import raw, utils
-from pyrogram import types
+from pyrogram import raw, types, utils
 
 
 class BanChatMember:
@@ -29,18 +28,12 @@ class BanChatMember:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         user_id: Union[int, str],
-        until_date: datetime = utils.zero_datetime()
+        until_date: datetime = utils.zero_datetime(),
     ) -> Union["types.Message", bool]:
         """Ban a user from a group, a supergroup or a channel.
         In the case of supergroups and channels, the user will not be able to return to the group on their own using
         invite links, etc., unless unbanned first. You must be an administrator in the chat for this to work and must
         have the appropriate admin rights.
-
-        .. note::
-
-            In regular groups (non-supergroups), this method will only work if the "All Members Are Admins" setting is
-            off in the target group. Otherwise members may only be removed by the group's creator or by the member
-            that added them.
 
         .. include:: /_includes/usable-by/users-bots.rst
 
@@ -89,15 +82,14 @@ class BanChatMember:
                         send_gifs=True,
                         send_games=True,
                         send_inline=True,
-                        embed_links=True
-                    )
+                        embed_links=True,
+                    ),
                 )
             )
         else:
             r = await self.invoke(
                 raw.functions.messages.DeleteChatUser(
-                    chat_id=abs(chat_id),
-                    user_id=user_peer
+                    chat_id=abs(chat_id), user_id=user_peer
                 )
             )
 

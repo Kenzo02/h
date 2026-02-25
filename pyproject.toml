@@ -35,7 +35,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
-dependencies = ["pyaes<=1.6.1", "pysocks<=1.7.1"]
+dependencies = ["pyaes<=1.6.1", "python-socks[asyncio]<=2.8.1"]
 license = "LGPL-3.0-or-later"
 license-files = ["COPYING", "COPYING.lesser"]
 keywords = [

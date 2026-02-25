@@ -201,6 +201,12 @@ class User(Object, Update):
         has_main_web_app (``bool``, *optional*):
             True, if the bot has a main Web App. Returned only in get_me.
 
+        has_topics (``bool``, *optional*):
+            True, if the bot has topics.
+
+        allows_users_to_create_topics (``bool``, *optional*):
+            True, if users can create and delete topics in the chat with the bot.
+
         paid_message_star_count (``int``, *optional*):
             Number of Telegram Stars that must be paid by user for each sent message to the user.
 
@@ -439,6 +445,8 @@ class User(Object, Update):
         can_read_all_group_messages: Optional[bool] = None,
         can_connect_to_business: Optional[bool] = None,
         has_main_web_app: Optional[bool] = None,
+        has_topics: Optional[bool] = None,
+        allows_users_to_create_topics: Optional[bool] = None,
         paid_message_star_count: Optional[int] = None,
         settings: Optional["types.ChatSettings"] = None,
         common_chats: Optional[int] = None,
@@ -531,6 +539,8 @@ class User(Object, Update):
         self.can_read_all_group_messages = can_read_all_group_messages
         self.can_connect_to_business = can_connect_to_business
         self.has_main_web_app = has_main_web_app
+        self.has_topics = has_topics
+        self.allows_users_to_create_topics = allows_users_to_create_topics
         self.paid_message_star_count = paid_message_star_count
         self.settings = settings
         self.common_chats = common_chats
@@ -661,6 +671,8 @@ class User(Object, Update):
             can_read_all_group_messages=user.bot_chat_history,
             can_connect_to_business=user.bot_business,
             has_main_web_app=user.bot_has_main_app,
+            has_topics=user.bot_forum_view,
+            allows_users_to_create_topics=user.bot_forum_can_manage_topics,
             paid_message_star_count=user.send_paid_messages_stars,
             raw=user,
             client=client

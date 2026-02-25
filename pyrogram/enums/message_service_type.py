@@ -36,6 +36,12 @@ class MessageServiceType(AutoName):
     LEFT_CHAT_MEMBER = auto()
     "Left chat member"
 
+    CHAT_OWNER_LEFT = auto()
+    "Chat owner left"
+
+    CHAT_OWNER_CHANGED = auto()
+    "Chat owner changed"
+
     NEW_CHAT_TITLE = auto()
     "New chat title"
 

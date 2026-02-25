@@ -40,4 +40,7 @@ class UpgradedGiftOrigin(AutoName):
     "The sender or receiver of the message has paid for upgraid of the gift, which has been completed."
 
     OFFER = auto()
-    "The gift was bought through an offer ."
+    "The gift was bought through an offer."
+
+    CRAFT = auto()
+    "The gift was crafted from other gifts."

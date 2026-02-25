@@ -400,7 +400,7 @@ POLL_OPTION_INVALID	IA poll option used invalid data (the data may be too long).
 POLL_QUESTION_INVALID	The poll question is invalid.
 POLL_UNSUPPORTED	This layer does not support polls in the invoked method.
 POLL_VOTE_REQUIRED	Cast a vote in the poll before calling this method.
-PRECHECKOUT_FAILED	Precheckout failed.
+PRECHECKOUT_FAILED	Precheckout failed. Probably you don't have enough funds to complete the purchase.
 PREMIUM_ACCOUNT_REQUIRED	A premium account is required to execute this action.
 PREMIUM_GIFTCODE_WAS_REFUNDED	This gift code can't be redeemed because the giveaway organizer requested a refund.
 PRICING_CHAT_INVALID	The pricing for the [subscription](https://core.telegram.org/api/subscriptions) is invalid, the maximum price is specified in the [`stars_subscription_amount_max` config key »](https://core.telegram.org/api/config#stars-subscription-amount-max).

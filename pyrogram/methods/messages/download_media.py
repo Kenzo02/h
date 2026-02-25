@@ -16,7 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-import asyncio
 import os
 from datetime import datetime
 from typing import Union, Optional, Callable, BinaryIO, List, Literal, overload
@@ -53,7 +52,7 @@ class DownloadMedia:
         *,
         in_memory: bool = False,
         block: Literal[False],
-        progress: Callable = None,
+        progress: Optional[Callable] = None,
         progress_args: tuple = (),
     ) -> None: ...
 
@@ -81,9 +80,9 @@ class DownloadMedia:
         *,
         in_memory: Literal[True],
         block: bool = True,
-        progress: Callable = None,
+        progress: Optional[Callable] = None,
         progress_args: tuple = (),
-    ) -> Union[BinaryIO, list[BinaryIO]]: ...
+    ) -> Union[BinaryIO, List[BinaryIO]]: ...
 
     @overload
     async def download_media(
@@ -109,9 +108,9 @@ class DownloadMedia:
         *,
         in_memory: Literal[False],
         block: bool = True,
-        progress: Callable = None,
+        progress: Optional[Callable] = None,
         progress_args: tuple = (),
-    ) -> Union[str, list[str]]:
+    ) -> Union[str, List[str]]:
         ...
 
     async def download_media(
@@ -136,9 +135,9 @@ class DownloadMedia:
         file_name: str = DEFAULT_DOWNLOAD_DIR,
         in_memory: bool = False,
         block: bool = True,
-        progress: Callable = None,
+        progress: Optional[Callable] = None,
         progress_args: tuple = ()
-    ) -> Union[str, BinaryIO, List[Union[str, BinaryIO]], None]:
+    ) -> Union[str, BinaryIO, List[str], List[BinaryIO], None]:
         """Download the media from a message.
 
         .. include:: /_includes/usable-by/users-bots.rst
