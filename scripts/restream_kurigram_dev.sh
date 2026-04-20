@@ -6,10 +6,13 @@ cd "$repo_root"
 
 branch="$(git branch --show-current)"
 status_output="$(git status --short)"
-today="$(date +%Y-%m-%d)"
-backup_branch="backup/dev-before-kurigram-${today}"
+backup_suffix="$(date +%Y-%m-%d-%H%M%S)"
+backup_branch="backup/dev-before-kurigram-${backup_suffix}"
 git_user_name="$(git config --local --get user.name || true)"
 git_user_email="$(git config --local --get user.email || true)"
+expected_origin_url="git@github-kenzo02:Kenzo02/h.git"
+origin_fetch_url="$(git config --local --get remote.origin.url || true)"
+origin_push_url="$(git config --local --get remote.origin.pushurl || true)"
 
 if [[ "$branch" != "dev" ]]; then
   echo "error: current branch is '$branch', expected 'dev'" >&2
@@ -32,8 +35,18 @@ if [[ "$git_user_email" != "Kenzo02@users.noreply.github.com" ]]; then
   exit 1
 fi
 
+if [[ "$origin_fetch_url" != "$expected_origin_url" ]]; then
+  echo "error: remote.origin.url must be ${expected_origin_url} (got ${origin_fetch_url:-<unset>})" >&2
+  exit 1
+fi
+
+if [[ "$origin_push_url" != "$expected_origin_url" ]]; then
+  echo "error: remote.origin.pushurl must be ${expected_origin_url} (got ${origin_push_url:-<unset>})" >&2
+  exit 1
+fi
+
 echo "==> verifying GitHub alias"
-ssh_output="$(ssh -T git@github-kenzo02 2>&1 || true)"
+ssh_output="$(ssh -o BatchMode=yes -o ConnectTimeout=10 -T git@github-kenzo02 2>&1 || true)"
 printf '%s\n' "$ssh_output"
 
 if [[ "$ssh_output" != *"Hi Kenzo02!"* ]]; then
