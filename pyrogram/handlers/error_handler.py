@@ -16,13 +16,15 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, Union
 
-import pyrogram
 from pyrogram.filters import Filter
-from pyrogram.types import Update
 
 from .handler import Handler
+
+if TYPE_CHECKING:
+    import pyrogram
+    from pyrogram import raw
 
 
 class ErrorHandler(Handler):
@@ -74,7 +76,15 @@ class ErrorHandler(Handler):
 
     def __init__(
         self,
-        callback: Callable,
+        callback: Callable[
+            [
+                "pyrogram.Client",
+                "raw.base.Update",
+                Dict[int, "raw.base.User"],
+                Dict[int, "raw.base.Chat"],
+            ],
+            Any,
+        ],
         exceptions: Optional[Union[Exception, Sequence[Exception]]] = None,
         filters: Optional[Filter] = None,
     ):

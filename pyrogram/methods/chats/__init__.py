@@ -61,6 +61,7 @@ from .leave_folder import LeaveFolder
 from .mark_chat_unread import MarkChatUnread
 from .pin_chat_message import PinChatMessage
 from .pin_forum_topic import PinForumTopic
+from .process_chat_has_protected_content_disable_request import ProcessChatHasProtectedContentDisableRequest
 from .promote_chat_member import PromoteChatMember
 from .restrict_chat_member import RestrictChatMember
 from .set_administrator_title import SetAdministratorTitle
@@ -68,6 +69,7 @@ from .set_chat_description import SetChatDescription
 from .set_chat_direct_messages_group import SetChatDirectMessagesGroup
 from .set_chat_permissions import SetChatPermissions
 from .set_chat_discussion_group import SetChatDiscussionGroup
+from .set_chat_member_tag import SetChatMemberTag
 from .set_main_profile_tab import SetMainProfileTab
 from .set_chat_photo import SetChatPhoto
 from .set_chat_protected_content import SetChatProtectedContent
@@ -115,6 +117,7 @@ class Chats(
     PinChatMessage,
     UnpinChatMessage,
     PinForumTopic,
+    ProcessChatHasProtectedContentDisableRequest,
     UnpinForumTopic,
     UpdateChatNotifications,
     UpdateColor,
@@ -126,6 +129,7 @@ class Chats(
     SetChatUsername,
     SetChatPermissions,
     SetChatDiscussionGroup,
+    SetChatMemberTag,
     SetMainProfileTab,
     GetDialogsCount,
     GetFolders,

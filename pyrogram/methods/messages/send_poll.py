@@ -29,31 +29,31 @@ class SendPoll:
     async def send_poll(
         self: "pyrogram.Client",
         chat_id: Union[int, str],
-        question: str,
-        options: List[str],
+        question: Union[str, "types.FormattedText"],
+        options: List[Union[str, "types.InputPollOption"]],
+        message_thread_id: Optional[int] = None,
+        business_connection_id: Optional[str] = None,
         is_anonymous: bool = True,
         type: "enums.PollType" = enums.PollType.REGULAR,
         allows_multiple_answers: Optional[bool] = None,
-        correct_option_id: Optional[int] = None,
-        question_parse_mode: Optional["enums.ParseMode"] = None,
-        question_entities: Optional[List["types.MessageEntity"]] = None,
-        explanation: Optional[str] = None,
-        explanation_parse_mode: Optional["enums.ParseMode"] = None,
-        explanation_entities: Optional[List["types.MessageEntity"]] = None,
+        allows_revoting: Optional[bool] = None,
+        shuffle_options: Optional[bool] = None,
+        allow_adding_options: Optional[bool] = None,
+        hide_results_until_closes: Optional[bool] = None,
+        correct_option_ids: Optional[List[int]] = None,
+        explanation: Optional[Union[str, "types.FormattedText"]] = None,
         open_period: Optional[int] = None,
         close_date: Optional[datetime] = None,
         is_closed: Optional[bool] = None,
+        description: Optional[Union[str, "types.FormattedText"]] = None,
         disable_notification: Optional[bool] = None,
         protect_content: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
+        allow_paid_broadcast: Optional[bool] = None,
         effect_id: Optional[int] = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
         schedule_date: Optional[datetime] = None,
         repeat_period: Optional[int] = None,
-        business_connection_id: Optional[str] = None,
-        options_parse_mode: Optional["enums.ParseMode"] = None,
-        allow_paid_broadcast: bool = None,
-        paid_message_star_count: int = None,
+        paid_message_star_count: Optional[int] = None,
         reply_markup: Optional[
             Union[
                 "types.InlineKeyboardMarkup",
@@ -62,15 +62,13 @@ class SendPoll:
                 "types.ForceReply"
             ]
         ] = None,
-
-        reply_to_message_id: Optional[int] = None,
-        reply_to_chat_id: Optional[Union[int, str]] = None,
-        quote_text: Optional[str] = None,
-        quote_parse_mode: Optional["enums.ParseMode"] = None,
-        quote_entities: Optional[List["types.MessageEntity"]] = None,
-        quote_offset: Optional[int] = None,
     ) -> "types.Message":
-        """Send a new poll.
+        """A message with a poll.
+
+        .. note::
+
+            Polls can't be sent to secret chats and channel direct messages chats.
+            Polls can be sent to a private chat only if the chat is a chat with a bot or the Saved Messages chat.
 
         .. include:: /_includes/usable-by/users-bots.rst
 
@@ -80,11 +78,19 @@ class SendPoll:
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
 
-            question (``str``):
-                Poll question, 1-255 characters.
+            question (``str`` | :obj:`~pyrogram.types.FormattedText`):
+                Poll question, 1-255 characters (up to 300 characters for bots).
+                Only custom emoji entities are allowed to be added and only by Premium users.
 
-            options (List of ``str``):
-                List of answer options, 2-12 strings 1-100 characters each.
+            options (List of :obj:`~pyrogram.types.InputPollOption`):
+                List of 2-12 answer options.
+
+            message_thread_id (``int``, *optional*):
+                Unique identifier for the target message thread (topic) of the forum.
+                For supergroups only.
+
+            business_connection_id (``str``, *optional*):
+                Unique identifier of the business connection on behalf of which the message will be sent.
 
             is_anonymous (``bool``, *optional*):
                 True, if the poll needs to be anonymous.
@@ -95,44 +101,44 @@ class SendPoll:
                 Defaults to :obj:`~pyrogram.enums.PollType.REGULAR`.
 
             allows_multiple_answers (``bool``, *optional*):
-                True, if the poll allows multiple answers, ignored for polls in quiz mode.
+                Pass True, if the poll allows multiple answers.
                 Defaults to False.
 
-            correct_option_id (``int``, *optional*):
-                0-based identifier of the correct answer option, required for polls in quiz mode.
+            allows_revoting (``bool``, *optional*):
+                Pass True, if the poll allows to change chosen answer options.
+                Defaults to False for quizzes and to True for regular polls.
 
-            question_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
+            shuffle_options (``bool``, *optional*):
+                Pass True, if the poll options must be shown in random order.
 
-            question_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-                List of special entities that appear in the poll question, which can be specified instead of
-                *parse_mode*.
+            allow_adding_options (``bool``, *optional*):
+                Pass True, if answer options can be added to the poll after creation, not supported for anonymous polls and quizzes.
 
-            explanation (``str``, *optional*):
-                Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style
-                poll, 0-200 characters with at most 2 line feeds after entities parsing.
+            hide_results_until_closes (``bool``, *optional*):
+                Pass True, if poll results must be shown only after the poll closes.
 
-            explanation_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
+            correct_option_ids (List of ``int``, *optional*):
+                List of monotonically increasing 0-based identifiers of the correct answer options, required for polls in quiz mode.
 
-            explanation_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-                List of special entities that appear in the poll explanation, which can be specified instead of
-                *parse_mode*.
+            explanation (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style poll, 0-200 characters with at most 2 line feeds after entities parsing.
 
             open_period (``int``, *optional*):
-                Amount of time in seconds the poll will be active after creation, 5-600.
+                Amount of time in seconds the poll will be active after creation, 5-2628000.
                 Can't be used together with *close_date*.
 
             close_date (:py:obj:`~datetime.datetime`, *optional*):
                 Point in time when the poll will be automatically closed.
-                Must be at least 5 and no more than 600 seconds in the future.
+                Must be at least 5 and no more than 2628000 seconds in the future.
                 Can't be used together with *open_period*.
 
             is_closed (``bool``, *optional*):
                 Pass True, if the poll needs to be immediately closed.
                 This can be useful for poll preview.
+                For bots only.
+
+            description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Description of the poll to be sent, 0-1024 characters after entities parsing.
 
             disable_notification (``bool``, *optional*):
                 Sends the message silently.
@@ -141,9 +147,11 @@ class SendPoll:
             protect_content (``bool``, *optional*):
                 Protects the contents of the sent message from forwarding and saving.
 
-            message_thread_id (``int``, *optional*):
-                Unique identifier for the target message thread (topic) of the forum.
-                For supergroups only.
+            allow_paid_broadcast (``bool``, *optional*):
+                If True, you will be allowed to send up to 1000 messages per second.
+                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
+                The relevant Stars will be withdrawn from the bot's balance.
+                For bots only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -158,19 +166,6 @@ class SendPoll:
             repeat_period (``int``, *optional*):
                 Period after which the message will be sent again in seconds.
 
-            business_connection_id (``str``, *optional*):
-                Unique identifier of the business connection on behalf of which the message will be sent.
-
-            options_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
-
-            allow_paid_broadcast (``bool``, *optional*):
-                If True, you will be allowed to send up to 1000 messages per second.
-                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
-                The relevant Stars will be withdrawn from the bot's balance.
-                For bots only.
-
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
@@ -184,78 +179,51 @@ class SendPoll:
         Example:
             .. code-block:: python
 
-                await app.send_poll(chat_id, "Is this a poll question?", ["Yes", "No", "Maybe"])
+                await app.send_poll(
+                    chat_id=chat_id,
+                    question="Is this a poll question?",
+                    options=[
+                        types.InputPollOption(text="Yes"),
+                        types.InputPollOption(text="No"),
+                        types.InputPollOption(text="Maybe")
+                    ]
+                )
         """
-        if any(
-            (
-                reply_to_message_id is not None,
-                reply_to_chat_id is not None,
-                quote_text is not None,
-                quote_parse_mode is not None,
-                quote_entities is not None,
-                quote_offset is not None,
-            )
-        ):
-            if reply_to_message_id is not None:
-                log.warning(
-                    "`reply_to_message_id` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
+        if isinstance(question, str):
+            question = types.FormattedText(text=question)
 
-            if reply_to_chat_id is not None:
-                log.warning(
-                    "`reply_to_chat_id` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
+        if isinstance(explanation, str):
+            explanation = types.FormattedText(text=explanation)
 
-            if quote_text is not None:
-                log.warning(
-                    "`quote_text` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if quote_parse_mode is not None:
-                log.warning(
-                    "`quote_parse_mode` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if quote_entities is not None:
-                log.warning(
-                    "`quote_entities` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            if quote_offset is not None:
-                log.warning(
-                    "`quote_offset` is deprecated and will be removed in future updates. Use `reply_parameters` instead."
-                )
-
-            reply_parameters = types.ReplyParameters(
-                message_id=reply_to_message_id,
-                chat_id=reply_to_chat_id,
-                quote=quote_text,
-                quote_parse_mode=quote_parse_mode,
-                quote_entities=quote_entities,
-                quote_position=quote_offset
-            )
-
-        question, question_entities = (await utils.parse_text_entities(
-            self, question, question_parse_mode, question_entities
-        )).values()
-
-        solution, solution_entities = (await utils.parse_text_entities(
-            self, explanation, explanation_parse_mode, explanation_entities
-        )).values()
+        if isinstance(description, str):
+            description = types.FormattedText(text=description)
 
         answers = []
 
-        for i, opt in enumerate(options):
-            option, option_entities = (await utils.parse_text_entities(
-                self, opt, options_parse_mode, None
-            )).values()
-
-            answers.append(
-                raw.types.PollAnswer(
-                    text=raw.types.TextWithEntities(text=option, entities=option_entities or []),
-                    option=bytes([i]),
+        for option in options:
+            if isinstance(option, str):
+                answers.append(
+                    types.InputPollOption(
+                        text=types.FormattedText(text=option)
+                    )
                 )
-            )
+            else:
+                answers.append(option)
+
+        solution = None
+        solution_entities = None
+        message = None
+        entities = None
+
+        if explanation is not None:
+            raw_solution = await explanation.write(self)
+            solution = raw_solution.text
+            solution_entities = raw_solution.entities
+
+        if description is not None:
+            raw_message = await description.write(self)
+            message = raw_message.text
+            entities = raw_message.entities
 
         r = await self.invoke(
             raw.functions.messages.SendMedia(
@@ -263,23 +231,26 @@ class SendPoll:
                 media=raw.types.InputMediaPoll(
                     poll=raw.types.Poll(
                         id=self.rnd_id(),
-                        question=raw.types.TextWithEntities(
-                            text=question,
-                            entities=question_entities or []
-                        ),
-                        answers=answers,
+                        question=await question.write(self),
+                        answers=[await answer.write(self) for answer in answers],
+                        hash=0,
                         closed=is_closed,
                         public_voters=not is_anonymous,
-                        multiple_choice=allows_multiple_answers,
+                        multiple_choice=True if correct_option_ids and len(correct_option_ids) > 1 else allows_multiple_answers,
                         quiz=type == enums.PollType.QUIZ or False,
+                        open_answers=False if type == enums.PollType.QUIZ and allow_adding_options else allow_adding_options,
+                        revoting_disabled=not allows_revoting if allows_revoting is not None else (type == enums.PollType.QUIZ),
+                        shuffle_answers=shuffle_options,
+                        hide_results_until_close=hide_results_until_closes,
                         close_period=open_period,
                         close_date=utils.datetime_to_timestamp(close_date)
                     ),
-                    correct_answers=[bytes([correct_option_id])] if correct_option_id is not None else None,
+                    correct_answers=correct_option_ids,
                     solution=solution,
-                    solution_entities=solution_entities or []
+                    solution_entities=solution_entities
                 ),
-                message="",
+                message=message or "",
+                entities=entities or None,
                 silent=disable_notification,
                 reply_to=await utils.get_reply_to(
                     self,
@@ -298,6 +269,4 @@ class SendPoll:
             business_connection_id=business_connection_id
         )
 
-        messages = await utils.parse_messages(client=self, messages=r)
-
-        return messages[0] if messages else None
+        return next(iter(await utils.parse_messages(client=self, messages=r)), None)

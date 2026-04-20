@@ -35,6 +35,7 @@ from .inline_keyboard_markup import InlineKeyboardMarkup
 from .keyboard_button import KeyboardButton
 from .labeled_price import LabeledPrice
 from .login_url import LoginUrl
+from .managed_bot_updated import ManagedBotUpdated
 from .menu_button import MenuButton
 from .menu_button_commands import MenuButtonCommands
 from .menu_button_default import MenuButtonDefault
@@ -47,6 +48,7 @@ from .purchased_paid_media import PurchasedPaidMedia
 from .reply_keyboard_markup import ReplyKeyboardMarkup
 from .reply_keyboard_remove import ReplyKeyboardRemove
 from .keyboard_button_request_chat import KeyboardButtonRequestChat
+from .keyboard_button_request_managed_bot import KeyboardButtonRequestManagedBot
 from .keyboard_button_poll_type import KeyboardButtonPollType
 from .keyboard_button_request_users import KeyboardButtonRequestUsers
 from .chat_shared import ChatShared
@@ -69,12 +71,14 @@ __all__ = [
     "ReplyKeyboardMarkup",
     "ReplyKeyboardRemove",
     "KeyboardButtonRequestChat",
+    "KeyboardButtonRequestManagedBot",
     "KeyboardButtonRequestUsers",
     "KeyboardButtonPollType",
     "ChatShared",
     "UsersShared",
     "LabeledPrice",
     "LoginUrl",
+    "ManagedBotUpdated",
     "BotCommand",
     "BotCommandScope",
     "BotCommandScopeAllChatAdministrators",

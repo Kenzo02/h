@@ -28,6 +28,7 @@ class SummarizeMessage:
         chat_id: str,
         message_id: int,
         translate_to_language_code: Optional[str] = None,
+        tone: Optional[str] = None,
     ) -> "types.FormattedText":
         """Summarizes content of the message with non-empty summary_language_code.
 
@@ -50,6 +51,10 @@ class SummarizeMessage:
                 "st", "sn", "sd", "si", "sk", "sl", "so", "es", "su", "sw", "sv", "tl", "tg", "ta", "tt", "te", "th", "tr", "tk", "uk", "ur", "ug", "uz", "vi", "cy", "xh", "yi", "ji", "yo", "zu"
                 Defaults to the client's language code.
 
+            tone (``str``, *optional*):
+                Tone of the summarization.
+                Must be one of "formal", "neutral", "casual".
+
         Returns:
             :obj:`~pyrogram.types.FormattedText`: On success, information about the summarized text is returned.
         """
@@ -57,7 +62,8 @@ class SummarizeMessage:
             raw.functions.messages.SummarizeText(
                 peer=await self.resolve_peer(chat_id),
                 id=message_id,
-                to_lang=translate_to_language_code or self.lang_code
+                to_lang=translate_to_language_code or self.lang_code,
+                tone=tone
             )
         )
 

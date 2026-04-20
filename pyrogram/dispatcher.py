@@ -17,33 +17,71 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
-from collections import OrderedDict
 import inspect
 import logging
+from collections import OrderedDict
 from typing import Dict
 
 import pyrogram
 from pyrogram import utils
 from pyrogram.handlers import (
+    BusinessConnectionHandler,
+    BusinessMessageHandler,
+    CallbackQueryHandler,
+    ChatBoostHandler,
+    ChatJoinRequestHandler,
+    ChatMemberUpdatedHandler,
+    ChosenInlineResultHandler,
+    DeletedBusinessMessagesHandler,
+    DeletedMessagesHandler,
+    EditedBusinessMessageHandler,
+    EditedMessageHandler,
+    ErrorHandler,
     Handler,
-    ErrorHandler, CallbackQueryHandler, MessageHandler, EditedMessageHandler, DeletedMessagesHandler,
-    UserStatusHandler, RawUpdateHandler, InlineQueryHandler, PollHandler, PreCheckoutQueryHandler,
-    ChosenInlineResultHandler, ChatMemberUpdatedHandler, ChatJoinRequestHandler, StoryHandler,
-    ShippingQueryHandler, MessageReactionHandler, MessageReactionCountHandler, ChatBoostHandler,
-    PurchasedPaidMediaHandler, BusinessConnectionHandler, BusinessMessageHandler,
-    EditedBusinessMessageHandler, DeletedBusinessMessagesHandler
+    InlineQueryHandler,
+    ManagedBotUpdatedHandler,
+    MessageHandler,
+    MessageReactionCountHandler,
+    MessageReactionHandler,
+    PollHandler,
+    PreCheckoutQueryHandler,
+    PurchasedPaidMediaHandler,
+    RawUpdateHandler,
+    ShippingQueryHandler,
+    StoryHandler,
+    UserStatusHandler,
 )
 from pyrogram.raw.types import (
-    UpdateNewMessage, UpdateNewChannelMessage, UpdateNewScheduledMessage,
-    UpdateBotNewBusinessMessage, UpdateBotEditBusinessMessage, UpdateBotDeleteBusinessMessage,
-    UpdateEditMessage, UpdateEditChannelMessage,
-    UpdateDeleteMessages, UpdateDeleteChannelMessages,
-    UpdateBotCallbackQuery, UpdateInlineBotCallbackQuery, UpdateBotPrecheckoutQuery,
-    UpdateUserStatus, UpdateBotInlineQuery, UpdateMessagePoll,
-    UpdateBotInlineSend, UpdateChatParticipant, UpdateChannelParticipant,
-    UpdateBotChatInviteRequester, UpdateStory, UpdateBotShippingQuery, UpdateBotMessageReaction,
-    UpdateBotMessageReactions, UpdateBotChatBoost, UpdateBusinessBotCallbackQuery,
-    UpdateBotPurchasedPaidMedia, UpdateMessagePollVote, UpdateBotBusinessConnect
+    UpdateBotBusinessConnect,
+    UpdateBotCallbackQuery,
+    UpdateBotChatBoost,
+    UpdateBotChatInviteRequester,
+    UpdateBotDeleteBusinessMessage,
+    UpdateBotEditBusinessMessage,
+    UpdateBotInlineQuery,
+    UpdateBotInlineSend,
+    UpdateBotMessageReaction,
+    UpdateBotMessageReactions,
+    UpdateBotNewBusinessMessage,
+    UpdateBotPrecheckoutQuery,
+    UpdateBotPurchasedPaidMedia,
+    UpdateBotShippingQuery,
+    UpdateBusinessBotCallbackQuery,
+    UpdateChannelParticipant,
+    UpdateChatParticipant,
+    UpdateDeleteChannelMessages,
+    UpdateDeleteMessages,
+    UpdateEditChannelMessage,
+    UpdateEditMessage,
+    UpdateInlineBotCallbackQuery,
+    UpdateManagedBot,
+    UpdateMessagePoll,
+    UpdateMessagePollVote,
+    UpdateNewChannelMessage,
+    UpdateNewMessage,
+    UpdateNewScheduledMessage,
+    UpdateStory,
+    UpdateUserStatus,
 )
 
 log = logging.getLogger(__name__)
@@ -71,6 +109,7 @@ class Dispatcher:
     NEW_BUSINESS_MESSAGE_UPDATES = (UpdateBotNewBusinessMessage,)
     EDITED_BUSINESS_MESSAGE_UPDATES = (UpdateBotEditBusinessMessage,)
     DELETED_BUSINESS_MESSAGES_UPDATES = (UpdateBotDeleteBusinessMessage,)
+    MANAGED_BOT_UPDATES = (UpdateManagedBot,)
 
     def __init__(self, client: "pyrogram.Client"):
         self.client = client
@@ -133,7 +172,7 @@ class Dispatcher:
 
         async def poll_parser(update, users, chats):
             return (
-                pyrogram.types.Poll._parse_update(self.client, update, users),
+                pyrogram.types.Poll._parse_update(self.client, update, users, chats),
                 PollHandler
             )
 
@@ -230,6 +269,12 @@ class Dispatcher:
                 DeletedBusinessMessagesHandler,
             )
 
+        async def managed_bot_parser(update, users, chats):
+            return (
+                await pyrogram.types.ManagedBotUpdated._parse(self.client, update, users),
+                ManagedBotUpdatedHandler
+            )
+
         self.update_parsers = {
             Dispatcher.NEW_MESSAGE_UPDATES: message_parser,
             Dispatcher.EDIT_MESSAGE_UPDATES: edited_message_parser,
@@ -251,7 +296,8 @@ class Dispatcher:
             Dispatcher.BUSINESS_CONNECTION_UPDATES: business_connection_parser,
             Dispatcher.NEW_BUSINESS_MESSAGE_UPDATES: business_message_parser,
             Dispatcher.EDITED_BUSINESS_MESSAGE_UPDATES: edited_business_message_parser,
-            Dispatcher.DELETED_BUSINESS_MESSAGES_UPDATES: deleted_business_messages_parser
+            Dispatcher.DELETED_BUSINESS_MESSAGES_UPDATES: deleted_business_messages_parser,
+            Dispatcher.MANAGED_BOT_UPDATES: managed_bot_parser,
         }
 
         self.update_parsers = {key: value for key_tuple, value in self.update_parsers.items() for key in key_tuple}

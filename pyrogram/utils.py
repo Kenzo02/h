@@ -458,7 +458,8 @@ async def get_reply_to(
                 quote_entities=entities,
                 quote_offset=reply_parameters.quote_position,
                 monoforum_peer_id=await client.resolve_peer(direct_messages_topic_id),
-                todo_item_id=reply_parameters.checklist_task_id
+                todo_item_id=reply_parameters.checklist_task_id,
+                poll_option=reply_parameters.poll_option_id.encode() if reply_parameters.poll_option_id is not None else None,
             )
 
     if message_thread_id:

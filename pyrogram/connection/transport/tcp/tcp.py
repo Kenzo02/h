@@ -18,9 +18,11 @@
 
 import asyncio
 import logging
+import re
 import socket
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Tuple, TypedDict, Union
+from urllib.parse import parse_qs
 
 from python_socks import ProxyType
 from python_socks.async_.asyncio import Proxy
@@ -69,6 +71,27 @@ class TCP:
 
     async def _build_proxy(self) -> Proxy:
         if isinstance(self.proxy, str):
+            match = re.match(r"(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/socks\?|tg://socks\?)(.+)", self.proxy)
+
+            if match:
+                params = parse_qs(match.group(1))
+                server = params.get("server", [None])[0]
+                port = params.get("port", [None])[0]
+                user = params.get("user", [None])[0]
+                password = params.get("pass", [None])[0]
+
+                if not server or not port:
+                    raise ValueError(
+                        "Telegram proxy link must contain 'server' and 'port' params"
+                    )
+
+                if user and password:
+                    url = f"socks5://{user}:{password}@{server}:{port}"
+                else:
+                    url = f"socks5://{server}:{port}"
+
+                return Proxy.from_url(url)
+
             return Proxy.from_url(self.proxy)
 
         scheme = self.proxy.get("scheme", "").lower()

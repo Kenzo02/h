@@ -120,7 +120,7 @@ class Client(Methods):
         proxy (``dict`` | ``str``, *optional*):
             The Proxy settings as dict.
             E.g.: *dict(scheme="socks5", hostname="11.22.33.44", port=1234, username="user", password="pass")*
-            or *"http://11.22.33.44:1234"* or *"socks5://user:pass@11.22.33.44:1234"*.
+            or *"http://11.22.33.44:1234"* or *"socks5://user:pass@11.22.33.44:1234"* or *"tg://user:pass@11.22.33.44:1234"*.
             The *username* and *password* can be omitted if the proxy doesn't require authorization.
 
         test_mode (``bool``, *optional*):
@@ -382,10 +382,7 @@ class Client(Methods):
         self.dispatcher: Dispatcher = Dispatcher(self)
 
         self.rnd_id = MsgId
-        self._last_sync_time = time.time()
-        self._last_monotonic = time.monotonic()
-
-        self._is_server_time_synced = False
+        self._server_time_offset = 0.0
 
         self.parser: Parser = Parser(self)
 
@@ -425,9 +422,19 @@ class Client(Methods):
         if isinstance(loop, asyncio.AbstractEventLoop):
             self.loop = loop
         else:
-            self.loop = utils.get_event_loop()
+            self.loop = None
 
         self.__config: "raw.types.Config" = None
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        if not self._loop:
+            self._loop = utils.get_event_loop()
+        return self._loop
+
+    @loop.setter
+    def loop(self, value: asyncio.AbstractEventLoop):
+        self._loop = value
 
     def __enter__(self):
         return self.start()
@@ -488,7 +495,7 @@ class Client(Methods):
                     else:
                         self.phone_number = value
 
-                sent_code = await self.send_code(self.phone_number)
+                sent_code = await self.send_phone_number_code(self.phone_number)
             except BadRequest as e:
                 print(e.MESSAGE)
                 self.phone_number = None
@@ -1517,16 +1524,12 @@ class Client(Methods):
 
     @property
     def server_time(self) -> float:
-        return self._last_sync_time + (time.monotonic() - self._last_monotonic)
+        return time.time() + self._server_time_offset
 
     def _set_server_time(self, msg_id: int):
-        if self._is_server_time_synced:
-            return
-
-        self._last_sync_time = msg_id / float(2**32)
-        self._last_monotonic = time.monotonic()
-        self._is_server_time_synced = True
-        log.info(f"Time synced: {utils.timestamp_to_datetime(self._last_sync_time)}")
+        server_ts = msg_id / float(2**32)
+        self._server_time_offset = server_ts - time.time()
+        log.info(f"Time synced: offset={self._server_time_offset:.3f}s, server_time={utils.timestamp_to_datetime(server_ts)}")
 
     def guess_mime_type(self, filename: Union[str, BytesIO]) -> Optional[str]:
         if isinstance(filename, BytesIO):

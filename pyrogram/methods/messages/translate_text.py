@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
@@ -25,10 +25,9 @@ from pyrogram import enums, raw, types, utils
 class TranslateText:
     async def translate_text(
         self: "pyrogram.Client",
-        text: str,
+        text: Union[str, "types.FormattedText"],
         to_language_code: str,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        entities: List["types.MessageEntity"] = None,
+        tone: Optional[str] = None,
     ) -> "types.FormattedText":
         """Translate a text to the given language.
 
@@ -37,7 +36,7 @@ class TranslateText:
         .. include:: /_includes/usable-by/users.rst
 
         Parameters:
-            text (``str``):
+            text (``str`` | :obj:`~pyrogram.types.FormattedText`):
                 Text to translate.
 
             to_language_code (``str``):
@@ -47,6 +46,10 @@ class TranslateText:
                 "ku", "ky", "lo", "la", "lv", "lt", "lb", "mk", "mg", "ms", "ml", "mt", "mi", "mr", "mn", "my", "ne", "no", "ny", "or", "ps", "fa", "pl", "pt", "pa", "ro", "ru", "sm", "gd", "sr",
                 "st", "sn", "sd", "si", "sk", "sl", "so", "es", "su", "sw", "sv", "tl", "tg", "ta", "tt", "te", "th", "tr", "tk", "uk", "ur", "ug", "uz", "vi", "cy", "xh", "yi", "ji", "yo", "zu"
 
+            tone (``str``, *optional*):
+                Tone of the translation.
+                Must be one of "formal", "neutral", "casual".
+
         Returns:
             :obj:`~pyrogram.types.FormattedText`: On success, information about the translated text is returned.
 
@@ -55,17 +58,14 @@ class TranslateText:
 
                 await app.translate_text("Hello!", "ru")
         """
-        message, entities = (await utils.parse_text_entities(self, text, parse_mode, entities)).values()
+        if isinstance(text, str):
+            text = types.FormattedText(text=text)
 
         r = await self.invoke(
             raw.functions.messages.TranslateText(
                 to_lang=to_language_code,
-                text=[
-                    raw.types.TextWithEntities(
-                        text=message,
-                        entities=entities or []
-                    )
-                ]
+                text=[await text.write(self)],
+                tone=tone
             )
         )
 

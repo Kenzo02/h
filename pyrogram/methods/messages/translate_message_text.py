@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from typing import Optional
+
 import pyrogram
 from pyrogram import raw, types
 
@@ -26,6 +28,7 @@ class TranslateMessageText:
         chat_id: str,
         message_id: int,
         to_language_code: str,
+        tone: Optional[str] = None
     ) -> "types.FormattedText":
         """Extract text or caption of the given message and translates it to the given language.
 
@@ -49,6 +52,10 @@ class TranslateMessageText:
                 "ku", "ky", "lo", "la", "lv", "lt", "lb", "mk", "mg", "ms", "ml", "mt", "mi", "mr", "mn", "my", "ne", "no", "ny", "or", "ps", "fa", "pl", "pt", "pa", "ro", "ru", "sm", "gd", "sr",
                 "st", "sn", "sd", "si", "sk", "sl", "so", "es", "su", "sw", "sv", "tl", "tg", "ta", "tt", "te", "th", "tr", "tk", "uk", "ur", "ug", "uz", "vi", "cy", "xh", "yi", "ji", "yo", "zu"
 
+            tone (``str``, *optional*):
+                Tone of the translation.
+                Must be one of "formal", "neutral", "casual".
+
         Returns:
             :obj:`~pyrogram.types.FormattedText`: On success, information about the translated text is returned.
 
@@ -61,7 +68,8 @@ class TranslateMessageText:
             raw.functions.messages.TranslateText(
                 to_lang=to_language_code,
                 peer=await self.resolve_peer(chat_id),
-                id=[message_id]
+                id=[message_id],
+                tone=tone
             )
         )
 

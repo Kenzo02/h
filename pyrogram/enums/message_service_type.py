@@ -96,6 +96,15 @@ class MessageServiceType(AutoName):
     GIVEAWAY_COMPLETED = auto()
     "Giveaway completed"
 
+    MANAGED_BOT_CREATED = auto()
+    "Managed bot created"
+
+    POLL_OPTION_ADDED = auto()
+    "Poll option added"
+
+    POLL_OPTION_DELETED = auto()
+    "Poll option deleted"
+
     PREMIUM_GIFT_CODE = auto()
     "Gift code"
 
@@ -218,3 +227,9 @@ class MessageServiceType(AutoName):
 
     UPGRADED_GIFT_PURCHASE_OFFER_REJECTED = auto()
     "Upgraded gift purchase offer declined"
+
+    CHAT_HAS_PROTECTED_CONTENT_TOGGLED = auto()
+    "Chat has protected content toggled"
+
+    CHAT_HAS_PROTECTED_CONTENT_DISABLE_REQUESTED = auto()
+    "Chat has protected content disable requested"

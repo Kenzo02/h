@@ -243,12 +243,14 @@ def pyrogram_api():
             send_voice
             send_video_note
             send_media_group
+            send_message_draft
             send_location
             send_venue
             send_contact
             send_cached_media
             send_reaction
             edit_message_text
+            fix_text_with_ai
             edit_message_caption
             edit_message_checklist
             edit_message_media
@@ -304,8 +306,11 @@ def pyrogram_api():
             send_paid_reaction
             add_to_gifs
             approve_suggested_post
+            compose_text_with_ai
             decline_suggested_post
             add_checklist_tasks
+            add_poll_option
+            delete_poll_option
             summarize_message
         """,
         chats="""
@@ -326,6 +331,7 @@ def pyrogram_api():
             pin_chat_message
             unpin_chat_message
             pin_forum_topic
+            process_chat_has_protected_content_disable_request
             unpin_forum_topic
             unpin_all_chat_messages
             get_chat
@@ -383,6 +389,7 @@ def pyrogram_api():
             transfer_chat_ownership
             get_suitable_discussion_chats
             set_chat_discussion_group
+            set_chat_member_tag
             set_main_profile_tab
         """,
         users="""
@@ -515,6 +522,8 @@ def pyrogram_api():
             set_chat_menu_button
             get_chat_menu_button
             answer_web_app_query
+            check_bot_username
+            create_bot
             answer_pre_checkout_query
             answer_shipping_query
             create_invoice_link
@@ -525,6 +534,8 @@ def pyrogram_api():
             get_bot_info_short_description
             set_bot_name
             get_bot_name
+            get_managed_bot_token
+            replace_managed_bot_token
             get_owned_bots
         """,
         business="""
@@ -541,13 +552,14 @@ def pyrogram_api():
             disconnect
             initialize
             terminate
-            send_code
-            resend_code
+            send_phone_number_code
+            resend_phone_number_code
             sign_in
             sign_in_bot
             sign_up
             get_password_hint
             check_password
+            change_phone_number
             send_recovery_code
             recover_password
             accept_terms_of_service
@@ -697,6 +709,8 @@ def pyrogram_api():
             MessageOriginUser
             MessageOrigin
             Photo
+            PollOptionAdded
+            PollOptionDeleted
             Thumbnail
             StrippedThumbnail
             Audio
@@ -721,6 +735,7 @@ def pyrogram_api():
             CraftGiftResultSuccess
             CraftGiftResultFail
             Location
+            ManagedBotCreated
             MaskPosition
             MediaArea
             Venue
@@ -797,6 +812,8 @@ def pyrogram_api():
             ChatBoost
             ChatOwnerChanged
             ChatOwnerLeft
+            ChatHasProtectedContentToggled
+            ChatHasProtectedContentDisableRequested
             ContactRegistered
             ScreenshotTaken
             StarAmount
@@ -853,8 +870,10 @@ def pyrogram_api():
             MenuButtonDefault
             SentWebAppMessage
             KeyboardButtonRequestChat
+            KeyboardButtonRequestManagedBot
             KeyboardButtonRequestUsers
             KeyboardButtonPollType
+            ManagedBotUpdated
             OrderInfo
             PreCheckoutQuery
             ShippingAddress
@@ -901,6 +920,7 @@ def pyrogram_api():
             InputMediaVideo
             InputMessageContent
             InputPhoneContact
+            InputPollOption
             InputPrivacyRule
             InputPrivacyRuleAllowAll
             InputPrivacyRuleAllowBots
@@ -944,6 +964,10 @@ def pyrogram_api():
         Authorization
             ActiveSession
             ActiveSessions
+            FirebaseAuthenticationSettings
+            FirebaseAuthenticationSettingsAndroid
+            FirebaseAuthenticationSettingsIos
+            PhoneNumberAuthenticationSettings
             SentCode
             TermsOfService
         """
@@ -1221,6 +1245,7 @@ def pyrogram_api():
             PaidReactionPrivacy
             ParseMode
             PhoneCallDiscardReason
+            PhoneNumberCodeType
             PollType
             PrivacyKey
             ProfileColor

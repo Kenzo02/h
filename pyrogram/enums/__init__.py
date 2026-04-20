@@ -37,6 +37,7 @@ from .paid_reaction_privacy import PaidReactionPrivacy
 from .parse_mode import ParseMode
 from .payment_form_type import PaymentFormType
 from .phone_call_discard_reason import PhoneCallDiscardReason
+from .phone_number_code_type import PhoneNumberCodeType
 from .poll_type import PollType
 from .privacy_key import PrivacyKey
 from .privacy_rule_type import PrivacyRuleType
@@ -79,6 +80,7 @@ __all__ = [
     'ParseMode',
     'PaymentFormType',
     'PhoneCallDiscardReason',
+    'PhoneNumberCodeType',
     'PollType',
     'PrivacyKey',
     'PrivacyRuleType',

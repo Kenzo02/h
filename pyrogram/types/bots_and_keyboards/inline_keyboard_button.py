@@ -16,12 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union, Optional
+from typing import Optional, Union
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
-from pyrogram import enums
+from pyrogram import enums, raw, types
+
 from ..object import Object
 
 
@@ -85,7 +84,7 @@ class InlineKeyboardButton(Object):
             A button that copies specified text to clipboard.
             Limited to 256 character.
 
-        icon_custom_emoji_id (``int``, *optional*):
+        icon_custom_emoji_id (``str``, *optional*):
             Identifier of the custom emoji that must be shown on the button.
 
         style (:obj:`~pyrogram.enums.ButtonStyle`, *optional*):
@@ -104,9 +103,9 @@ class InlineKeyboardButton(Object):
         switch_inline_query_current_chat: Optional[str] = None,
         callback_game: Optional["types.CallbackGame"] = None,
         requires_password: Optional[bool] = None,
-        pay: bool = None,
-        copy_text: str = None,
-        icon_custom_emoji_id: Optional[int] = None,
+        pay: Optional[bool] = None,
+        copy_text: Optional[str] = None,
+        icon_custom_emoji_id: Optional[str] = None,
         style: "enums.ButtonStyle" = enums.ButtonStyle.DEFAULT
     ):
         super().__init__()
@@ -139,8 +138,9 @@ class InlineKeyboardButton(Object):
                 button_style = enums.ButtonStyle.DANGER
             elif raw_style.bg_success:
                 button_style = enums.ButtonStyle.SUCCESS
-            elif raw_style.icon:
-                icon_custom_emoji_id = raw_style.icon
+
+            if raw_style.icon:
+                icon_custom_emoji_id = str(raw_style.icon)
 
         if isinstance(b, raw.types.KeyboardButtonCallback):
             # Try decode data to keep it as string, but if fails, fallback to bytes so we don't lose any information,
@@ -244,7 +244,7 @@ class InlineKeyboardButton(Object):
             bg_primary=self.style == enums.ButtonStyle.PRIMARY,
             bg_danger=self.style == enums.ButtonStyle.DANGER,
             bg_success=self.style == enums.ButtonStyle.SUCCESS,
-            icon=self.icon_custom_emoji_id
+            icon=int(self.icon_custom_emoji_id) if self.icon_custom_emoji_id is not None else None
         ) if self.style != enums.ButtonStyle.DEFAULT or self.icon_custom_emoji_id is not None else None
 
         if self.callback_data is not None:

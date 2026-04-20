@@ -29,6 +29,7 @@ from pyrogram.parser import utils as parser_utils
 
 from ..object import Object
 from ..update import Update
+import contextlib
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +79,10 @@ class Message(Object, Update):
         sender_business_bot (:obj:`~pyrogram.types.User`, *optional*):
             The bot that actually sent the message on behalf of the business account. Available only for outgoing messages sent on behalf of the connected business account.
 
+        sender_tag (``str``, *optional*):
+            Tag or custom title of the sender of the message.
+            For supergroups only.
+
         date (:py:obj:`~datetime.datetime`, *optional*):
             Date the message was sent.
 
@@ -122,6 +127,9 @@ class Message(Object, Update):
 
         reply_to_top_message_id (``int``, *optional*):
             The id of the first message which started this message thread.
+
+        reply_to_poll_option_id (``str``, *optional*):
+            Persistent identifier of the specific poll option that is being replied to.
 
         reply_to_message (:obj:`~pyrogram.types.Message`, *optional*):
             For replies, the original message. Note that the Message object in this field will not contain
@@ -474,6 +482,15 @@ class Message(Object, Update):
         giveaway_completed (:obj:`~pyrogram.types.GiveawayCompleted`, *optional*):
             Service message: a giveaway without public winners was completed.
 
+        managed_bot_created (:obj:`~pyrogram.types.ManagedBotCreated`, *optional*):
+            Service message: user created a bot that will be managed by the current bot.
+
+        poll_option_added (:obj:`~pyrogram.types.PollOptionAdded`, *optional*):
+            Service message: answer option was added to a poll.
+
+        poll_option_deleted (:obj:`~pyrogram.types.PollOptionDeleted`, *optional*):
+            Service message: answer option was deleted from a poll.
+
         chat_set_theme (:obj:`~pyrogram.types.ChatTheme`, *optional*):
             Service message: The chat theme was changed.
 
@@ -510,6 +527,12 @@ class Message(Object, Update):
 
         upgraded_gift_purchase_offer_rejected (:obj:`~pyrogram.types.UpgradedGiftPurchaseOfferRejected`, *optional*):
             Service message: An offer to purchase a gift was rejected or expired.
+
+        chat_has_protected_content_toggled (:obj:`~pyrogram.types.ChatHasProtectedContentToggled`, *optional*):
+            Service message: An ``has_protected_content`` setting was changed or request to change it was rejected in a chat.
+
+        chat_has_protected_content_disable_requested (:obj:`~pyrogram.types.ChatProtectedContentDisableRequested`, *optional*):
+            Service message: An process requested to disable ``has_protected_content`` in a chat.
 
         business_connection_id (``str``, *optional*):
             Unique identifier of the business connection from which the message was received.
@@ -576,6 +599,7 @@ class Message(Object, Update):
         sender_chat: Optional["types.Chat"] = None,
         sender_boost_count: Optional[int] = None,
         sender_business_bot: Optional["types.User"] = None,
+        sender_tag: Optional[str] = None,
         date: Optional[datetime] = None,
         chat: Optional["types.Chat"] = None,
         topic_message: Optional[bool] = None,
@@ -593,6 +617,7 @@ class Message(Object, Update):
         reply_to_story_id: Optional[int] = None,
         reply_to_story_user_id: Optional[int] = None,
         reply_to_top_message_id: Optional[int] = None,
+        reply_to_poll_option_id: Optional[str] = None,
         reply_to_message: Optional["Message"] = None,
         reply_to_story: Optional["types.Story"] = None,
         reply_to_checklist_task_id: Optional[int] = None,
@@ -623,6 +648,9 @@ class Message(Object, Update):
         giveaway: Optional["types.Giveaway"] = None,
         giveaway_winners: Optional["types.GiveawayWinners"] = None,
         giveaway_completed: Optional["types.GiveawayCompleted"] = None,
+        managed_bot_created: Optional["types.ManagedBotCreated"] = None,
+        poll_option_added: Optional["types.PollOptionAdded"] = None,
+        poll_option_deleted: Optional["types.PollOptionDeleted"] = None,
         invoice: Optional["types.Invoice"] = None,
         story: Optional["types.Story"] = None,
         video: Optional["types.Video"] = None,
@@ -651,7 +679,7 @@ class Message(Object, Update):
         migrate_to_chat_id: Optional[int] = None,
         migrate_from_chat_id: Optional[int] = None,
         pinned_message: Optional["Message"] = None,
-        game_high_score: Optional[int] = None,
+        game_high_score: Optional["types.GameHighScore"] = None,
         views: Optional[int] = None,
         forwards: Optional[int] = None,
         via_bot: Optional["types.User"] = None,
@@ -708,6 +736,8 @@ class Message(Object, Update):
         screenshot_taken: Optional["types.ScreenshotTaken"] = None,
         upgraded_gift_purchase_offer: Optional["types.UpgradedGiftPurchaseOffer"] = None,
         upgraded_gift_purchase_offer_rejected: Optional["types.UpgradedGiftPurchaseOfferRejected"] = None,
+        chat_has_protected_content_toggled: Optional["types.ChatHasProtectedContentToggled"] = None,
+        chat_has_protected_content_disable_requested: Optional["types.ChatHasProtectedContentDisableRequested"] = None,
         business_connection_id: Optional[str] = None,
         reply_markup: Optional[
             Union[
@@ -738,6 +768,7 @@ class Message(Object, Update):
         self.sender_chat = sender_chat
         self.sender_boost_count = sender_boost_count
         self.sender_business_bot = sender_business_bot
+        self.sender_tag = sender_tag
         self.date = date
         self.chat = chat
         self.topic_message = topic_message
@@ -755,6 +786,7 @@ class Message(Object, Update):
         self.reply_to_story_id = reply_to_story_id
         self.reply_to_story_user_id = reply_to_story_user_id
         self.reply_to_top_message_id = reply_to_top_message_id
+        self.reply_to_poll_option_id = reply_to_poll_option_id
         self.reply_to_message = reply_to_message
         self.reply_to_story = reply_to_story
         self.reply_to_checklist_task_id = reply_to_checklist_task_id
@@ -785,6 +817,9 @@ class Message(Object, Update):
         self.giveaway = giveaway
         self.giveaway_winners = giveaway_winners
         self.giveaway_completed = giveaway_completed
+        self.managed_bot_created = managed_bot_created
+        self.poll_option_added = poll_option_added
+        self.poll_option_deleted = poll_option_deleted
         self.invoice = invoice
         self.story = story
         self.video = video
@@ -824,6 +859,8 @@ class Message(Object, Update):
         self.screenshot_taken = screenshot_taken
         self.upgraded_gift_purchase_offer = upgraded_gift_purchase_offer
         self.upgraded_gift_purchase_offer_rejected = upgraded_gift_purchase_offer_rejected
+        self.chat_has_protected_content_toggled = chat_has_protected_content_toggled
+        self.chat_has_protected_content_disable_requested = chat_has_protected_content_disable_requested
         self.business_connection_id = business_connection_id
         self.reply_markup = reply_markup
         self.forum_topic_created = forum_topic_created
@@ -894,6 +931,7 @@ class Message(Object, Update):
         chats: Dict[int, "raw.base.Chat"],
         replies: int = 1,
         business_connection_id: str = None,
+        raw_reply_to_message: "raw.base.Message" = None
     ) -> "Message":
         from_id = utils.get_raw_peer_id(message.from_id)
         peer_id = utils.get_raw_peer_id(message.peer_id)
@@ -945,6 +983,7 @@ class Message(Object, Update):
         gifted_ton = None
         giveaway_created = None
         giveaway_completed = None
+        managed_bot_created = None
         video_chat_ended = None
         video_chat_started = None
         video_chat_scheduled = None
@@ -965,6 +1004,8 @@ class Message(Object, Update):
         screenshot_taken = None
         upgraded_gift_purchase_offer = None
         upgraded_gift_purchase_offer_rejected = None
+        chat_has_protected_content_toggled = None
+        chat_has_protected_content_disable_requested = None
         # passport_data_send = None
         # passport_data_received = None
         chat_set_theme = None
@@ -1105,6 +1146,9 @@ class Message(Object, Update):
                     None
                 )
             )
+        elif isinstance(action, raw.types.MessageActionManagedBotCreated):
+            service_type = enums.MessageServiceType.MANAGED_BOT_CREATED
+            managed_bot_created = await types.ManagedBotCreated._parse(client, action, users)
         elif isinstance(action, raw.types.MessageActionGroupCall):
             if action.duration:
                 service_type = enums.MessageServiceType.VIDEO_CHAT_ENDED
@@ -1182,6 +1226,15 @@ class Message(Object, Update):
                 users,
                 chats
             )
+        elif isinstance(action, raw.types.MessageActionNoForwardsToggle):
+            service_type = enums.MessageServiceType.CHAT_HAS_PROTECTED_CONTENT_TOGGLED
+            chat_has_protected_content_toggled = types.ChatHasProtectedContentToggled._parse(
+                getattr(message.reply_to, "reply_to_msg_id", None),
+                action
+            )
+        elif isinstance(action, raw.types.MessageActionNoForwardsRequest):
+            service_type = enums.MessageServiceType.CHAT_HAS_PROTECTED_CONTENT_DISABLE_REQUESTED
+            chat_has_protected_content_disable_requested = types.ChatHasProtectedContentDisableRequested._parse(action)
         # TODO: elif isinstance(action, raw.types.MessageActionSecureValuesSent):
             # service_type = enums.MessageServiceType.PASSPORT_DATA_SEND
             # passport_data_send = ...
@@ -1279,6 +1332,7 @@ class Message(Object, Update):
             gifted_ton=gifted_ton,
             giveaway_created=giveaway_created,
             giveaway_completed=giveaway_completed,
+            managed_bot_created=managed_bot_created,
             video_chat_ended=video_chat_ended,
             video_chat_started=video_chat_started,
             video_chat_scheduled=video_chat_scheduled,
@@ -1300,6 +1354,8 @@ class Message(Object, Update):
             screenshot_taken=screenshot_taken,
             upgraded_gift_purchase_offer=upgraded_gift_purchase_offer,
             upgraded_gift_purchase_offer_rejected=upgraded_gift_purchase_offer_rejected,
+            chat_has_protected_content_toggled=chat_has_protected_content_toggled,
+            chat_has_protected_content_disable_requested=chat_has_protected_content_disable_requested,
             chat_set_theme=chat_set_theme,
             chat_set_background=chat_set_background,
             set_message_auto_delete_time=set_message_auto_delete_time,
@@ -1325,42 +1381,30 @@ class Message(Object, Update):
             client=client
         )
 
-        if isinstance(action, raw.types.MessageActionGameScore):
-            parsed_message.game_high_score = types.GameHighScore._parse_action(client, message, users)
-            parsed_message.service = enums.MessageServiceType.GAME_HIGH_SCORE
+        if message.reply_to:
+            parsed_message = await types.Message.__parse_reply(
+                client=client,
+                parsed_message=parsed_message,
+                message=message,
+                users=users,
+                chats=chats,
+                replies=replies,
+                business_connection_id=business_connection_id,
+                raw_reply_to_message=raw_reply_to_message,
+            )
 
-            if client.fetch_replies and message.reply_to and replies:
-                try:
-                    parsed_message.reply_to_message = await client.get_messages(
-                        chat_id=parsed_message.chat.id,
-                        message_ids=message.id,
-                        reply=True,
-                        replies=0
-                    )
-                except (MessageIdsEmpty, ChannelPrivate):
-                    pass
+        if isinstance(action, raw.types.MessageActionGameScore):
+            parsed_message.service = enums.MessageServiceType.GAME_HIGH_SCORE
+            parsed_message.game_high_score = types.GameHighScore._parse_action(client, message, users)
         elif isinstance(action, raw.types.MessageActionPinMessage):
             parsed_message.service = enums.MessageServiceType.PINNED_MESSAGE
-
-            if client.fetch_replies:
-                try:
-                    parsed_message.pinned_message = await client.get_messages(
-                        chat_id=parsed_message.chat.id,
-                        pinned=True,
-                        replies=0
-                    )
-
-                except (MessageIdsEmpty, ChannelPrivate):
-                    pass
-
-        if message.reply_to and message.reply_to.forum_topic:
-            parsed_message.topic_message = True
-            if message.reply_to.reply_to_top_id:
-                parsed_message.message_thread_id = message.reply_to.reply_to_top_id
-            elif message.reply_to.reply_to_msg_id:
-                parsed_message.message_thread_id = message.reply_to.reply_to_msg_id
-            else:
-                parsed_message.message_thread_id = 1
+            parsed_message.pinned_message = parsed_message.reply_to_message # Why...
+        elif isinstance(action, raw.types.MessageActionPollAppendAnswer):
+            parsed_message.service = enums.MessageServiceType.POLL_OPTION_ADDED
+            parsed_message.poll_option_added = await types.PollOptionAdded._parse(client, parsed_message.reply_to_message, action)
+        elif isinstance(action, raw.types.MessageActionPollDeleteAnswer):
+            parsed_message.service = enums.MessageServiceType.POLL_OPTION_DELETED
+            parsed_message.poll_option_deleted = await types.PollOptionDeleted._parse(client, parsed_message.reply_to_message, action)
 
         client.message_cache[(parsed_message.chat.id, parsed_message.id)] = parsed_message
 
@@ -1528,7 +1572,19 @@ class Message(Object, Update):
                 media_type = enums.MessageMediaType.WEB_PAGE
                 web_page = types.WebPage._parse(client, media)
             elif isinstance(media, raw.types.MessageMediaPoll):
-                poll = types.Poll._parse(client, media)
+                poll = types.Poll._parse(
+                    client,
+                    media,
+                    description=types.FormattedText._parse(
+                        client,
+                        raw.types.TextWithEntities(
+                            text=message.message,
+                            entities=message.entities
+                        )
+                    )  if message.message else None,
+                    users=users,
+                    chats=chats
+                )
                 media_type = enums.MessageMediaType.POLL
             elif isinstance(media, raw.types.MessageMediaDice):
                 dice = types.Dice._parse(client, media)
@@ -1576,6 +1632,7 @@ class Message(Object, Update):
                 client,
                 users.get(getattr(message, "via_business_bot_id", None))
             ),
+            sender_tag=message.from_rank,
             text=(
                 Str(message.message).init(entities) or None
                 if media is None or web_page is not None
@@ -1672,74 +1729,16 @@ class Message(Object, Update):
                 parsed_message.automatic_forward = True
 
         if message.reply_to:
-            parsed_message.external_reply = await types.ExternalReplyInfo._parse(
-                client,
-                message.reply_to,
-                users,
-                chats
+            parsed_message = await types.Message.__parse_reply(
+                client=client,
+                parsed_message=parsed_message,
+                message=message,
+                users=users,
+                chats=chats,
+                replies=replies,
+                business_connection_id=business_connection_id,
+                raw_reply_to_message=raw_reply_to_message,
             )
-
-            if isinstance(message.reply_to, raw.types.MessageReplyHeader):
-                parsed_message.reply_to_message_id = message.reply_to.reply_to_msg_id
-                parsed_message.reply_to_top_message_id = message.reply_to.reply_to_top_id
-                parsed_message.reply_to_checklist_task_id = message.reply_to.todo_item_id
-
-                if message.reply_to.forum_topic:
-                    parsed_message.topic_message = True
-
-                    if message.reply_to.reply_to_top_id:
-                        parsed_message.message_thread_id = message.reply_to.reply_to_top_id
-                    elif message.reply_to.reply_to_msg_id:
-                        parsed_message.message_thread_id = message.reply_to.reply_to_msg_id
-                    else:
-                        parsed_message.message_thread_id = 1
-
-                if message.reply_to.quote:
-                    parsed_message.quote = types.TextQuote._parse(
-                        client,
-                        users,
-                        message.reply_to
-                    )
-            elif isinstance(message.reply_to, raw.types.MessageReplyStoryHeader):
-                parsed_message.reply_to_story_id = message.reply_to.story_id
-                parsed_message.reply_to_story_user_id = utils.get_peer_id(message.reply_to.peer)
-
-                if client.fetch_stories and client.me and not client.me.is_bot:
-                    parsed_message.reply_to_story = await client.get_stories(
-                        utils.get_peer_id(message.reply_to.peer),
-                        message.reply_to.story_id
-                    )
-
-            if raw_reply_to_message:
-                parsed_message.reply_to_message = await types.Message._parse(
-                    client,
-                    raw_reply_to_message,
-                    users,
-                    chats,
-                    business_connection_id=business_connection_id,
-                    replies=0
-                )
-            elif replies:
-                if isinstance(message.reply_to, raw.types.MessageReplyHeader):
-                    if message.reply_to.reply_to_peer_id:
-                        key = (utils.get_peer_id(message.reply_to.reply_to_peer_id), message.reply_to.reply_to_msg_id)
-                        reply_to_params = {"chat_id": key[0], 'message_ids': key[1]}
-                    else:
-                        key = (parsed_message.chat.id, parsed_message.reply_to_message_id)
-                        reply_to_params = {'chat_id': key[0], 'message_ids': message.id, 'reply': True}
-
-                    reply_to_message = client.message_cache[key]
-
-                    if not reply_to_message and client.fetch_replies:
-                        try:
-                            reply_to_message = await client.get_messages(
-                                replies=replies - 1,
-                                **reply_to_params
-                            )
-                        except (ChannelPrivate, ChannelInvalid, MessageIdsEmpty):
-                            pass
-
-                    parsed_message.reply_to_message = reply_to_message
 
         if topics:
             parsed_message.topic = types.ForumTopic._parse(
@@ -1792,6 +1791,85 @@ class Message(Object, Update):
         return parsed_message
 
     @staticmethod
+    async def __parse_reply(
+        client: "pyrogram.Client",
+        parsed_message: "Message",
+        message: "raw.base.Message",
+        users: Dict[int, "raw.base.User"],
+        chats: Dict[int, "raw.base.Chat"],
+        replies: int = 1,
+        business_connection_id: Optional[str] = None,
+        raw_reply_to_message: Optional["raw.base.Message"] = None
+    ):
+        if isinstance(message.reply_to, raw.types.MessageReplyHeader):
+            parsed_message.reply_to_message_id = message.reply_to.reply_to_msg_id
+            parsed_message.reply_to_top_message_id = message.reply_to.reply_to_top_id
+            parsed_message.reply_to_checklist_task_id = message.reply_to.todo_item_id
+            parsed_message.reply_to_poll_option_id = message.reply_to.poll_option.decode() if message.reply_to.poll_option is not None else None
+
+            if replies:
+                if message.reply_to.reply_to_peer_id:
+                    key = (utils.get_peer_id(message.reply_to.reply_to_peer_id), message.reply_to.reply_to_msg_id)
+                    reply_to_params = {"chat_id": key[0], 'message_ids': key[1]}
+                else:
+                    key = (parsed_message.chat.id, parsed_message.reply_to_message_id)
+                    reply_to_params = {'chat_id': key[0], 'message_ids': message.id, 'reply': True}
+
+                parsed_message.reply_to_message = client.message_cache[key]
+
+                if raw_reply_to_message: # For business bots only
+                    parsed_message.reply_to_message = await types.Message._parse(
+                        client,
+                        raw_reply_to_message,
+                        users,
+                        chats,
+                        business_connection_id=business_connection_id,
+                        replies=0
+                    )
+                elif client.fetch_replies and not parsed_message.reply_to_message:
+                    with contextlib.suppress(ChannelPrivate, ChannelInvalid, MessageIdsEmpty):
+                        parsed_message.reply_to_message = await client.get_messages(
+                            replies=replies - 1,
+                            **reply_to_params
+                        )
+
+            if message.reply_to.forum_topic:
+                parsed_message.topic_message = True
+
+                if message.reply_to.reply_to_top_id:
+                    parsed_message.message_thread_id = message.reply_to.reply_to_top_id
+                elif message.reply_to.reply_to_msg_id:
+                    parsed_message.message_thread_id = message.reply_to.reply_to_msg_id
+                else:
+                    parsed_message.message_thread_id = 1
+
+            if message.reply_to.quote:
+                parsed_message.quote = types.TextQuote._parse(
+                    client,
+                    users,
+                    message.reply_to
+                )
+
+            if message.reply_to.reply_from:
+                parsed_message.external_reply = await types.ExternalReplyInfo._parse(
+                    client,
+                    message.reply_to,
+                    users,
+                    chats
+                )
+        elif isinstance(message.reply_to, raw.types.MessageReplyStoryHeader):
+            parsed_message.reply_to_story_id = message.reply_to.story_id
+            parsed_message.reply_to_story_user_id = utils.get_peer_id(message.reply_to.peer)
+
+            if client.fetch_stories and client.me and not client.me.is_bot:
+                parsed_message.reply_to_story = await client.get_stories(
+                    utils.get_peer_id(message.reply_to.peer),
+                    message.reply_to.story_id
+                )
+
+        return parsed_message
+
+    @staticmethod
     async def _parse(
         client: "pyrogram.Client",
         message: "raw.base.Message",
@@ -1819,7 +1897,8 @@ class Message(Object, Update):
                 users=users,
                 chats=chats,
                 replies=replies,
-                business_connection_id=business_connection_id
+                business_connection_id=business_connection_id,
+                raw_reply_to_message=raw_reply_to_message
             )
 
         if isinstance(message, raw.types.Message):
@@ -4988,29 +5067,30 @@ class Message(Object, Update):
 
     async def reply_poll(
         self,
-        question: str,
-        options: List[str],
+        question: "types.FormattedText",
+        options: List[Union[str, "types.FormattedText"]],
+        message_thread_id: Optional[int] = None,
+        business_connection_id: Optional[str] = None,
         is_anonymous: bool = True,
         type: "enums.PollType" = enums.PollType.REGULAR,
         allows_multiple_answers: Optional[bool] = None,
-        correct_option_id: Optional[int] = None,
-        question_parse_mode: Optional["enums.ParseMode"] = None,
-        question_entities: Optional[List["types.MessageEntity"]] = None,
-        explanation: Optional[str] = None,
-        explanation_parse_mode: Optional["enums.ParseMode"] = None,
-        explanation_entities: Optional[List["types.MessageEntity"]] = None,
+        allows_revoting: Optional[bool] = None,
+        shuffle_options: Optional[bool] = None,
+        allow_adding_options: Optional[bool] = None,
+        hide_results_until_closes: Optional[bool] = None,
+        correct_option_ids: Optional[List[int]] = None,
+        explanation: Optional["types.FormattedText"] = None,
         open_period: Optional[int] = None,
         close_date: Optional[datetime] = None,
         is_closed: Optional[bool] = None,
+        description: Optional["types.FormattedText"] = None,
         disable_notification: Optional[bool] = None,
         protect_content: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
+        allow_paid_broadcast: Optional[bool] = None,
         effect_id: Optional[int] = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
         schedule_date: Optional[datetime] = None,
         repeat_period: Optional[int] = None,
-        options_parse_mode: Optional[List["types.MessageEntity"]] = None,
-        allow_paid_broadcast: Optional[bool] = None,
         paid_message_star_count: Optional[int] = None,
         reply_markup: Optional[
             Union[
@@ -5020,13 +5100,6 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None,
-
-        quote: Optional[bool] = None,
-        reply_to_message_id: int = None,
-        quote_text: Optional[str] = None,
-        quote_parse_mode: Optional["enums.ParseMode"] = None,
-        quote_entities: Optional[List["types.MessageEntity"]] = None,
-        quote_offset: Optional[int] = None,
     ) -> "Message":
         """Shortcut for method :obj:`~pyrogram.Client.send_poll` will automatically fill method attributes:
 
@@ -5041,11 +5114,19 @@ class Message(Object, Update):
                 await message.reply_poll("This is a poll", ["A", "B", "C"])
 
         Parameters:
-            question (``str``):
-                Poll question, 1-255 characters.
+            question (``str`` | :obj:`~pyrogram.types.FormattedText`):
+                Poll question, 1-255 characters (up to 300 characters for bots).
+                Only custom emoji entities are allowed to be added and only by Premium users.
 
-            options (List of ``str``):
-                List of answer options, 2-10 strings 1-100 characters each.
+            options (List of ``str`` | List of :obj:`~pyrogram.types.FormattedText`):
+                List of 2-12 answer options, each 1-100 characters.
+
+            message_thread_id (``int``, *optional*):
+                Unique identifier for the target message thread (topic) of the forum.
+                For supergroups only.
+
+            business_connection_id (``str``, *optional*):
+                Unique identifier of the business connection on behalf of which the message will be sent.
 
             is_anonymous (``bool``, *optional*):
                 True, if the poll needs to be anonymous.
@@ -5056,44 +5137,44 @@ class Message(Object, Update):
                 Defaults to :obj:`~pyrogram.enums.PollType.REGULAR`.
 
             allows_multiple_answers (``bool``, *optional*):
-                True, if the poll allows multiple answers, ignored for polls in quiz mode.
+                Pass True, if the poll allows multiple answers.
                 Defaults to False.
 
-            correct_option_id (``int``, *optional*):
-                0-based identifier of the correct answer option, required for polls in quiz mode.
+            allows_revoting (``bool``, *optional*):
+                Pass True, if the poll allows to change chosen answer options.
+                Defaults to False for quizzes and to True for regular polls.
 
-            question_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
+            shuffle_options (``bool``, *optional*):
+                Pass True, if the poll options must be shown in random order.
 
-            question_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-                List of special entities that appear in the poll question, which can be specified instead of
-                *parse_mode*.
+            allow_adding_options (``bool``, *optional*):
+                Pass True, if answer options can be added to the poll after creation, not supported for anonymous polls and quizzes.
 
-            explanation (``str``, *optional*):
-                Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style
-                poll, 0-200 characters with at most 2 line feeds after entities parsing.
+            hide_results_until_closes (``bool``, *optional*):
+                Pass True, if poll results must be shown only after the poll closes.
 
-            explanation_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
+            correct_option_ids (List of ``int``, *optional*):
+                List of monotonically increasing 0-based identifiers of the correct answer options, required for polls in quiz mode.
 
-            explanation_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-                List of special entities that appear in the poll explanation, which can be specified instead of
-                *parse_mode*.
+            explanation (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style poll, 0-200 characters with at most 2 line feeds after entities parsing.
 
             open_period (``int``, *optional*):
-                Amount of time in seconds the poll will be active after creation, 5-600.
+                Amount of time in seconds the poll will be active after creation, 5-2628000.
                 Can't be used together with *close_date*.
 
             close_date (:py:obj:`~datetime.datetime`, *optional*):
                 Point in time when the poll will be automatically closed.
-                Must be at least 5 and no more than 600 seconds in the future.
+                Must be at least 5 and no more than 2628000 seconds in the future.
                 Can't be used together with *open_period*.
 
             is_closed (``bool``, *optional*):
                 Pass True, if the poll needs to be immediately closed.
                 This can be useful for poll preview.
+                For bots only.
+
+            description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Description of the poll to be sent, 0-1024 characters after entities parsing.
 
             disable_notification (``bool``, *optional*):
                 Sends the message silently.
@@ -5102,9 +5183,11 @@ class Message(Object, Update):
             protect_content (``bool``, *optional*):
                 Protects the contents of the sent message from forwarding and saving.
 
-            message_thread_id (``int``, *optional*):
-                Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+            allow_paid_broadcast (``bool``, *optional*):
+                If True, you will be allowed to send up to 1000 messages per second.
+                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
+                The relevant Stars will be withdrawn from the bot's balance.
+                For bots only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -5118,16 +5201,6 @@ class Message(Object, Update):
 
             repeat_period (``int``, *optional*):
                 Period after which the message will be sent again in seconds.
-
-            options_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
-
-            allow_paid_broadcast (``bool``, *optional*):
-                If True, you will be allowed to send up to 1000 messages per second.
-                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
-                The relevant Stars will be withdrawn from the bot's balance.
-                For bots only.
 
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
@@ -5147,15 +5220,6 @@ class Message(Object, Update):
                 message_id=self.id
             )
 
-        if quote is not None:
-            log.warning(
-                "`quote` parameter is deprecated and will be removed in future updates."
-            )
-            quote = self.chat.type != enums.ChatType.PRIVATE
-
-            if not quote:
-                reply_parameters = None
-
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
 
@@ -5163,63 +5227,58 @@ class Message(Object, Update):
             chat_id=self.chat.id,
             question=question,
             options=options,
+            message_thread_id=message_thread_id,
+            business_connection_id=business_connection_id,
             is_anonymous=is_anonymous,
             type=type,
             allows_multiple_answers=allows_multiple_answers,
-            correct_option_id=correct_option_id,
-            question_parse_mode=question_parse_mode,
-            question_entities=question_entities,
+            allows_revoting=allows_revoting,
+            shuffle_options=shuffle_options,
+            allow_adding_options=allow_adding_options,
+            hide_results_until_closes=hide_results_until_closes,
+            correct_option_ids=correct_option_ids,
             explanation=explanation,
-            explanation_parse_mode=explanation_parse_mode,
-            explanation_entities=explanation_entities,
             open_period=open_period,
             close_date=close_date,
             is_closed=is_closed,
+            description=description,
             disable_notification=disable_notification,
             protect_content=protect_content,
-            message_thread_id=message_thread_id,
+            allow_paid_broadcast=allow_paid_broadcast,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             schedule_date=schedule_date,
             repeat_period=repeat_period,
-            business_connection_id=self.business_connection_id,
-            options_parse_mode=options_parse_mode,
-            allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
             reply_markup=reply_markup,
-
-            reply_to_message_id=reply_to_message_id,
-            quote_text=quote_text,
-            quote_parse_mode=quote_parse_mode,
-            quote_entities=quote_entities,
-            quote_offset=quote_offset,
         )
 
     async def answer_poll(
         self,
-        question: str,
-        options: List[str],
+        question: "types.FormattedText",
+        options: List["types.FormattedText"],
+        message_thread_id: Optional[int] = None,
+        business_connection_id: Optional[str] = None,
         is_anonymous: bool = True,
         type: "enums.PollType" = enums.PollType.REGULAR,
         allows_multiple_answers: Optional[bool] = None,
-        correct_option_id: Optional[int] = None,
-        question_parse_mode: Optional["enums.ParseMode"] = None,
-        question_entities: Optional[List["types.MessageEntity"]] = None,
-        explanation: Optional[str] = None,
-        explanation_parse_mode: Optional["enums.ParseMode"] = None,
-        explanation_entities: Optional[List["types.MessageEntity"]] = None,
+        allows_revoting: Optional[bool] = None,
+        shuffle_options: Optional[bool] = None,
+        allow_adding_options: Optional[bool] = None,
+        hide_results_until_closes: Optional[bool] = None,
+        correct_option_ids: Optional[List[int]] = None,
+        explanation: Optional["types.FormattedText"] = None,
         open_period: Optional[int] = None,
         close_date: Optional[datetime] = None,
         is_closed: Optional[bool] = None,
+        description: Optional["types.FormattedText"] = None,
         disable_notification: Optional[bool] = None,
         protect_content: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
+        allow_paid_broadcast: Optional[bool] = None,
         effect_id: Optional[int] = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
         schedule_date: Optional[datetime] = None,
         repeat_period: Optional[int] = None,
-        options_parse_mode: Optional[List["types.MessageEntity"]] = None,
-        allow_paid_broadcast: Optional[bool] = None,
         paid_message_star_count: Optional[int] = None,
         reply_markup: Optional[
             Union[
@@ -5228,7 +5287,7 @@ class Message(Object, Update):
                 "types.ReplyKeyboardRemove",
                 "types.ForceReply"
             ]
-        ] = None
+        ] = None,
     ) -> "Message":
         """Shortcut for method :obj:`~pyrogram.Client.send_poll` will automatically fill method attributes:
 
@@ -5242,11 +5301,19 @@ class Message(Object, Update):
                 await message.reply_poll("This is a poll", ["A", "B", "C"])
 
         Parameters:
-            question (``str``):
-                Poll question, 1-255 characters.
+            question (``str`` | :obj:`~pyrogram.types.FormattedText`):
+                Poll question, 1-255 characters (up to 300 characters for bots).
+                Only custom emoji entities are allowed to be added and only by Premium users.
 
-            options (List of ``str``):
-                List of answer options, 2-10 strings 1-100 characters each.
+            options (List of ``str`` | List of :obj:`~pyrogram.types.FormattedText`):
+                List of 2-12 answer options, each 1-100 characters.
+
+            message_thread_id (``int``, *optional*):
+                Unique identifier for the target message thread (topic) of the forum.
+                For supergroups only.
+
+            business_connection_id (``str``, *optional*):
+                Unique identifier of the business connection on behalf of which the message will be sent.
 
             is_anonymous (``bool``, *optional*):
                 True, if the poll needs to be anonymous.
@@ -5257,44 +5324,44 @@ class Message(Object, Update):
                 Defaults to :obj:`~pyrogram.enums.PollType.REGULAR`.
 
             allows_multiple_answers (``bool``, *optional*):
-                True, if the poll allows multiple answers, ignored for polls in quiz mode.
+                Pass True, if the poll allows multiple answers.
                 Defaults to False.
 
-            correct_option_id (``int``, *optional*):
-                0-based identifier of the correct answer option, required for polls in quiz mode.
+            allows_revoting (``bool``, *optional*):
+                Pass True, if the poll allows to change chosen answer options.
+                Defaults to False for quizzes and to True for regular polls.
 
-            question_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
+            shuffle_options (``bool``, *optional*):
+                Pass True, if the poll options must be shown in random order.
 
-            question_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-                List of special entities that appear in the poll question, which can be specified instead of
-                *parse_mode*.
+            allow_adding_options (``bool``, *optional*):
+                Pass True, if answer options can be added to the poll after creation, not supported for anonymous polls and quizzes.
 
-            explanation (``str``, *optional*):
-                Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style
-                poll, 0-200 characters with at most 2 line feeds after entities parsing.
+            hide_results_until_closes (``bool``, *optional*):
+                Pass True, if poll results must be shown only after the poll closes.
 
-            explanation_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
+            correct_option_ids (List of ``int``, *optional*):
+                List of monotonically increasing 0-based identifiers of the correct answer options, required for polls in quiz mode.
 
-            explanation_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-                List of special entities that appear in the poll explanation, which can be specified instead of
-                *parse_mode*.
+            explanation (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style poll, 0-200 characters with at most 2 line feeds after entities parsing.
 
             open_period (``int``, *optional*):
-                Amount of time in seconds the poll will be active after creation, 5-600.
+                Amount of time in seconds the poll will be active after creation, 5-2628000.
                 Can't be used together with *close_date*.
 
             close_date (:py:obj:`~datetime.datetime`, *optional*):
                 Point in time when the poll will be automatically closed.
-                Must be at least 5 and no more than 600 seconds in the future.
+                Must be at least 5 and no more than 2628000 seconds in the future.
                 Can't be used together with *open_period*.
 
             is_closed (``bool``, *optional*):
                 Pass True, if the poll needs to be immediately closed.
                 This can be useful for poll preview.
+                For bots only.
+
+            description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Description of the poll to be sent, 0-1024 characters after entities parsing.
 
             disable_notification (``bool``, *optional*):
                 Sends the message silently.
@@ -5303,9 +5370,11 @@ class Message(Object, Update):
             protect_content (``bool``, *optional*):
                 Protects the contents of the sent message from forwarding and saving.
 
-            message_thread_id (``int``, *optional*):
-                Unique identifier of a message thread to which the message belongs.
-                For supergroups only.
+            allow_paid_broadcast (``bool``, *optional*):
+                If True, you will be allowed to send up to 1000 messages per second.
+                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
+                The relevant Stars will be withdrawn from the bot's balance.
+                For bots only.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -5319,16 +5388,6 @@ class Message(Object, Update):
 
             repeat_period (``int``, *optional*):
                 Period after which the message will be sent again in seconds.
-
-            options_parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-                By default, texts are parsed using both Markdown and HTML styles.
-                You can combine both syntaxes together.
-
-            allow_paid_broadcast (``bool``, *optional*):
-                If True, you will be allowed to send up to 1000 messages per second.
-                Ignoring broadcasting limits for a fee of 0.1 Telegram Stars per message.
-                The relevant Stars will be withdrawn from the bot's balance.
-                For bots only.
 
             paid_message_star_count (``int``, *optional*):
                 The number of Telegram Stars the user agreed to pay to send the messages.
@@ -5350,30 +5409,30 @@ class Message(Object, Update):
             chat_id=self.chat.id,
             question=question,
             options=options,
+            message_thread_id=message_thread_id,
+            business_connection_id=business_connection_id,
             is_anonymous=is_anonymous,
             type=type,
             allows_multiple_answers=allows_multiple_answers,
-            correct_option_id=correct_option_id,
-            question_parse_mode=question_parse_mode,
-            question_entities=question_entities,
+            allows_revoting=allows_revoting,
+            shuffle_options=shuffle_options,
+            allow_adding_options=allow_adding_options,
+            hide_results_until_closes=hide_results_until_closes,
+            correct_option_ids=correct_option_ids,
             explanation=explanation,
-            explanation_parse_mode=explanation_parse_mode,
-            explanation_entities=explanation_entities,
             open_period=open_period,
             close_date=close_date,
             is_closed=is_closed,
+            description=description,
             disable_notification=disable_notification,
             protect_content=protect_content,
-            message_thread_id=message_thread_id,
+            allow_paid_broadcast=allow_paid_broadcast,
             effect_id=effect_id,
             reply_parameters=reply_parameters,
             schedule_date=schedule_date,
             repeat_period=repeat_period,
-            business_connection_id=self.business_connection_id,
-            options_parse_mode=options_parse_mode,
-            allow_paid_broadcast=allow_paid_broadcast,
             paid_message_star_count=paid_message_star_count,
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
         )
 
     async def reply_dice(
@@ -8723,17 +8782,28 @@ class Message(Object, Update):
                     business_connection_id=business_connection_id
                 )
             elif self.poll:
+                if self.poll.type == enums.PollType.QUIZ and not self.poll.correct_option_ids:
+                    raise ValueError("You can copy quiz polls which are closed or were sent (not forwarded) by the bot or to the private chat with the bot.")
+
                 return await self._client.send_poll(
                     chat_id,
                     question=self.poll.question,
-                    options=[opt.text for opt in self.poll.options],
-                    disable_notification=disable_notification,
+                    options=[types.InputPollOption(text=opt.text) for opt in self.poll.options],
                     message_thread_id=message_thread_id,
+                    business_connection_id=business_connection_id,
+                    is_anonymous=self.poll.is_anonymous,
+                    type=self.poll.type,
+                    allows_multiple_answers=self.poll.allows_multiple_answers,
+                    allows_revoting=self.poll.allows_revoting,
+                    correct_option_ids=self.poll.correct_option_ids,
+                    explanation=self.poll.explanation,
+                    open_period=self.poll.open_period,
+                    description=self.poll.description,
+                    disable_notification=disable_notification,
                     reply_parameters=reply_parameters,
                     schedule_date=schedule_date,
                     allow_paid_broadcast=allow_paid_broadcast,
                     paid_message_star_count=paid_message_star_count,
-                    business_connection_id=business_connection_id
                 )
             elif self.game:
                 return await self._client.send_game(
@@ -9200,7 +9270,7 @@ class Message(Object, Update):
 
     async def vote(
         self,
-        option: int,
+        option: Union[int, List[int]]
     ) -> "types.Poll":
         """Shortcut for method :obj:`~pyrogram.Client.vote_poll` will automatically fill method attributes:
 
@@ -9208,8 +9278,8 @@ class Message(Object, Update):
         * message_id
 
         Parameters:
-            option (``int``):
-                Index of the poll option you want to vote for (0 to 9).
+            option (``int`` | List of ``int``):
+                Index or list of indexes (for multiple answers) of the poll option(s) you want to vote for (0 to 11).
 
         Returns:
             :obj:`~pyrogram.types.Poll`: On success, the poll with the chosen option is returned.

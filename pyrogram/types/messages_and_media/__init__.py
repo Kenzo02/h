@@ -28,6 +28,8 @@ from .chat_background import ChatBackground
 from .chat_boost import ChatBoost
 from .chat_owner_changed import ChatOwnerChanged
 from .chat_owner_left import ChatOwnerLeft
+from .chat_has_protected_content_toggled import ChatHasProtectedContentToggled
+from .chat_has_protected_content_disable_requested import ChatHasProtectedContentDisableRequested
 from .chat_theme import ChatTheme
 from .checked_gift_code import CheckedGiftCode
 from .checklist_task import ChecklistTask
@@ -69,6 +71,7 @@ from .giveaway_created import GiveawayCreated
 from .giveaway_prize_stars import GiveawayPrizeStars
 from .giveaway_winners import GiveawayWinners
 from .location import Location
+from .managed_bot_created import ManagedBotCreated
 from .mask_position import MaskPosition
 from .media_area import MediaArea
 from .message import Message
@@ -90,6 +93,8 @@ from .payment_form import PaymentForm
 from .payment_option import PaymentOption
 from .payment_result import PaymentResult
 from .photo import Photo
+from .poll_option_added import PollOptionAdded
+from .poll_option_deleted import PollOptionDeleted
 from .poll import Poll
 from .proximity_alert_triggered import ProximityAlertTriggered
 from .poll_option import PollOption
@@ -153,6 +158,8 @@ __all__ = [
     "ChatBoost",
     "ChatOwnerChanged",
     "ChatOwnerLeft",
+    "ChatHasProtectedContentToggled",
+    "ChatHasProtectedContentDisableRequested",
     "ChatTheme",
     "CheckedGiftCode",
     "ChecklistTask",
@@ -198,6 +205,7 @@ __all__ = [
     "GiveawayPrizeStars",
     "GiveawayWinners",
     "Location",
+    "ManagedBotCreated",
     "MaskPosition",
     "MediaArea",
     "Message",
@@ -219,6 +227,8 @@ __all__ = [
     "PaymentOption",
     "PaymentResult",
     "Photo",
+    "PollOptionAdded",
+    "PollOptionDeleted",
     "Poll",
     "ProximityAlertTriggered",
     "PollOption",

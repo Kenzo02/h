@@ -67,6 +67,9 @@ class ChatPermissions(Object):
         can_add_web_page_previews (``bool``, *optional*):
             True, if the user is allowed to add web page previews to their messages.
 
+        can_edit_tag (``bool``, *optional*):
+            True, if the user is allowed to edit their own tag.
+
         can_change_info (``bool``, *optional*):
             True, if the user is allowed to change the chat title, photo and other settings.
             Ignored in public supergroups
@@ -96,6 +99,7 @@ class ChatPermissions(Object):
         can_send_polls: Optional[bool] = None,
         can_send_other_messages: Optional[bool] = None,  # Stickers, animations, games, inline bots
         can_add_web_page_previews: Optional[bool] = None,
+        can_edit_tag: Optional[bool] = None,
         can_change_info: Optional[bool] = None,
         can_invite_users: Optional[bool] = None,
         can_pin_messages: Optional[bool] = None,
@@ -115,6 +119,7 @@ class ChatPermissions(Object):
         self.can_send_polls = can_send_polls
         self.can_send_other_messages = can_send_other_messages
         self.can_add_web_page_previews = can_add_web_page_previews
+        self.can_edit_tag = can_edit_tag
         self.can_change_info = can_change_info
         self.can_invite_users = can_invite_users
         self.can_pin_messages = can_pin_messages
@@ -141,6 +146,7 @@ class ChatPermissions(Object):
                     not denied_permissions.send_inline
                 ]),
                 can_add_web_page_previews=not denied_permissions.embed_links,
+                can_edit_tag=not denied_permissions.edit_rank,
                 can_change_info=not denied_permissions.change_info,
                 can_invite_users=not denied_permissions.invite_users,
                 can_pin_messages=not denied_permissions.pin_messages,
@@ -188,6 +194,7 @@ class ChatPermissions(Object):
             send_games=not self.can_send_other_messages,
             send_inline=not self.can_send_other_messages,
             embed_links=not self.can_add_web_page_previews,
+            edit_rank=not self.can_edit_tag,
             change_info=not self.can_change_info,
             invite_users=not self.can_invite_users,
             pin_messages=not self.can_pin_messages,
