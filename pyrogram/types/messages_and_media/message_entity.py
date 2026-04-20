@@ -172,8 +172,8 @@ class MessageEntity(Object):
         if self.language is None:
             args.pop("language", None)
 
-            is_custom_emoji_type = self.type == enums.MessageEntityType.CUSTOM_EMOJI
-            current_custom_emoji_id = args.pop("custom_emoji_id", None)
+        is_custom_emoji_type = self.type == enums.MessageEntityType.CUSTOM_EMOJI
+        current_custom_emoji_id = args.pop("custom_emoji_id", None)
 
         if is_custom_emoji_type:
             if current_custom_emoji_id is None:
@@ -181,12 +181,12 @@ class MessageEntity(Object):
                     "MessageEntityType.CUSTOM_EMOJI requires a 'custom_emoji_id'."
                 )
 
-                try:
-                    current_custom_emoji_id = int(current_custom_emoji_id)
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(
-                        "MessageEntityType.CUSTOM_EMOJI requires a valid integer 'custom_emoji_id'."
-                    ) from exc
+            try:
+                current_custom_emoji_id = int(current_custom_emoji_id)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "MessageEntityType.CUSTOM_EMOJI requires a valid integer 'custom_emoji_id'."
+                ) from exc
 
             # Accept both signed (-2^63 to 2^63-1) and unsigned (0 to 2^64-1) range
             min_val = -9223372036854775808  # -2^63

@@ -174,6 +174,30 @@ class TestHTMLParserCustomEmoji:
 class TestMessageEntityWrite:
     """Test MessageEntity._write() normalizes custom_emoji_id."""
 
+    def test_message_entity_write_pre_with_language(self):
+        """Test MessageEntity.write() preserves PRE language entities."""
+        import asyncio
+        import inspect
+        from pyrogram import raw
+        from pyrogram.types import MessageEntity
+        from pyrogram.enums import MessageEntityType
+
+        entity = MessageEntity(
+            type=MessageEntityType.PRE,
+            offset=0,
+            length=4,
+            language="py"
+        )
+
+        result = entity.write()
+        if inspect.iscoroutine(result):
+            raw_entity = asyncio.run(result)
+        else:
+            raw_entity = result
+
+        assert isinstance(raw_entity, raw.types.MessageEntityPre)
+        assert raw_entity.language == "py"
+
     def test_message_entity_write_normalizes_large_id(self):
         """Test MessageEntity.write() normalizes large custom_emoji_id."""
         import asyncio
@@ -205,6 +229,36 @@ class TestMessageEntityWrite:
         
         # The document_id should be normalized
         expected_signed = large_id - (1 << 64)  # -7493006912391491519
+        assert raw_entity.document_id == expected_signed, f"Expected {expected_signed}, got {raw_entity.document_id}"
+
+    def test_message_entity_write_normalizes_large_string_id(self):
+        """Test MessageEntity.write() normalizes large string custom_emoji_id values."""
+        import asyncio
+        import inspect
+        from pyrogram.types import MessageEntity
+        from pyrogram.enums import MessageEntityType
+
+        large_id = "10953737161318060097"
+
+        entity = MessageEntity(
+            type=MessageEntityType.CUSTOM_EMOJI,
+            offset=0,
+            length=2,
+            custom_emoji_id=large_id
+        )
+
+        class MockClient:
+            pass
+
+        entity._client = MockClient()
+
+        result = entity.write()
+        if inspect.iscoroutine(result):
+            raw_entity = asyncio.run(result)
+        else:
+            raw_entity = result
+
+        expected_signed = int(large_id) - (1 << 64)
         assert raw_entity.document_id == expected_signed, f"Expected {expected_signed}, got {raw_entity.document_id}"
 
     def test_message_entity_write_preserves_normal_id(self):
