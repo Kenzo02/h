@@ -20,10 +20,9 @@ from typing import List, Optional
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
-
-from ..object import Object
 from pyrogram.types.messages_and_media.message import Str
 
+from ..object import Object
 
 
 class FormattedText(Object):
@@ -43,7 +42,7 @@ class FormattedText(Object):
     def __init__(
         self,
         *,
-        text: str,
+        text: Str,
         parse_mode: Optional["enums.ParseMode"] = None,
         entities: Optional[List["types.MessageEntity"]] = None,
     ):
@@ -52,6 +51,9 @@ class FormattedText(Object):
         self.text = text
         self.parse_mode = parse_mode
         self.entities = entities
+
+    def __str__(self) -> str:
+        return self.text
 
     @staticmethod
     def _parse(client: "pyrogram.Client", text: "raw.types.TextWithEntities") -> "FormattedText":
