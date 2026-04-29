@@ -31,9 +31,9 @@ class InputPollOption(Object):
         text (``str`` | :obj:`~pyrogram.enums.FormattedText`, *optional*):
             Option text, 1-100 characters.
 
-        media (:obj:`~pyrogram.types.InputMediaPhoto` | :obj:`~pyrogram.types.InputMediaVideo` | :obj:`~pyrogram.types.InputMediaSticker` | :obj:`~pyrogram.types.Location`, *optional*):
-            Media associated with the option.
-            Currently supports only photo, video, sticker or location.
+        media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
+            Option media.
+            Currently, can be only of the types Animation, Location, Photo, Sticker, Venue, or Video without caption.
     """
 
     def __init__(
@@ -42,9 +42,7 @@ class InputPollOption(Object):
         text: Union[str, "types.FormattedText"],
         media: Optional[
             Union[
-                "types.InputMediaPhoto",
-                "types.InputMediaVideo",
-                "types.InputMediaSticker",
+                "types.InputMedia",
                 "types.Location",
             ]
         ] = None,
@@ -57,17 +55,6 @@ class InputPollOption(Object):
     async def write(self, client: "pyrogram.Client") -> "raw.types.InputPollAnswer":
         if isinstance(self.text, str):
             self.text = types.FormattedText(text=self.text)
-
-        if self.media is not None and not isinstance(
-            self.media,
-            (
-                types.InputMediaPhoto,
-                types.InputMediaVideo,
-                types.InputMediaSticker,
-                types.Location,
-            ),
-        ):
-            raise ValueError(f"Unsupported media type: {type(self.media)}")
 
         return raw.types.InputPollAnswer(
             text=await self.text.write(client),

@@ -31,7 +31,7 @@ class SendPoll:
         chat_id: Union[int, str],
         question: Union[str, "types.FormattedText"],
         options: List[Union[str, "types.InputPollOption"]],
-        media: Optional["types.InputMedia"] = None,
+        description_media: Optional["types.InputMedia"] = None,
         message_thread_id: Optional[int] = None,
         business_connection_id: Optional[str] = None,
         is_anonymous: bool = True,
@@ -43,6 +43,7 @@ class SendPoll:
         hide_results_until_closes: Optional[bool] = None,
         correct_option_ids: Optional[List[int]] = None,
         explanation: Optional[Union[str, "types.FormattedText"]] = None,
+        explanation_media: Optional["types.InputMedia"] = None,
         open_period: Optional[int] = None,
         close_date: Optional[datetime] = None,
         is_closed: Optional[bool] = None,
@@ -86,9 +87,8 @@ class SendPoll:
             options (List of :obj:`~pyrogram.types.InputPollOption`):
                 List of 2-12 answer options.
 
-            media (:obj:`~pyrogram.types.InputMediaPhoto` | :obj:`~pyrogram.types.InputMediaVideo` | :obj:`~pyrogram.types.InputMediaSticker` | :obj:`~pyrogram.types.Location`, *optional*):
+            explanation_media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
                 Media attached to the poll.
-                Currently supports only photo, video, sticker or location.
 
             message_thread_id (``int``, *optional*):
                 Unique identifier for the target message thread (topic) of the forum.
@@ -127,6 +127,9 @@ class SendPoll:
 
             explanation (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
                 Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style poll, 0-200 characters with at most 2 line feeds after entities parsing.
+
+            explanation_media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
+                Media attached to the explanation.
 
             open_period (``int``, *optional*):
                 Amount of time in seconds the poll will be active after creation, 5-2628000.
@@ -199,7 +202,7 @@ class SendPoll:
                 await app.send_poll(
                     chat_id=chat_id,
                     question="Where we are?",
-                    media=types.InputMediaPhoto("photo.jpg"),
+                    description_media=types.InputMediaPhoto("photo.jpg"),
                     options=[
                         types.InputPollOption(
                             text="Maybe here?",
@@ -208,24 +211,13 @@ class SendPoll:
                         types.InputPollOption(
                             text="Or here?",
                             media=types.Location(
-                                longitude=49.807760,
-                                latitude=73.088504
+                                latitude=49.807760,
+                                longitude=73.088504
                             ),
                         ),
                     ]
                 )
         """
-        if media is not None and not isinstance(
-            media,
-            (
-                types.InputMediaPhoto,
-                types.InputMediaVideo,
-                types.InputMediaSticker,
-                types.Location,
-            ),
-        ):
-            raise ValueError("Unsupported media type")
-
         if isinstance(question, str):
             question = types.FormattedText(text=question)
 
@@ -283,9 +275,10 @@ class SendPoll:
                         close_date=utils.datetime_to_timestamp(close_date)
                     ),
                     correct_answers=correct_option_ids,
-                    attached_media=await media.write(client=self) if media is not None else None,
+                    attached_media=await description_media.write(client=self) if description_media is not None else None,
                     solution=solution,
-                    solution_entities=solution_entities
+                    solution_entities=solution_entities,
+                    solution_media=await explanation_media.write(client=self) if explanation_media is not None else None
                 ),
                 message=message or "",
                 entities=entities or None,

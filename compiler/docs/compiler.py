@@ -738,6 +738,7 @@ def pyrogram_api():
             ManagedBotCreated
             MaskPosition
             MediaArea
+            MessageContent
             Venue
             Sticker
             Game

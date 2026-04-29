@@ -590,6 +590,7 @@ class Message(Object, Update):
             IETF language tag of the message language on which it can be summarized.
             None if summary isn't available for the message.
     """
+    # TODO: replace media params to MessageContent class
     def __init__(
         self,
         *,
@@ -1572,7 +1573,7 @@ class Message(Object, Update):
                 media_type = enums.MessageMediaType.WEB_PAGE
                 web_page = types.WebPage._parse(client, media)
             elif isinstance(media, raw.types.MessageMediaPoll):
-                poll = types.Poll._parse(
+                poll = await types.Poll._parse(
                     client,
                     media,
                     description=types.FormattedText._parse(
