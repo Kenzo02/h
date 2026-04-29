@@ -20,7 +20,9 @@ import asyncio
 import base64
 import functools
 import hashlib
+import io
 import os
+import pathlib
 import re
 import struct
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -473,6 +475,21 @@ async def get_reply_to(
         )
 
     return None
+
+
+def get_file_name(
+    media: Union[io.BytesIO, str],
+    *,
+    file_name: str = "",
+    fallback: str = ""
+) -> str:
+    if file_name:
+        return file_name
+
+    if isinstance(media, io.BytesIO):
+        return getattr(media, "name", fallback) or fallback
+
+    return pathlib.Path(media).name or fallback
 
 
 def get_channel_id(peer_id: int) -> int:

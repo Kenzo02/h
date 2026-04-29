@@ -19,63 +19,38 @@
 import io
 import pathlib
 import re
-from typing import BinaryIO, Callable, List, Optional, Union
+from typing import BinaryIO, Callable, Optional, Union
 
 import pyrogram
 from pyrogram import raw, utils
 from pyrogram.file_id import FileType
 
-from ... import enums
-from ..messages_and_media import MessageEntity
 from .input_media import InputMedia
 
 
-class InputMediaDocument(InputMedia):
-    """A generic file to be sent inside an album.
+class InputMediaSticker(InputMedia):
+    """A sticker to be attached.
 
     Parameters:
         media (``str`` | ``BinaryIO``):
-            File to send.
+            Sticker to send.
             Pass a file_id as string to send a file that exists on the Telegram servers or
             pass a file path as string to upload a new file that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
-            pass an HTTP URL as a string for Telegram to get a file from the Internet.
+            pass an HTTP URL as a string for Telegram to get the webp file from the Internet.
 
-        thumb (``str``):
-            Thumbnail of the file sent.
-            The thumbnail should be in JPEG format and less than 200 KB in size.
-            A thumbnail's width and height should not exceed 320 pixels.
-            Thumbnails can't be reused and can be only uploaded as a new file.
-
-        caption (``str``, *optional*):
-            Caption of the document to be sent, 0-1024 characters.
-            If not specified, the original caption is kept. Pass "" (empty string) to remove the caption.
-
-        parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
-            By default, texts are parsed using both Markdown and HTML styles.
-            You can combine both syntaxes together.
-
-        caption_entities (List of :obj:`~pyrogram.types.MessageEntity`):
-            List of special entities that appear in the caption, which can be specified instead of *parse_mode*.
-
-        file_name (``str``, *optional*):
-            File name of the document sent.
-            Defaults to file's path basename.
+        emoji (``str``, *optional*):
+            Emoji associated with this sticker.
     """
 
     def __init__(
         self,
         media: Union[str, BinaryIO],
-        thumb: Optional[str] = None,
-        caption: str = "",
-        parse_mode: Optional["enums.ParseMode"] = None,
-        caption_entities: Optional[List[MessageEntity]] = None,
-        file_name: Optional[str] = None
-    ):
-        super().__init__(media, caption, parse_mode, caption_entities)
+        emoji: str = "",
+    ) -> None:
+        super().__init__(media)
 
-        self.thumb = thumb
-        self.file_name = file_name
+        self.emoji = emoji
 
     async def write(
         self,
@@ -96,15 +71,16 @@ class InputMediaDocument(InputMedia):
                 raw.functions.messages.UploadMedia(
                     peer=peer,
                     media=raw.types.InputMediaUploadedDocument(
-                        mime_type=client.guess_mime_type(self.media) or "application/zip",
+                        mime_type=client.guess_mime_type(self.media) or "image/webp",
                         file=await client.save_file(
                             self.media, progress=progress, progress_args=progress_args
                         ),
-                        force_file=True,
-                        thumb=await client.save_file(self.thumb),
                         attributes=[
                             raw.types.DocumentAttributeFilename(
-                                file_name=utils.get_file_name(self.media, file_name=self.file_name),
+                                file_name=utils.get_file_name(self.media),
+                            ),
+                            raw.types.DocumentAttributeSticker(
+                                alt=self.emoji, stickerset=raw.types.InputStickerSetEmpty()
                             ),
                         ],
                     ),
@@ -124,4 +100,4 @@ class InputMediaDocument(InputMedia):
                 url=self.media,
             )
 
-        return utils.get_input_media_from_file_id(self.media, FileType.DOCUMENT)
+        return utils.get_input_media_from_file_id(self.media, FileType.STICKER)
