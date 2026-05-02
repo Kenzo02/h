@@ -8772,7 +8772,7 @@ class Message(Object, Update):
                     longitude=self.venue.location.longitude,
                     title=self.venue.title,
                     address=self.venue.address,
-                    foursquare_id=self.venue.foursquare_id,
+                    foursquare_id=self.venue.foursquare_id or "",
                     foursquare_type=self.venue.foursquare_type,
                     disable_notification=disable_notification,
                     message_thread_id=message_thread_id,
@@ -8817,23 +8817,13 @@ class Message(Object, Update):
             else:
                 raise ValueError("Unknown media type")
 
-            if self.sticker or self.video_note:  # Sticker and VideoNote should have no caption
-                return await send_media(
-                    file_id=file_id,
-                    message_thread_id=message_thread_id
-                )
-            else:
-                if caption is None:
-                    caption = self.caption or ""
-                    caption_entities = self.caption_entities
-
-                return await send_media(
-                    file_id=file_id,
-                    caption=caption,
-                    parse_mode=parse_mode,
-                    caption_entities=caption_entities,
-                    message_thread_id=message_thread_id
-                )
+            return await send_media(
+                file_id=file_id,
+                caption=self.caption or "",
+                parse_mode=parse_mode,
+                caption_entities=self.caption_entities,
+                message_thread_id=message_thread_id
+            )
         else:
             raise ValueError("Can't copy this message")
 
