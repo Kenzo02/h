@@ -1729,7 +1729,7 @@ class Story(Object, Update):
                 Unique identifier (int) or username (str) of the target chat.
                 For your personal stories you can simply use "me" or "self".
 
-            caption (``string``, *optional*):
+            caption (``str``, *optional*):
                 New caption for story, 0-1024 characters after entities parsing.
                 If not specified, the original caption is kept.
                 Pass "" (empty string) to remove the caption.

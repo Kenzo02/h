@@ -8615,7 +8615,7 @@ class Message(Object, Update):
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
 
-            caption (``string``, *optional*):
+            caption (``str``, *optional*):
                 New caption for media, 0-1024 characters after entities parsing.
                 If not specified, the original caption is kept.
                 Pass "" (empty string) to remove the caption.
@@ -8864,8 +8864,8 @@ class Message(Object, Update):
                 If not specified, the original caption is kept.
                 Pass "" (empty string) to remove the caption.
 
-                If a ``string`` is passed, it becomes a caption only for the first media.
-                If a list of ``string`` passed, each element becomes caption for each media element.
+                If a ``str`` is passed, it becomes a caption only for the first media.
+                If a list of ``str`` passed, each element becomes caption for each media element.
                 You can pass ``None`` in list to keep the original caption.
 
             disable_notification (``bool``, *optional*):

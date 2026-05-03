@@ -31,6 +31,7 @@ class SendPoll:
         chat_id: Union[int, str],
         question: Union[str, "types.FormattedText"],
         options: List[Union[str, "types.InputPollOption"]],
+        description: Optional[Union[str, "types.FormattedText"]] = None,
         description_media: Optional["types.InputMedia"] = None,
         message_thread_id: Optional[int] = None,
         business_connection_id: Optional[str] = None,
@@ -47,7 +48,6 @@ class SendPoll:
         open_period: Optional[int] = None,
         close_date: Optional[datetime] = None,
         is_closed: Optional[bool] = None,
-        description: Optional[Union[str, "types.FormattedText"]] = None,
         disable_notification: Optional[bool] = None,
         protect_content: Optional[bool] = None,
         allow_paid_broadcast: Optional[bool] = None,
@@ -87,7 +87,10 @@ class SendPoll:
             options (List of :obj:`~pyrogram.types.InputPollOption`):
                 List of 2-12 answer options.
 
-            explanation_media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
+            description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
+                Description of the poll to be sent, 0-1024 characters after entities parsing.
+
+            description_media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
                 Media attached to the poll.
 
             message_thread_id (``int``, *optional*):
@@ -144,9 +147,6 @@ class SendPoll:
                 Pass True, if the poll needs to be immediately closed.
                 This can be useful for poll preview.
                 For bots only.
-
-            description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
-                Description of the poll to be sent, 0-1024 characters after entities parsing.
 
             disable_notification (``bool``, *optional*):
                 Sends the message silently.
