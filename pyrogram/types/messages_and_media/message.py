@@ -8579,7 +8579,7 @@ class Message(Object, Update):
     async def copy(
         self,
         chat_id: Union[int, str],
-        caption: str = None,
+        caption: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         caption_entities: Optional[List["types.MessageEntity"]] = None,
         disable_notification: Optional[bool] = None,
@@ -8817,11 +8817,15 @@ class Message(Object, Update):
             else:
                 raise ValueError("Unknown media type")
 
+            if caption is None:
+                caption = self.caption or ""
+                caption_entities = self.caption_entities
+
             return await send_media(
                 file_id=file_id,
-                caption=self.caption or "",
+                caption=caption,
                 parse_mode=parse_mode,
-                caption_entities=self.caption_entities,
+                caption_entities=caption_entities,
                 message_thread_id=message_thread_id
             )
         else:
