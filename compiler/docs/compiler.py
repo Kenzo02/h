@@ -209,7 +209,7 @@ def pyrogram_api():
 
     # Methods
 
-    categories = dict(
+    categories = dict(  # noqa: C408
         utilities="""
         Utilities
             start
@@ -312,6 +312,10 @@ def pyrogram_api():
             add_poll_option
             delete_poll_option
             summarize_message
+        """,
+        folders="""
+        Folders
+            check_chat_folder_invite_link
         """,
         chats="""
         Chats
@@ -696,6 +700,7 @@ def pyrogram_api():
             ChatSettings
             GlobalPrivacySettings
             HistoryCleared
+            ChatFolderInviteLinkInfo
         """,
         messages_media="""
         Messages & Media
