@@ -549,15 +549,6 @@ class Message(Object, Update):
         send_paid_messages_stars (``int``, *optional*):
             The number of Telegram Stars the sender paid to send the message.
 
-        raw (:obj:`~pyrogram.raw.types.Message`, *optional*):
-            The raw message object, as received from the Telegram API.
-
-        link (``str``, *property*):
-            Generate a link to this message, only for groups and channels.
-
-        content (``str``, *property*):
-            The text or caption content of the message.
-
         unread_media (``bool``, *optional*):
             True, if there are unread media attachments in this message.
 
@@ -589,6 +580,18 @@ class Message(Object, Update):
         summary_language_code (``str``, *optional*):
             IETF language tag of the message language on which it can be summarized.
             None if summary isn't available for the message.
+
+        guest_bot_caller (:obj:`~pyrogram.types.Chat`, *optional*):
+            The user or chat which used a guest bot to send the message.
+
+        raw (:obj:`~pyrogram.raw.types.Message`, *optional*):
+            The raw message object, as received from the Telegram API.
+
+        link (``str``, *property*):
+            Generate a link to this message, only for groups and channels.
+
+        content (``str``, *property*):
+            The text or caption content of the message.
     """
     # TODO: replace media params to MessageContent class
     def __init__(
@@ -760,6 +763,7 @@ class Message(Object, Update):
         channel_post: Optional[bool] = None,
         repeat_period: Optional[int] = None,
         summary_language_code: Optional[str] = None,
+        guest_bot_caller: Optional["types.Chat"] = None,
         raw: Optional["raw.types.Message"] = None
     ):
         super().__init__(client)
@@ -922,6 +926,7 @@ class Message(Object, Update):
         self.channel_post = channel_post
         self.repeat_period = repeat_period
         self.summary_language_code = summary_language_code
+        self.guest_bot_caller = guest_bot_caller
         self.raw = raw
 
     @staticmethod
@@ -1712,6 +1717,13 @@ class Message(Object, Update):
             channel_post=message.post,
             repeat_period=message.schedule_repeat_period,
             summary_language_code=message.summary_from_language,
+            guest_bot_caller=types.Chat._parse_chat(
+                client,
+                users.get(utils.get_raw_peer_id(message.guestchat_via_from))
+                or chats.get(utils.get_raw_peer_id(message.guestchat_via_from)),
+            )
+            if message.guestchat_via_from
+            else None,
             raw=message,
             client=client
         )
