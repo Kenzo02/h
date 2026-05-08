@@ -328,6 +328,7 @@ def pyrogram_api():
             set_administrator_title
             set_chat_photo
             delete_chat_photo
+            delete_chat_reactions_by_sender
             set_chat_title
             set_chat_description
             set_chat_direct_messages_group

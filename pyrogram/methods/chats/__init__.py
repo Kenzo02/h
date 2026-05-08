@@ -28,6 +28,7 @@ from .close_forum_topic import CloseForumTopic
 from .delete_channel import DeleteChannel
 from .delete_folder_invite_link import DeleteFolderInviteLink
 from .delete_chat_photo import DeleteChatPhoto
+from .delete_chat_reactions_by_sender import DeleteChatReactionsBySender
 from .delete_folder import DeleteFolder
 from .delete_forum_topic import DeleteForumTopic
 from .delete_supergroup import DeleteSupergroup
@@ -110,6 +111,7 @@ class Chats(
     GetChatMember,
     SetChatPhoto,
     DeleteChatPhoto,
+    DeleteChatReactionsBySender,
     DeleteFolder,
     SetChatTitle,
     SetChatTTL,
