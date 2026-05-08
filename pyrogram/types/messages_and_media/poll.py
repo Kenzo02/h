@@ -57,6 +57,13 @@ class Poll(Object, Update):
         allows_revoting (``bool``, *optional*):
             True, if the poll allows to change the chosen answer options.
 
+        members_only (``bool``, *optional*):
+            True, if only the users that are members of the chat for more than a day will be able to vote.
+
+        country_codes (List of ``str``, *optional*):
+            The list of two-letter ISO 3166-1 alpha-2 codes of countries, users from which will be able to vote.
+            If None, then all users can participate in the poll.
+
         chosen_option_ids (List of ``int``, *optional*):
             Array of 0-based index of the chosen option), None in case of no vote yet.
 
@@ -103,6 +110,8 @@ class Poll(Object, Update):
         type: Optional["enums.PollType"] = None,
         allows_multiple_answers: Optional[bool] = None,
         allows_revoting: Optional[bool] = None,
+        members_only: Optional[bool] = None,
+        country_codes: Optional[List[str]] = None,
         chosen_option_ids: Optional[List[int]] = None,
         correct_option_ids: Optional[List[int]] = None,
         explanation: Optional["types.FormattedText"] = None,
@@ -124,6 +133,8 @@ class Poll(Object, Update):
         self.type = type
         self.allows_multiple_answers = allows_multiple_answers
         self.allows_revoting = allows_revoting
+        self.members_only = members_only
+        self.country_codes = country_codes
         self.chosen_option_ids = chosen_option_ids
         self.correct_option_ids = correct_option_ids
         self.explanation = explanation
@@ -214,6 +225,8 @@ class Poll(Object, Update):
             type=enums.PollType.QUIZ if poll.quiz else enums.PollType.REGULAR,
             allows_multiple_answers=poll.multiple_choice,
             allows_revoting=not poll.revoting_disabled,
+            members_only=poll.subscribers_only,
+            country_codes=poll.countries_iso2 or None,
             chosen_option_ids=chosen_option_ids or None,
             correct_option_ids=correct_option_ids or None,
             explanation=types.FormattedText._parse(
