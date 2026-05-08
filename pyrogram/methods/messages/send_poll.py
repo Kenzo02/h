@@ -39,6 +39,8 @@ class SendPoll:
         type: "enums.PollType" = enums.PollType.REGULAR,
         allows_multiple_answers: Optional[bool] = None,
         allows_revoting: Optional[bool] = None,
+        members_only: Optional[bool] = None,
+        country_codes: Optional[List[str]] = None,
         shuffle_options: Optional[bool] = None,
         allow_adding_options: Optional[bool] = None,
         hide_results_until_closes: Optional[bool] = None,
@@ -115,6 +117,15 @@ class SendPoll:
             allows_revoting (``bool``, *optional*):
                 Pass True, if the poll allows to change chosen answer options.
                 Defaults to False for quizzes and to True for regular polls.
+
+            members_only (``bool``, *optional*):
+                True, if only the users that are members of the chat for more than a day will be able to vote.
+                For channel chats only.
+
+            country_codes (List of ``str``, *optional*):
+                The list of two-letter ISO 3166-1 alpha-2 codes of countries, users from which will be able to vote.
+                For channel chats only.
+                If None, then all users can participate in the poll.
 
             shuffle_options (``bool``, *optional*):
                 Pass True, if the poll options must be shown in random order.
@@ -269,6 +280,8 @@ class SendPoll:
                         quiz=type == enums.PollType.QUIZ or False,
                         open_answers=False if type == enums.PollType.QUIZ and allow_adding_options else allow_adding_options,
                         revoting_disabled=not allows_revoting if allows_revoting is not None else (type == enums.PollType.QUIZ),
+                        subscribers_only=members_only,
+                        countries_iso2=country_codes,
                         shuffle_answers=shuffle_options,
                         hide_results_until_close=hide_results_until_closes,
                         close_period=open_period,
