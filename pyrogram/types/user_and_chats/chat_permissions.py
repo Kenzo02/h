@@ -151,7 +151,7 @@ class ChatPermissions(Object):
                     not denied_permissions.send_inline
                 ]),
                 can_add_web_page_previews=not denied_permissions.embed_links,
-                can_react_to_messages=not denied_permissions.react_to_messages,
+                can_react_to_messages=not denied_permissions.send_reactions,
                 can_edit_tag=not denied_permissions.edit_rank,
                 can_change_info=not denied_permissions.change_info,
                 can_invite_users=not denied_permissions.invite_users,
