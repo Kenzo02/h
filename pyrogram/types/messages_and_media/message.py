@@ -5132,7 +5132,7 @@ class Message(Object, Update):
                 Only custom emoji entities are allowed to be added and only by Premium users.
 
             options (List of ``str`` | List of :obj:`~pyrogram.types.FormattedText`):
-                List of 2-12 answer options, each 1-100 characters.
+                List of 1-12 answer options, each 1-100 characters.
 
             message_thread_id (``int``, *optional*):
                 Unique identifier for the target message thread (topic) of the forum.
@@ -5319,7 +5319,7 @@ class Message(Object, Update):
                 Only custom emoji entities are allowed to be added and only by Premium users.
 
             options (List of ``str`` | List of :obj:`~pyrogram.types.FormattedText`):
-                List of 2-12 answer options, each 1-100 characters.
+                List of 1-12 answer options, each 1-100 characters.
 
             message_thread_id (``int``, *optional*):
                 Unique identifier for the target message thread (topic) of the forum.

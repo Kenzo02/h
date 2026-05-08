@@ -87,7 +87,7 @@ class SendPoll:
                 Only custom emoji entities are allowed to be added and only by Premium users.
 
             options (List of :obj:`~pyrogram.types.InputPollOption`):
-                List of 2-12 answer options.
+                List of 1-12 answer options.
 
             description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
                 Description of the poll to be sent, 0-1024 characters after entities parsing.
