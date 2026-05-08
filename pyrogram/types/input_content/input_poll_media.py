@@ -19,13 +19,13 @@
 from typing import TYPE_CHECKING, BinaryIO, List, Optional, Union
 
 from ..messages_and_media import MessageEntity
-from ..object import Object
+from .input_media import InputMedia
 
 if TYPE_CHECKING:
     from pyrogram import raw
 
 
-class InputMedia(Object):
+class InputPollMedia(InputMedia):
     """Content of a media message to be sent.
 
     It should be one of:
@@ -34,7 +34,9 @@ class InputMedia(Object):
     - :obj:`~pyrogram.types.InputMediaAudio`
     - :obj:`~pyrogram.types.InputMediaDocument`
     - :obj:`~pyrogram.types.InputMediaLivePhoto`
+    - :obj:`~pyrogram.types.InputMediaLocation`
     - :obj:`~pyrogram.types.InputMediaPhoto`
+    - :obj:`~pyrogram.types.InputMediaVenue`
     - :obj:`~pyrogram.types.InputMediaVideo`
     """
 

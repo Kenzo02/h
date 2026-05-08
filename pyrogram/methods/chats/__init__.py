@@ -28,12 +28,13 @@ from .close_forum_topic import CloseForumTopic
 from .delete_channel import DeleteChannel
 from .delete_folder_invite_link import DeleteFolderInviteLink
 from .delete_chat_photo import DeleteChatPhoto
-from .delete_chat_reactions_by_sender import DeleteChatReactionsBySender
+from .delete_all_message_reactions import DeleteAllMessageReactions
 from .delete_folder import DeleteFolder
 from .delete_forum_topic import DeleteForumTopic
 from .delete_supergroup import DeleteSupergroup
 from .delete_user_history import DeleteUserHistory
 from .edit_forum_topic import EditForumTopic
+from .delete_message_reaction import DeleteMessageReaction
 from .create_folder_invite_link import CreateFolderInviteLink
 from .get_chat import GetChat
 from .get_chats_for_folder_invite_link import GetChatsForFolderInviteLink
@@ -111,7 +112,7 @@ class Chats(
     GetChatMember,
     SetChatPhoto,
     DeleteChatPhoto,
-    DeleteChatReactionsBySender,
+    DeleteAllMessageReactions,
     DeleteFolder,
     SetChatTitle,
     SetChatTTL,
@@ -153,6 +154,7 @@ class Chats(
     DeleteForumTopic,
     DeleteSupergroup,
     EditForumTopic,
+    DeleteMessageReaction,
     CreateFolderInviteLink,
     GetPersonalChannels,
     SetAdministratorTitle,

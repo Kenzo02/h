@@ -30,20 +30,26 @@ from ..messages_and_media import MessageEntity
 from .input_media import InputMedia
 
 
-class InputMediaPhoto(InputMedia):
-    """A photo to be sent inside an album.
-    It is intended to be used with :obj:`~pyrogram.Client.send_media_group`.
+class InputMediaLivePhoto(InputMedia):
+    """Represents a live photo to be sent.
 
     Parameters:
         media (``str`` | ``BinaryIO``):
-            Photo to send.
-            Pass a file_id as string to send a photo that exists on the Telegram servers or
-            pass a file path as string to upload a new photo that exists on your local machine or
+            Video of the live photo to send.
+            Pass a file_id as string to send a video that exists on the Telegram servers or
+            pass a file path as string to upload a new video that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
-            pass an HTTP URL as a string for Telegram to get a photo from the Internet.
+            pass an HTTP URL as a string for Telegram to get a video from the Internet.
+
+        photo (``str`` | ``BinaryIO``):
+            The static photo to send.
+            Pass a file_id as string to send a video that exists on the Telegram servers or
+            pass a file path as string to upload a new video that exists on your local machine or
+            pass a binary file-like object with its attribute “.name” set for in-memory uploads or
+            pass an HTTP URL as a string for Telegram to get a video from the Internet.
 
         caption (``str``, *optional*):
-            Caption of the photo to be sent, 0-1024 characters.
+            Caption of the video to be sent, 0-1024 characters.
             If not specified, the original caption is kept. Pass "" (empty string) to remove the caption.
 
         parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
@@ -53,6 +59,9 @@ class InputMediaPhoto(InputMedia):
         caption_entities (List of :obj:`~pyrogram.types.MessageEntity`):
             List of special entities that appear in the caption, which can be specified instead of *parse_mode*.
 
+        show_caption_above_media (``bool``, *optional*):
+            Pass True, if the caption must be shown above the message media.
+
         has_spoiler (``bool``, *optional*):
             Pass True if the photo needs to be covered with a spoiler animation.
     """
@@ -60,13 +69,20 @@ class InputMediaPhoto(InputMedia):
     def __init__(
         self,
         media: Union[str, BinaryIO],
+        photo: Union[str, BinaryIO],
+        thumb: Optional[str] = None,
         caption: str = "",
         parse_mode: Optional["enums.ParseMode"] = None,
         caption_entities: Optional[List[MessageEntity]] = None,
-        has_spoiler: Optional[bool] = None
+        show_caption_above_media: Optional[bool] = None,
+        has_spoiler: Optional[bool] = None,
+
     ):
         super().__init__(media, caption, parse_mode, caption_entities)
 
+        self.photo = photo
+        self.thumb = thumb
+        self.show_caption_above_media = show_caption_above_media
         self.has_spoiler = has_spoiler
 
     async def write(
@@ -74,9 +90,10 @@ class InputMediaPhoto(InputMedia):
         *,
         client: "pyrogram.Client",
         chat_id: Optional[Union[int, str]] = None,
+        width: int = 0,
+        height: int = 0,
         progress: Optional[Callable] = None,
         progress_args: tuple = (),
-        ttl_seconds: Optional[int] = None,
         **kwargs
     ) -> "raw.base.InputMedia":
         if chat_id is None:
@@ -88,36 +105,58 @@ class InputMediaPhoto(InputMedia):
             uploaded_media = await client.invoke(
                 raw.functions.messages.UploadMedia(
                     peer=peer,
-                    media=raw.types.InputMediaUploadedPhoto(
+                    media=raw.types.InputMediaUploadedDocument(
+                        mime_type=client.guess_mime_type(self.media) or "video/mp4",
                         file=await client.save_file(
                             self.media, progress=progress, progress_args=progress_args
                         ),
                         spoiler=self.has_spoiler,
-                        ttl_seconds=ttl_seconds,
+                        attributes=[
+                            raw.types.DocumentAttributeVideo(
+                                duration=0,
+                                w=width,
+                                h=height,
+                            ),
+                        ],
+                    ),
+                ),
+            )
+
+            uploaded_photo = await client.invoke(
+                raw.functions.messages.UploadMedia(
+                    peer=peer,
+                    media=raw.types.InputMediaUploadedPhoto(
+                        video=await client.save_file(
+                            self.media, progress=progress, progress_args=progress_args
+                        ),
+                        file=await client.save_file(
+                            self.photo, progress=progress, progress_args=progress_args
+                        ),
+                        live_photo=True,
+                        spoiler=self.has_spoiler,
                     ),
                 )
             )
 
             return raw.types.InputMediaPhoto(
                 id=raw.types.InputPhoto(
-                    id=uploaded_media.photo.id,
-                    access_hash=uploaded_media.photo.access_hash,
-                    file_reference=uploaded_media.photo.file_reference,
+                    id=uploaded_photo.photo.id,
+                    access_hash=uploaded_photo.photo.access_hash,
+                    file_reference=uploaded_photo.photo.file_reference,
                 ),
+                live_photo=True,
                 spoiler=self.has_spoiler,
-                ttl_seconds=ttl_seconds,
-            )
-
-        if re.match("^https?://", self.media):
-            return raw.types.InputMediaPhotoExternal(
-                url=self.media,
-                spoiler=self.has_spoiler,
-                ttl_seconds=ttl_seconds,
+                video=raw.types.InputDocument(
+                    id=uploaded_media.document.id,
+                    access_hash=uploaded_media.document.access_hash,
+                    file_reference=uploaded_media.document.file_reference,
+                )
             )
 
         return utils.get_input_media_from_file_id(
-            self.media,
+            self.photo,
             FileType.PHOTO,
             has_spoiler=self.has_spoiler,
-            ttl_seconds=ttl_seconds,
+            live_photo=True,
+            live_photo_video_file_id=self.media,
         )

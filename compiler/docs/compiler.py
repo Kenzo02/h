@@ -266,6 +266,7 @@ def pyrogram_api():
             get_messages
             get_scheduled_messages
             get_stickers
+            get_user_personal_chat_messages
             get_web_app_link_url
             get_web_app_url
             mark_checklist_tasks_as_done
@@ -328,7 +329,8 @@ def pyrogram_api():
             set_administrator_title
             set_chat_photo
             delete_chat_photo
-            delete_chat_reactions_by_sender
+            delete_message_reaction
+            delete_all_message_reactions
             set_chat_title
             set_chat_description
             set_chat_direct_messages_group
@@ -512,8 +514,11 @@ def pyrogram_api():
         Bots
             get_inline_bot_results
             send_inline_bot_result
+            get_managed_bot_access_settings
+            set_managed_bot_access_settings
             send_invoice
             answer_callback_query
+            answer_guest_query
             answer_inline_query
             request_callback_answer
             send_game
@@ -716,6 +721,7 @@ def pyrogram_api():
             MessageOriginUser
             MessageOrigin
             Photo
+            LivePhoto
             PollOptionAdded
             PollOptionDeleted
             Thumbnail
@@ -864,6 +870,7 @@ def pyrogram_api():
             ReplyKeyboardMarkup
             KeyboardButton
             ReplyKeyboardRemove
+            SentGuestMessage
             InlineKeyboardMarkup
             InlineKeyboardButton
             LoginUrl
@@ -896,6 +903,7 @@ def pyrogram_api():
         """,
         bot_commands="""
         Bot commands
+            BotAccessSettings
             BotCommand
             BotCommandScope
             BotCommandScopeDefault
@@ -924,11 +932,17 @@ def pyrogram_api():
             InputMediaAnimation
             InputMediaAudio
             InputMediaDocument
+            InputMediaLocation
+            InputMediaVenue
             InputMediaPhoto
+            InputMediaLivePhoto
             InputMediaVideo
             InputMediaSticker
             InputMessageContent
             InputPhoneContact
+            InputPollOption
+            InputPollMedia
+            InputPollOptionMedia
             InputPollOption
             InputPrivacyRule
             InputPrivacyRuleAllowAll

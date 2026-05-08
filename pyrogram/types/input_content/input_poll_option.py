@@ -31,7 +31,7 @@ class InputPollOption(Object):
         text (``str`` | :obj:`~pyrogram.enums.FormattedText`, *optional*):
             Option text, 1-100 characters.
 
-        media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
+        media (:obj:`~pyrogram.types.InputPollOptionMedia`, *optional*):
             Option media.
             Currently, can be only of the types Animation, Location, Photo, Sticker, Venue, or Video without caption.
     """
@@ -40,12 +40,7 @@ class InputPollOption(Object):
         self,
         *,
         text: Union[str, "types.FormattedText"],
-        media: Optional[
-            Union[
-                "types.InputMedia",
-                "types.Location",
-            ]
-        ] = None,
+        media: Optional["types.InputPollOptionMedia"] = None,
     ):
         super().__init__()
 

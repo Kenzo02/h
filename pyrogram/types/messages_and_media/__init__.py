@@ -64,6 +64,7 @@ from .gift_upgrade_price import GiftUpgradePrice
 from .gift_upgrade_variants import GiftUpgradeVariants
 from .invoice import Invoice
 from .link_preview_options import LinkPreviewOptions
+from .live_photo import LivePhoto
 from .giveaway import Giveaway
 from .input_checklist_task import InputChecklistTask
 from .giveaway_completed import GiveawayCompleted
@@ -201,6 +202,7 @@ __all__ = [
     "InputChecklistTask",
     "Invoice",
     "LinkPreviewOptions",
+    "LivePhoto",
     "GiveawayCompleted",
     "GiveawayCreated",
     "GiveawayPrizeStars",

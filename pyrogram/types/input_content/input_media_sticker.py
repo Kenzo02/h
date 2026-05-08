@@ -41,6 +41,7 @@ class InputMediaSticker(InputMedia):
 
         emoji (``str``, *optional*):
             Emoji associated with this sticker.
+            Only for just uploaded stickers.
     """
 
     def __init__(

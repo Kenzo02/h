@@ -393,7 +393,8 @@ class User(Object, Update):
             Note added to the user's contact.
 
         supports_guest_queries (``bool``, *optional*):
-            True, if the bot can be queried by username from any non-secret chat.
+            True, if the bot supports guest queries from chats it is not a member of.
+            Returned only in :meth:`~pyrogram.Client.get_me`
 
         raw (:obj:`~pyrogram.raw.base.User` | :obj:`~pyrogram.raw.base.UserStatus`, *optional*):
             The raw user or user status object, as received from the Telegram API.

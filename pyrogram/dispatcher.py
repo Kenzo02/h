@@ -80,6 +80,7 @@ from pyrogram.raw.types import (
     UpdateNewChannelMessage,
     UpdateNewMessage,
     UpdateNewScheduledMessage,
+    UpdateBotGuestChatQuery,
     UpdateStory,
     UpdateUserStatus,
 )
@@ -88,7 +89,7 @@ log = logging.getLogger(__name__)
 
 
 class Dispatcher:
-    NEW_MESSAGE_UPDATES = (UpdateNewMessage, UpdateNewChannelMessage, UpdateNewScheduledMessage)
+    NEW_MESSAGE_UPDATES = (UpdateNewMessage, UpdateNewChannelMessage, UpdateNewScheduledMessage, UpdateBotGuestChatQuery)
     EDIT_MESSAGE_UPDATES = (UpdateEditMessage, UpdateEditChannelMessage)
     DELETE_MESSAGES_UPDATES = (UpdateDeleteMessages, UpdateDeleteChannelMessages)
     CALLBACK_QUERY_UPDATES = (UpdateBotCallbackQuery, UpdateInlineBotCallbackQuery, UpdateBusinessBotCallbackQuery)
@@ -121,8 +122,6 @@ class Dispatcher:
         self.groups = OrderedDict()
 
         async def message_parser(update, users, chats):
-            connection_id = getattr(update, "connection_id", None)
-
             return (
                 await pyrogram.types.Message._parse(
                     self.client,
@@ -131,7 +130,7 @@ class Dispatcher:
                     chats,
                     is_scheduled=isinstance(update, UpdateNewScheduledMessage),
                     replies=0 if getattr(update, "connection_id", None) else 1,
-                    business_connection_id=connection_id,
+                    business_connection_id=getattr(update, "connection_id", None),
                     raw_reply_to_message=getattr(update, "reply_to_message", None)
                 ),
                 MessageHandler

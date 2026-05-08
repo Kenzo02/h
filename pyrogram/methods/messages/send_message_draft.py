@@ -27,12 +27,17 @@ class SendMessageDraft:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         draft_id: int,
-        text: str,
+        text: str = "",
         message_thread_id: Optional[int] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         entities: Optional[List["types.MessageEntity"]] = None,
     ) -> bool:
         """Use this method to stream a partial message to a user while the message is being generated.
+
+        .. note::
+
+            The streamed draft is ephemeral and acts as a temporary 30-second preview - once the output is finalized,
+            you must call :meth:`~pyrogram.Client.send_message` with the complete message to persist it in the user's chat.
 
         .. include:: /_includes/usable-by/bots.rst
 
@@ -45,7 +50,8 @@ class SendMessageDraft:
                 Changes of drafts with the same identifier are animated.
 
             text (``str``):
-                Text of the message to be sent.
+                Text of the message to be sent, 0-4096 characters after entities parsing.
+                Pass an empty text to show a "Thinking…" placeholder.
 
             message_thread_id (``int``, *optional*):
                 Unique identifier for the target message thread.
@@ -63,9 +69,15 @@ class SendMessageDraft:
         Example:
             .. code-block:: python
 
+
                 text = "Hello! I'm your Pyrogram bot! How can I help you?"
                 words = text.split()
                 draft_id = app.rnd_id()
+
+                # Send thinking placeholder
+                await app.send_message_draft(chat_id, draft_id)
+
+                await asyncio.sleep(5)
 
                 for i, word in enumerate(words):
                     await app.send_message_draft(

@@ -54,6 +54,7 @@ from .get_media_group import GetMediaGroup
 from .get_messages import GetMessages
 from .get_scheduled_messages import GetScheduledMessages
 from .get_stickers import GetStickers
+from .get_user_personal_chat_messages import GetUserPersonalChatMessages
 from .get_web_app_link_url import GetWebAppLinkUrl
 from .get_web_app_url import GetWebAppUrl
 from .mark_checklist_tasks_as_done import MarkChecklistTasksAsDone
@@ -125,6 +126,7 @@ class Messages(
     GetMessages,
     GetScheduledMessages,
     GetStickers,
+    GetUserPersonalChatMessages,
     GetWebAppLinkUrl,
     GetWebAppUrl,
     MarkChecklistTasksAsDone,

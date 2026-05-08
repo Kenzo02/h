@@ -68,7 +68,8 @@ class ChatPermissions(Object):
             True, if the user is allowed to add web page previews to their messages.
 
         can_react_to_messages (``bool``, *optional*):
-            True, if the user can react to messages.
+            True, if the user is allowed to react to messages.
+            If omitted, defaults to the value of can_send_messages.
 
         can_edit_tag (``bool``, *optional*):
             True, if the user is allowed to edit their own tag.
@@ -200,7 +201,7 @@ class ChatPermissions(Object):
             send_games=not self.can_send_other_messages,
             send_inline=not self.can_send_other_messages,
             embed_links=not self.can_add_web_page_previews,
-            send_reactions=not self.can_react_to_messages,
+            send_reactions=not self.can_react_to_messages if self.can_react_to_messages is not None else not self.can_send_messages,
             edit_rank=not self.can_edit_tag,
             change_info=not self.can_change_info,
             invite_users=not self.can_invite_users,

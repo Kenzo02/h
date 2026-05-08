@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+import contextlib
 import logging
 from datetime import datetime
 from functools import partial
@@ -23,13 +24,19 @@ from typing import BinaryIO, Callable, Dict, List, Match, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
-from pyrogram.errors import ChannelForumMissing, ChannelPrivate, ChannelInvalid, MessageIdsEmpty, PeerIdInvalid, ChatAdminRequired
+from pyrogram.errors import (
+    ChannelForumMissing,
+    ChannelInvalid,
+    ChannelPrivate,
+    ChatAdminRequired,
+    MessageIdsEmpty,
+    PeerIdInvalid,
+)
 from pyrogram.parser import Parser
 from pyrogram.parser import utils as parser_utils
 
 from ..object import Object
 from ..update import Update
-import contextlib
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +92,11 @@ class Message(Object, Update):
 
         date (:py:obj:`~datetime.datetime`, *optional*):
             Date the message was sent.
+
+        guest_query_id (``str``, *optional*):
+            The unique identifier for the guest query.
+            Use this identifier with the method :meth:`~pyrogram.Client.answer_guest_query` to send a response message.
+            If non-empty, the message belongs to the chat where the guest bot was summoned, which may not coincide with other existing bot chats sharing the same identifier.
 
         chat (:obj:`~pyrogram.types.Chat`, *optional*):
             Conversation the message belongs to.
@@ -212,6 +224,10 @@ class Message(Object, Update):
 
         photo (:obj:`~pyrogram.types.Photo`, *optional*):
             Message is a photo, information about the photo.
+
+        live_photo (:obj:`~pyrogram.types.LivePhoto`, *optional*):
+            Message is a live photo, information about the live photo.
+            For backward compatibility, when this field is set, the photo field will also be set.
 
         sticker (:obj:`~pyrogram.types.Sticker`, *optional*):
             Message is a sticker, information about the sticker.
@@ -581,8 +597,11 @@ class Message(Object, Update):
             IETF language tag of the message language on which it can be summarized.
             None if summary isn't available for the message.
 
-        guest_bot_caller (:obj:`~pyrogram.types.Chat`, *optional*):
-            The user or chat which used a guest bot to send the message.
+        guest_bot_caller_user (:obj:`~pyrogram.types.User`, *optional*):
+            For a message sent by a guest bot, this is the user whose original message triggered the bot's response.
+
+        guest_bot_caller_chat (:obj:`~pyrogram.types.Chat`, *optional*):
+            For a message sent by a guest bot, this is the chat whose original message triggered the bot's response.
 
         raw (:obj:`~pyrogram.raw.types.Message`, *optional*):
             The raw message object, as received from the Telegram API.
@@ -605,6 +624,7 @@ class Message(Object, Update):
         sender_business_bot: Optional["types.User"] = None,
         sender_tag: Optional[str] = None,
         date: Optional[datetime] = None,
+        guest_query_id: Optional[str] = None,
         chat: Optional["types.Chat"] = None,
         topic_message: Optional[bool] = None,
         automatic_forward: Optional[bool] = None,
@@ -646,6 +666,7 @@ class Message(Object, Update):
         audio: Optional["types.Audio"] = None,
         document: Optional["types.Document"] = None,
         photo: Optional["types.Photo"] = None,
+        live_photo: Optional["types.LivePhoto"] = None,
         sticker: Optional["types.Sticker"] = None,
         animation: Optional["types.Animation"] = None,
         game: Optional["types.Game"] = None,
@@ -763,7 +784,8 @@ class Message(Object, Update):
         channel_post: Optional[bool] = None,
         repeat_period: Optional[int] = None,
         summary_language_code: Optional[str] = None,
-        guest_bot_caller: Optional["types.Chat"] = None,
+        guest_bot_caller_user: Optional["types.User"] = None,
+        guest_bot_caller_chat: Optional["types.Chat"] = None,
         raw: Optional["raw.types.Message"] = None
     ):
         super().__init__(client)
@@ -775,6 +797,7 @@ class Message(Object, Update):
         self.sender_business_bot = sender_business_bot
         self.sender_tag = sender_tag
         self.date = date
+        self.guest_query_id = guest_query_id
         self.chat = chat
         self.topic_message = topic_message
         self.automatic_forward = automatic_forward
@@ -816,6 +839,7 @@ class Message(Object, Update):
         self.audio = audio
         self.document = document
         self.photo = photo
+        self.live_photo = live_photo
         self.sticker = sticker
         self.animation = animation
         self.game = game
@@ -926,7 +950,8 @@ class Message(Object, Update):
         self.channel_post = channel_post
         self.repeat_period = repeat_period
         self.summary_language_code = summary_language_code
-        self.guest_bot_caller = guest_bot_caller
+        self.guest_bot_caller_user = guest_bot_caller_user
+        self.guest_bot_caller_chat = guest_bot_caller_chat
         self.raw = raw
 
     @staticmethod
@@ -1422,10 +1447,11 @@ class Message(Object, Update):
         message: "raw.types.Message",
         users: Dict[int, "raw.base.User"],
         chats: Dict[int, "raw.base.Chat"],
-        topics: Dict[int, "raw.base.ForumTopic"] = None,
+        topics: Optional[Dict[int, "raw.base.ForumTopic"]] = None,
         is_scheduled: bool = False,
         replies: int = 1,
-        business_connection_id: str = None,
+        business_connection_id: Optional[str] = None,
+        guest_query_id: Optional[str] = None,
         raw_reply_to_message: "raw.base.Message" = None
     ) -> "Message":
         from_id = utils.get_raw_peer_id(message.from_id)
@@ -1470,6 +1496,7 @@ class Message(Object, Update):
             )
 
         photo = None
+        live_photo = None
         location = None
         contact = None
         venue = None
@@ -1498,8 +1525,22 @@ class Message(Object, Update):
 
         if media:
             if isinstance(media, raw.types.MessageMediaPhoto):
+                if media.live_photo:
+                    doc = media.video
+
+                    if isinstance(doc, raw.types.Document):
+                        attributes = {type(i): i for i in doc.attributes}
+
+                        if raw.types.DocumentAttributeVideo in attributes:
+                            video_attributes = attributes[raw.types.DocumentAttributeVideo]
+
+                            live_photo = types.LivePhoto._parse(client, doc, video_attributes)
+
+                    media_type = enums.MessageMediaType.LIVE_PHOTO
+                else:
+                    media_type = enums.MessageMediaType.PHOTO
+
                 photo = types.Photo._parse(client, media.photo, media.ttl_seconds)
-                media_type = enums.MessageMediaType.PHOTO
                 has_media_spoiler = media.spoiler
             elif isinstance(media, raw.types.MessageMediaGeo):
                 location = types.Location._parse(media.geo)
@@ -1631,6 +1672,7 @@ class Message(Object, Update):
             id=message.id,
             effect_id=getattr(message, "effect", None),
             date=utils.timestamp_to_datetime(message.date),
+            guest_query_id=str(guest_query_id) if guest_query_id else None,
             chat=chat,
             from_user=from_user,
             sender_chat=sender_chat,
@@ -1675,6 +1717,7 @@ class Message(Object, Update):
             edit_hidden=message.edit_hide,
             media_group_id=message.grouped_id,
             photo=photo,
+            live_photo=live_photo,
             location=location,
             contact=contact,
             venue=venue,
@@ -1717,13 +1760,8 @@ class Message(Object, Update):
             channel_post=message.post,
             repeat_period=message.schedule_repeat_period,
             summary_language_code=message.summary_from_language,
-            guest_bot_caller=types.Chat._parse_chat(
-                client,
-                users.get(utils.get_raw_peer_id(message.guestchat_via_from))
-                or chats.get(utils.get_raw_peer_id(message.guestchat_via_from)),
-            )
-            if message.guestchat_via_from
-            else None,
+            guest_bot_caller_user=types.User._parse(client, users.get(utils.get_raw_peer_id(message.guestchat_via_from))),
+            guest_bot_caller_chat=types.Chat._parse_chat(client, chats.get(utils.get_raw_peer_id(message.guestchat_via_from))),
             raw=message,
             client=client
         )
@@ -1892,6 +1930,7 @@ class Message(Object, Update):
         is_scheduled: bool = False,
         replies: int = 1,
         business_connection_id: Optional[str] = None,
+        guest_query_id: Optional[str] = None,
         raw_reply_to_message: Optional["raw.base.Message"] = None
     ) -> "Message":
         if isinstance(message, raw.types.MessageEmpty):
@@ -1924,6 +1963,7 @@ class Message(Object, Update):
                 is_scheduled=is_scheduled,
                 replies=replies,
                 business_connection_id=business_connection_id,
+                guest_query_id=guest_query_id,
                 raw_reply_to_message=raw_reply_to_message
             )
 

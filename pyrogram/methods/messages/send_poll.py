@@ -32,7 +32,7 @@ class SendPoll:
         question: Union[str, "types.FormattedText"],
         options: List[Union[str, "types.InputPollOption"]],
         description: Optional[Union[str, "types.FormattedText"]] = None,
-        description_media: Optional["types.InputMedia"] = None,
+        description_media: Optional["types.InputPollMedia"] = None,
         message_thread_id: Optional[int] = None,
         business_connection_id: Optional[str] = None,
         is_anonymous: bool = True,
@@ -46,7 +46,7 @@ class SendPoll:
         hide_results_until_closes: Optional[bool] = None,
         correct_option_ids: Optional[List[int]] = None,
         explanation: Optional[Union[str, "types.FormattedText"]] = None,
-        explanation_media: Optional["types.InputMedia"] = None,
+        explanation_media: Optional["types.InputPollMedia"] = None,
         open_period: Optional[int] = None,
         close_date: Optional[datetime] = None,
         is_closed: Optional[bool] = None,
@@ -92,7 +92,7 @@ class SendPoll:
             description (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
                 Description of the poll to be sent, 0-1024 characters after entities parsing.
 
-            description_media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
+            description_media (:obj:`~pyrogram.types.InputPollMedia`, *optional*):
                 Media attached to the poll.
 
             message_thread_id (``int``, *optional*):
@@ -119,13 +119,13 @@ class SendPoll:
                 Defaults to False for quizzes and to True for regular polls.
 
             members_only (``bool``, *optional*):
-                True, if only the users that are members of the chat for more than a day will be able to vote.
+                Pass True, if voting is limited to users who have been members of the chat where the poll is being sent for more than 24 hours.
                 For channel chats only.
 
             country_codes (List of ``str``, *optional*):
-                The list of two-letter ISO 3166-1 alpha-2 codes of countries, users from which will be able to vote.
+                The list of 0-12 two-letter ISO 3166-1 alpha-2 country codes indicating the countries from which users can vote in the poll.
                 For channel chats only.
-                If None, then all users can participate in the poll.
+                If omitted or empty, then users from any country can participate in the poll.
 
             shuffle_options (``bool``, *optional*):
                 Pass True, if the poll options must be shown in random order.
@@ -142,7 +142,7 @@ class SendPoll:
             explanation (``str`` | :obj:`~pyrogram.types.FormattedText`, *optional*):
                 Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style poll, 0-200 characters with at most 2 line feeds after entities parsing.
 
-            explanation_media (:obj:`~pyrogram.types.InputMedia` | :obj:`~pyrogram.types.Location`, *optional*):
+            explanation_media (:obj:`~pyrogram.types.InputPollMedia`, *optional*):
                 Media attached to the explanation.
 
             open_period (``int``, *optional*):
