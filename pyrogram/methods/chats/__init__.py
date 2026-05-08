@@ -45,6 +45,7 @@ from .get_chat_online_count import GetChatOnlineCount
 from .get_chat_settings import GetChatSettings
 from .get_similar_channels import GetSimilarChannels
 from .get_suitable_discussion_chats import GetSuitableDiscussionChats
+from .get_top_chats import GetTopChats
 from .get_dialogs import GetDialogs
 from .get_direct_messages_topics_by_id import GetDirectMessagesTopicsByID
 from .get_direct_messages_topics import GetDirectMessagesTopics
@@ -168,6 +169,7 @@ class Chats(
     GetChatSettings,
     GetSimilarChannels,
     GetSuitableDiscussionChats,
+    GetTopChats,
     GetSendAsChats,
     SetSendAsChat,
     SetChatProtectedContent

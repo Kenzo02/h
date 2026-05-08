@@ -392,6 +392,7 @@ def pyrogram_api():
             get_chat_settings
             transfer_chat_ownership
             get_suitable_discussion_chats
+            get_top_chats
             set_chat_discussion_group
             set_chat_member_tag
             set_main_profile_tab
@@ -1273,6 +1274,7 @@ def pyrogram_api():
             MaskPointType
             SuggestedPostRefundReason
             SuggestedPostState
+            TopChatCategory
         """,
     )
 
