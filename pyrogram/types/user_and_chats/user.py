@@ -392,6 +392,9 @@ class User(Object, Update):
         note (:obj:`~pyrogram.types.FormattedText`, *optional*):
             Note added to the user's contact.
 
+        supports_guest_queries (``bool``, *optional*):
+            True, if the bot can be queried by username from any non-secret chat.
+
         raw (:obj:`~pyrogram.raw.base.User` | :obj:`~pyrogram.raw.base.UserStatus`, *optional*):
             The raw user or user status object, as received from the Telegram API.
 
@@ -501,6 +504,7 @@ class User(Object, Update):
         pending_rating_date: Optional[datetime] = None,
         accepted_gift_types: Optional["types.AcceptedGiftTypes"] = None,
         note: Optional["types.FormattedText"] = None,
+        supports_guest_queries: Optional[bool] = None,
         raw: Optional[Union["raw.base.User", "raw.base.UserStatus"]] = None
     ):
         super().__init__(client)
@@ -597,6 +601,7 @@ class User(Object, Update):
         self.pending_rating_date = pending_rating_date
         self.accepted_gift_types = accepted_gift_types
         self.note = note
+        self.supports_guest_queries = supports_guest_queries
         self.raw = raw
 
     @property
@@ -685,6 +690,7 @@ class User(Object, Update):
             has_topics=user.bot_forum_view,
             allows_users_to_create_topics=user.bot_forum_can_manage_topics,
             paid_message_star_count=user.send_paid_messages_stars,
+            supports_guest_queries=user.bot_guestchat,
             raw=user,
             client=client
         )
