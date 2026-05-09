@@ -131,6 +131,7 @@ class Dispatcher:
                     is_scheduled=isinstance(update, UpdateNewScheduledMessage),
                     replies=0 if getattr(update, "connection_id", None) else 1,
                     business_connection_id=getattr(update, "connection_id", None),
+                    guest_query_id=getattr(update, "query_id", None),
                     raw_reply_to_message=getattr(update, "reply_to_message", None)
                 ),
                 MessageHandler
