@@ -55,14 +55,14 @@ class ComposeTextWithAI:
         Returns:
             :obj:`~pyrogram.types.FormattedText`: On success, information about the composed text is returned.
 
-        Example: 
-            .. code-block:: python 
-            
-                await app.compose_text_with_ai( 
+        Example:
+            .. code-block:: python
+
+                await app.compose_text_with_ai(
                     "hello, how are you?",
                     translate_to_language_code="ru",
                     style_name="formal",
-                    add_emojis=True 
+                    add_emojis=True
                 )
         """
         if isinstance(text, str):

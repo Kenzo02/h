@@ -16,17 +16,17 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import pyrogram
-from pyrogram import enums, raw, types, utils
+from pyrogram import raw, types
 
 
 class TranslateText:
     async def translate_text(
         self: "pyrogram.Client",
         text: Union[str, "types.FormattedText"],
-        to_language_code: str,
+        to_language_code: Optional[str] = None,
         tone: Optional[str] = None,
     ) -> "types.FormattedText":
         """Translate a text to the given language.
@@ -39,7 +39,7 @@ class TranslateText:
             text (``str`` | :obj:`~pyrogram.types.FormattedText`):
                 Text to translate.
 
-            to_language_code (``str``):
+            to_language_code (``str``, *optional*):
                 Language code of the language to which the message is translated.
                 Must be one of "af", "sq", "am", "ar", "hy", "az", "eu", "be", "bn", "bs", "bg", "ca", "ceb", "zh-CN", "zh", "zh-Hans", "zh-TW", "zh-Hant", "co", "hr", "cs", "da", "nl", "en", "eo", "et",
                 "fi", "fr", "fy", "gl", "ka", "de", "el", "gu", "ht", "ha", "haw", "he", "iw", "hi", "hmn", "hu", "is", "ig", "id", "in", "ga", "it", "ja", "jv", "kn", "kk", "km", "rw", "ko",
