@@ -42,7 +42,8 @@ class Connect:
             server_address=await self.storage.server_address(),
             port=await self.storage.port(),
             export_authorization=False,
-            temporary=True
+            temporary=True,
+            order_fallback_endpoints=True
         )
         self.is_connected = True
 

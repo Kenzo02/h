@@ -38,7 +38,16 @@ from typing import AsyncGenerator, Callable, List, Optional, Type, Union
 import pyrogram
 from pyrogram import __license__, __version__, enums, raw, utils
 from pyrogram.crypto import aes
-from pyrogram.dc_options import get_dc_endpoints
+from pyrogram.dc_options import (
+    dedupe_dc_options,
+    endpoint_cache_key,
+    get_dc_endpoints,
+    order_dc_endpoints,
+    reorder_with_cached_endpoint,
+    select_dc_option,
+    static_dc_options,
+    update_endpoint_cache,
+)
 from pyrogram.errors import (
     AuthBytesInvalid,
     BadRequest,
@@ -1306,7 +1315,8 @@ class Client(Methods):
         export_authorization: Optional[bool] = True,
         server_address: Optional[str] = None,
         port: Optional[int] = None,
-        temporary: Optional[bool] = False
+        temporary: Optional[bool] = False,
+        order_fallback_endpoints: Optional[bool] = False
     ) -> "Session":
         """Get existing session or create a new one.
 
@@ -1342,6 +1352,12 @@ class Client(Methods):
         if not dc_id:
             dc_id = await self.storage.dc_id()
 
+        explicit_endpoint = server_address is not None or port is not None
+        explicit_server_address = server_address is not None
+
+        if explicit_server_address and port is None:
+            port = 80 if await self.storage.test_mode() else 443
+
         if business_connection_id:
             dc_id = self.business_connections.get(business_connection_id)
 
@@ -1371,12 +1387,44 @@ class Client(Methods):
             port = port or dc_option.port
 
         fallback_endpoints = None
+        fallback_cache_key = None
 
-        if not is_media and not is_cdn and not await self.storage.test_mode():
-            static_endpoints = get_dc_endpoints(dc_id, False)
+        if (
+            not is_media
+            and not is_cdn
+            and not self.ipv6
+            and not await self.storage.test_mode()
+            and (not explicit_endpoint or order_fallback_endpoints)
+        ):
+            try:
+                static_endpoints = get_dc_endpoints(dc_id, False)
+            except KeyError:
+                static_endpoints = ()
 
-            if (server_address, port) in static_endpoints:
-                fallback_endpoints = static_endpoints
+            is_known_static_endpoint = (server_address, port) in static_endpoints
+
+            if explicit_endpoint and not is_known_static_endpoint:
+                static_endpoints = ()
+
+            if not self.proxy and is_known_static_endpoint:
+                fallback_cache_key = endpoint_cache_key(dc_id, False, False, False, False)
+
+            fallback_endpoints = tuple(dict.fromkeys(
+                ((server_address, port),) + static_endpoints
+            ))
+
+            if is_known_static_endpoint:
+                fallback_endpoints = await order_dc_endpoints(
+                    dc_id,
+                    fallback_endpoints,
+                    proxy=self.proxy,
+                    preferred_endpoint=(server_address, port),
+                    cache_key=fallback_cache_key,
+                )
+            else:
+                fallback_endpoints = reorder_with_cached_endpoint(None, fallback_endpoints)
+
+            server_address, port = fallback_endpoints[0]
 
         if is_media:
             auth_key = (await self.get_session(dc_id)).auth_key
@@ -1409,6 +1457,11 @@ class Client(Methods):
             sessions[dc_id] = session
 
         await session.start()
+
+        update_endpoint_cache(
+            fallback_cache_key,
+            (session.server_address, session.port),
+        )
 
         if temporary and is_current_dc and not is_media and not is_cdn:
             await self.storage.server_address(session.server_address)
@@ -1473,7 +1526,11 @@ class Client(Methods):
             media_options = [dc for dc in options if dc.media_only]
 
             if media_options:
-                return media_options[0]
+                return await select_dc_option(
+                    dc_id,
+                    dedupe_dc_options(media_options),
+                    proxy=self.proxy,
+                )
 
             log.debug(
                 "No media datacenter found for DC%s, falling back to prod DC",
@@ -1483,7 +1540,29 @@ class Client(Methods):
         prod_options = [dc for dc in options if not dc.media_only]
 
         if prod_options:
-            return prod_options[0]
+            test_mode = await self.storage.test_mode()
+            preferred_endpoint = None
+
+            if (
+                not is_media
+                and not is_cdn
+                and not test_mode
+                and not ipv6
+            ):
+                if dc_id == await self.storage.dc_id():
+                    preferred_endpoint = (
+                        self.session.server_address,
+                        self.session.port
+                    )
+
+                prod_options = prod_options + static_dc_options(dc_id)
+
+            return await select_dc_option(
+                dc_id,
+                dedupe_dc_options(prod_options),
+                proxy=self.proxy,
+                preferred_endpoint=preferred_endpoint,
+            )
 
         raise ValueError("No suitable DC found")
 
@@ -1514,10 +1593,23 @@ class Client(Methods):
             self.__config = await self.invoke(raw.functions.help.GetConfig())
 
         dc_id = dc_id or self.__config.this_dc
-        dc_option = await self.get_dc_option(dc_id, ipv6=self.ipv6)
+        explicit_endpoint = server_address is not None or port is not None
+        test_mode = await self.storage.test_mode()
 
-        server_address = server_address or dc_option.ip_address
-        port = port or dc_option.port
+        if server_address is not None and port is None:
+            port = 80 if test_mode else 443
+
+        if server_address is None or port is None:
+            dc_option = await self.get_dc_option(dc_id, ipv6=self.ipv6)
+
+            server_address = server_address or dc_option.ip_address
+            port = port or dc_option.port
+
+        cache_key = (
+            endpoint_cache_key(dc_id, test_mode, self.ipv6, False, False)
+            if not explicit_endpoint and not test_mode and not self.ipv6 and not self.proxy
+            else None
+        )
 
         await self.storage.dc_id(dc_id)
         await self.storage.server_address(server_address)
@@ -1527,9 +1619,30 @@ class Client(Methods):
             self.session.server_address = server_address
             self.session.port = port
 
+            if explicit_endpoint:
+                self.session.fallback_endpoints = ((server_address, port),)
+            elif not test_mode and not self.ipv6:
+                try:
+                    static_endpoints = get_dc_endpoints(dc_id, False)
+                except KeyError:
+                    static_endpoints = ()
+
+                self.session.fallback_endpoints = tuple(dict.fromkeys(
+                    ((server_address, port),) + static_endpoints
+                ))
+
             await self.session.restart()
-            log.info("Changed session DC%s address to %s:%s", dc_id, server_address, port)
+            await self.storage.server_address(self.session.server_address)
+            await self.storage.port(self.session.port)
+            update_endpoint_cache(cache_key, (self.session.server_address, self.session.port))
+            log.info(
+                "Changed session DC%s address to %s:%s",
+                dc_id,
+                self.session.server_address,
+                self.session.port
+            )
         else:
+            update_endpoint_cache(cache_key, (server_address, port))
             log.info("Session DC%s address is already %s:%s", dc_id, server_address, port)
 
     @property
