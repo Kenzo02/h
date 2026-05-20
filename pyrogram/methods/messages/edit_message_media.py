@@ -33,6 +33,7 @@ class EditMessageMedia:
         schedule_date: Optional[datetime] = None,
         business_connection_id: Optional[str] = None,
         reply_markup: Optional["types.InlineKeyboardMarkup"] = None,
+        file_name: Optional[str] = None,
     ) -> "types.Message":
         """Edit animation, audio, document, photo or video messages, or to add media to text messages.
 
@@ -115,6 +116,9 @@ class EditMessageMedia:
             ),
         ):
             raise ValueError(f"Unsupported media type {type(media)}")
+
+        if file_name is not None and hasattr(media, "file_name"):
+            media.file_name = file_name
 
         r = await self.invoke(
             raw.functions.messages.EditMessage(
