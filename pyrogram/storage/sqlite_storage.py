@@ -27,6 +27,7 @@ from typing import Any, List, Optional, Tuple
 from pyrogram import raw
 
 from .. import utils
+from ..dc_options import PROD, TEST, get_dc_endpoint
 from .storage import Storage
 
 log = logging.getLogger(__name__)
@@ -114,21 +115,6 @@ CREATE TABLE update_state
 );
 """
 
-TEST = {
-    1: "149.154.175.10",
-    2: "149.154.167.40",
-    3: "149.154.175.117"
-}
-
-PROD = {
-    1: "149.154.175.53",
-    2: "149.154.167.51",
-    3: "149.154.175.100",
-    4: "149.154.167.91",
-    5: "91.108.56.130",
-    203: "91.105.192.100"
-}
-
 def get_input_peer(peer_id: int, access_hash: int, peer_type: str):
     if peer_type in ["user", "bot"]:
         return raw.types.InputPeerUser(
@@ -210,12 +196,10 @@ class SQLiteStorage(Storage):
             version += 1
 
         if version == 6:
-            if await self.test_mode():
-                address = TEST[await self.dc_id()]
-                port = 80
-            else:
-                address = PROD[await self.dc_id()]
-                port = 443
+            address, port = get_dc_endpoint(
+                await self.dc_id(),
+                await self.test_mode()
+            )
 
             with self.conn:
                 self.conn.execute("ALTER TABLE sessions ADD server_address TEXT;")
@@ -262,6 +246,8 @@ class SQLiteStorage(Storage):
                     )
 
                     await self.dc_id(dc_id)
+                    await self.server_address(get_dc_endpoint(dc_id, test_mode)[0])
+                    await self.port(get_dc_endpoint(dc_id, test_mode)[1])
                     await self.test_mode(test_mode)
                     await self.auth_key(auth_key)
                     await self.user_id(user_id)
@@ -281,13 +267,8 @@ class SQLiteStorage(Storage):
                 )
 
                 await self.dc_id(dc_id)
-
-                if test_mode:
-                    await self.server_address(TEST[dc_id])
-                    await self.port(80)
-                else:
-                    await self.server_address(PROD[dc_id])
-                    await self.port(443)
+                await self.server_address(get_dc_endpoint(dc_id, test_mode)[0])
+                await self.port(get_dc_endpoint(dc_id, test_mode)[1])
 
                 await self.api_id(api_id)
                 await self.test_mode(test_mode)

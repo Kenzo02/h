@@ -20,10 +20,11 @@ import asyncio
 import bisect
 import logging
 import os
+import time
 from enum import Enum, auto
 from hashlib import sha1
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pyrogram
 from pyrogram import raw, utils
@@ -101,6 +102,7 @@ class Session:
         test_mode: bool,
         is_media: bool = False,
         is_cdn: bool = False,
+        fallback_endpoints: Optional[Tuple[Tuple[str, int], ...]] = None,
     ):
         self.client = client
         self.dc_id = dc_id
@@ -110,6 +112,9 @@ class Session:
         self.test_mode = test_mode
         self.is_media = is_media
         self.is_cdn = is_cdn
+        self.fallback_endpoints = tuple(dict.fromkeys(
+            ((server_address, port),) + tuple(fallback_endpoints or ())
+        ))
 
         self.connection: Optional[Connection] = None
 
@@ -158,68 +163,111 @@ class Session:
             log.debug("Session already started")
             return
 
-        await self._set_state(SessionState.STARTING)
+        for endpoint_index, (server_address, port) in enumerate(self.fallback_endpoints):
+            await self._set_state(SessionState.STARTING)
+            self.server_address = server_address
+            self.port = port
+            self.connection = self.client.connection_factory(
+                dc_id=self.dc_id,
+                server_address=self.server_address,
+                port=self.port,
+                test_mode=self.test_mode,
+                proxy=self.client.proxy,
+                media=self.is_media,
+                protocol_factory=self.client.protocol_factory,
+                crypto_executor_workers=self.CRYPTO_EXECUTOR_WORKERS,
+                loop=self.client.loop
+            )
 
-        self.connection = self.client.connection_factory(
-            dc_id=self.dc_id,
-            server_address=self.server_address,
-            port=self.port,
-            test_mode=self.test_mode,
-            proxy=self.client.proxy,
-            media=self.is_media,
-            protocol_factory=self.client.protocol_factory,
-            crypto_executor_workers=self.CRYPTO_EXECUTOR_WORKERS,
-            loop=self.client.loop
-        )
+            started_at = time.monotonic()
 
-        try:
-            await self.connection.connect()
+            try:
+                await self.connection.connect()
 
-            self.recv_task = self.client.loop.create_task(self.recv_worker())
+                self.recv_task = self.client.loop.create_task(self.recv_worker())
 
-            await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
+                await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
 
-            init_connection_params = self.client.init_connection_params
+                init_connection_params = self.client.init_connection_params
 
-            if isinstance(init_connection_params, dict):
-                init_connection_params = utils.obj_to_jsonvalue(init_connection_params)
+                if isinstance(init_connection_params, dict):
+                    init_connection_params = utils.obj_to_jsonvalue(init_connection_params)
 
-            if not self.is_cdn:
-                await self.send(
-                    raw.functions.InvokeWithLayer(
-                        layer=layer,
-                        query=raw.functions.InitConnection(
-                            api_id=await self.client.storage.api_id(),
-                            app_version=self.client.app_version,
-                            device_model=self.client.device_model,
-                            system_version=self.client.system_version,
-                            system_lang_code=self.client.system_lang_code,
-                            lang_pack=self.client.lang_pack,
-                            lang_code=self.client.lang_code,
-                            query=raw.functions.help.GetConfig(),
-                            params=init_connection_params,
-                        )
-                    ),
-                    timeout=self.START_TIMEOUT
+                if not self.is_cdn:
+                    await self.send(
+                        raw.functions.InvokeWithLayer(
+                            layer=layer,
+                            query=raw.functions.InitConnection(
+                                api_id=await self.client.storage.api_id(),
+                                app_version=self.client.app_version,
+                                device_model=self.client.device_model,
+                                system_version=self.client.system_version,
+                                system_lang_code=self.client.system_lang_code,
+                                lang_pack=self.client.lang_pack,
+                                lang_code=self.client.lang_code,
+                                query=raw.functions.help.GetConfig(),
+                                params=init_connection_params,
+                            )
+                        ),
+                        timeout=self.START_TIMEOUT
+                    )
+
+                self.ping_task = self.client.loop.create_task(self.ping_worker())
+
+                log.info(
+                    "Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer
+                )
+                log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
+                log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
+            except (AuthKeyDuplicated, Unauthorized) as e:
+                await self.stop()
+                raise e
+            except (OSError, RPCError, ConnectionError, TimeoutError) as e:
+                elapsed = time.monotonic() - started_at
+                next_endpoint = (
+                    self.fallback_endpoints[endpoint_index + 1]
+                    if endpoint_index + 1 < len(self.fallback_endpoints)
+                    else None
                 )
 
-            self.ping_task = self.client.loop.create_task(self.ping_worker())
+                await self.stop()
 
-            log.info(
-                "Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer
-            )
-            log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
-            log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
-        except (AuthKeyDuplicated, Unauthorized) as e:
-            await self.stop()
-            raise e
-        except (OSError, RPCError) as e:
-            log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-            self.client.loop.create_task(self.restart())
-            return
-        except Exception as e:
-            await self.stop()
-            raise e
+                if next_endpoint:
+                    log.warning(
+                        "DC%s endpoint %s:%s failed after %.3fs with %s: %s; "
+                        "falling back to %s:%s",
+                        self.dc_id,
+                        server_address,
+                        port,
+                        elapsed,
+                        e.__class__.__name__,
+                        e,
+                        next_endpoint[0],
+                        next_endpoint[1],
+                    )
+                    continue
+
+                log.warning(
+                    "DC%s endpoint %s:%s failed after %.3fs with %s: %s; "
+                    "no fallback endpoint left",
+                    self.dc_id,
+                    server_address,
+                    port,
+                    elapsed,
+                    e.__class__.__name__,
+                    e,
+                )
+                raise ConnectionError(
+                    f"Unable to start session on DC{self.dc_id} via {len(self.fallback_endpoints)} endpoint(s)"
+                ) from e
+            except Exception as e:
+                await self.stop()
+                raise e
+            else:
+                self.fallback_endpoints = tuple(dict.fromkeys(
+                    ((server_address, port),) + self.fallback_endpoints
+                ))
+                break
 
         await self._set_state(SessionState.STARTED)
         self.is_started.set()

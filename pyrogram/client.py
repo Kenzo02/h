@@ -38,6 +38,7 @@ from typing import AsyncGenerator, Callable, List, Optional, Type, Union
 import pyrogram
 from pyrogram import __license__, __version__, enums, raw, utils
 from pyrogram.crypto import aes
+from pyrogram.dc_options import get_dc_endpoints
 from pyrogram.errors import (
     AuthBytesInvalid,
     BadRequest,
@@ -1369,6 +1370,14 @@ class Client(Methods):
             server_address = server_address or dc_option.ip_address
             port = port or dc_option.port
 
+        fallback_endpoints = None
+
+        if not is_media and not is_cdn and not await self.storage.test_mode():
+            static_endpoints = get_dc_endpoints(dc_id, False)
+
+            if (server_address, port) in static_endpoints:
+                fallback_endpoints = static_endpoints
+
         if is_media:
             auth_key = (await self.get_session(dc_id)).auth_key
         else:
@@ -1378,7 +1387,8 @@ class Client(Methods):
                     dc_id,
                     server_address,
                     port,
-                    await self.storage.test_mode()
+                    await self.storage.test_mode(),
+                    fallback_endpoints=fallback_endpoints
                 ).create()
             else:
                 auth_key = await self.storage.auth_key()
@@ -1390,13 +1400,19 @@ class Client(Methods):
             port,
             auth_key,
             await self.storage.test_mode(),
-            is_media=is_media
+            is_media=is_media,
+            is_cdn=is_cdn,
+            fallback_endpoints=fallback_endpoints
         )
 
         if not temporary:
             sessions[dc_id] = session
 
         await session.start()
+
+        if temporary and is_current_dc and not is_media and not is_cdn:
+            await self.storage.server_address(session.server_address)
+            await self.storage.port(session.port)
 
         if not is_current_dc and export_authorization:
             for _ in range(3):

@@ -22,7 +22,7 @@ import time
 from hashlib import sha1
 from io import BytesIO
 from os import urandom
-from typing import Optional
+from typing import Optional, Tuple
 
 import pyrogram
 from pyrogram import raw
@@ -43,7 +43,8 @@ class Auth:
         dc_id: int,
         server_address: str,
         port: int,
-        test_mode: bool
+        test_mode: bool,
+        fallback_endpoints: Optional[Tuple[Tuple[str, int], ...]] = None,
     ):
         self.client = client
         self.dc_id = dc_id
@@ -55,6 +56,9 @@ class Auth:
         self.connection_factory = client.connection_factory
         self.protocol_factory = client.protocol_factory
         self.loop = client.loop
+        self.fallback_endpoints = tuple(dict.fromkeys(
+            ((server_address, port),) + tuple(fallback_endpoints or ())
+        ))
 
         self.connection: Optional[Connection] = None
 
@@ -85,10 +89,12 @@ class Auth:
         https://core.telegram.org/mtproto/samples-auth_key
         """
         retries_left = self.MAX_RETRIES
+        endpoint_index = 0
 
         # The server may close the connection at any time, causing the auth key creation to fail.
         # If that happens, just try again up to MAX_RETRIES times.
         while True:
+            self.server_address, self.port = self.fallback_endpoints[endpoint_index]
             self.connection = self.connection_factory(
                 dc_id=self.dc_id,
                 server_address=self.server_address,
@@ -99,6 +105,7 @@ class Auth:
                 protocol_factory=self.protocol_factory,
                 loop=self.loop
             )
+            started_at = time.monotonic()
 
             try:
                 log.info("Start creating a new auth key on DC%s", self.dc_id)
@@ -288,6 +295,30 @@ class Auth:
 
                 log.info("Done auth key exchange: %s", set_client_dh_params_answer.__class__.__name__)
             except ConnectionError as e:
+                elapsed = time.monotonic() - started_at
+                next_endpoint = (
+                    self.fallback_endpoints[endpoint_index + 1]
+                    if endpoint_index + 1 < len(self.fallback_endpoints)
+                    else None
+                )
+
+                if next_endpoint:
+                    log.warning(
+                        "DC%s auth endpoint %s:%s failed after %.3fs with %s: %s; "
+                        "falling back to %s:%s",
+                        self.dc_id,
+                        self.server_address,
+                        self.port,
+                        elapsed,
+                        e.__class__.__name__,
+                        e,
+                        next_endpoint[0],
+                        next_endpoint[1],
+                    )
+                    endpoint_index += 1
+                    retries_left = self.MAX_RETRIES
+                    continue
+
                 log.info("Unable to connect due to network issues.")
                 raise e
             except Exception as e:
@@ -301,6 +332,9 @@ class Auth:
                 await asyncio.sleep(1)
                 continue
             else:
+                self.fallback_endpoints = tuple(dict.fromkeys(
+                    ((self.server_address, self.port),) + self.fallback_endpoints
+                ))
                 return auth_key
             finally:
                 await self.connection.close()

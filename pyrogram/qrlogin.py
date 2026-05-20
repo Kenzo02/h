@@ -88,8 +88,8 @@ class QRLogin:
             )
 
             await self.client.storage.dc_id(r.dc_id)
-            await self.client.storage.server_address(dc_option.ip_address)
-            await self.client.storage.port(dc_option.port)
+            await self.client.storage.server_address(self.client.session.server_address)
+            await self.client.storage.port(self.client.session.port)
             await self.client.storage.auth_key(self.client.session.auth_key)       
 
             r = await self.client.invoke(

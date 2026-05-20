@@ -178,8 +178,8 @@ class SendPhoneNumberCode:
                 )
 
                 await self.storage.dc_id(e.value)
-                await self.storage.server_address(dc_option.ip_address)
-                await self.storage.port(dc_option.port)
+                await self.storage.server_address(self.session.server_address)
+                await self.storage.port(self.session.port)
                 await self.storage.auth_key(self.session.auth_key)
             else:
                 return types.SentCode._parse(r)
