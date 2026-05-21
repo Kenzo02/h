@@ -267,24 +267,28 @@ async def select_dc_option(
     if len(options) == 1:
         return options[0]
 
-    async def run_probe(option):
+    async def run_probe(index, option):
         try:
-            return option, await probe_tcp_endpoint(
+            return index, option, await probe_tcp_endpoint(
                 option.ip_address,
                 option.port,
                 DC_ENDPOINT_PROBE_TIMEOUT
             )
         except Exception as e:
-            return option, (False, 0.0, e)
+            return index, option, (False, 0.0, e)
 
-    probe_results = await asyncio.gather(*(run_probe(option) for option in options))
+    probe_results = await asyncio.gather(*(
+        run_probe(index, option)
+        for index, option in enumerate(options)
+    ))
     reachable = []
 
-    for option, (ok, elapsed, error) in probe_results:
+    for index, option, (ok, elapsed, error) in probe_results:
         if ok:
             reachable.append((
                 elapsed,
                 0 if dc_option_endpoint(option) == preferred_endpoint else 1,
+                index,
                 option
             ))
             continue
@@ -301,7 +305,7 @@ async def select_dc_option(
 
     if reachable:
         if preferred_endpoint:
-            for elapsed, _, option in reachable:
+            for elapsed, _, _, option in reachable:
                 if dc_option_endpoint(option) == preferred_endpoint:
                     if dc_option_endpoint(option) != dc_option_endpoint(options[0]):
                         log.info(
@@ -316,8 +320,8 @@ async def select_dc_option(
 
                     return option
 
-        reachable.sort(key=lambda result: (result[0], result[1]))
-        elapsed, _, selected = reachable[0]
+        reachable.sort(key=lambda result: (result[0], result[1], result[2]))
+        elapsed, _, _, selected = reachable[0]
         original = options[0]
 
         if dc_option_endpoint(selected) != dc_option_endpoint(original):
@@ -379,27 +383,31 @@ async def order_dc_endpoints(
 
         return tuple(dict.fromkeys((cached_endpoint,) + endpoints))
 
-    async def run_probe(endpoint):
+    async def run_probe(index, endpoint):
         server_address, port = endpoint
 
         try:
-            return endpoint, await probe_tcp_endpoint(
+            return index, endpoint, await probe_tcp_endpoint(
                 server_address,
                 port,
                 DC_ENDPOINT_PROBE_TIMEOUT
             )
         except Exception as e:
-            return endpoint, (False, 0.0, e)
+            return index, endpoint, (False, 0.0, e)
 
-    probe_results = await asyncio.gather(*(run_probe(endpoint) for endpoint in endpoints))
+    probe_results = await asyncio.gather(*(
+        run_probe(index, endpoint)
+        for index, endpoint in enumerate(endpoints)
+    ))
     reachable = []
     failed = []
 
-    for endpoint, (ok, elapsed, error) in probe_results:
+    for index, endpoint, (ok, elapsed, error) in probe_results:
         if ok:
             reachable.append((
                 elapsed,
                 0 if endpoint == preferred_endpoint else 1,
+                index,
                 endpoint
             ))
             continue
@@ -418,8 +426,8 @@ async def order_dc_endpoints(
     if not reachable:
         return endpoints
 
-    reachable.sort(key=lambda result: (result[0], result[1]))
-    ordered = tuple(result[2] for result in reachable) + tuple(failed)
+    reachable.sort(key=lambda result: (result[0], result[1], result[2]))
+    ordered = tuple(result[3] for result in reachable) + tuple(failed)
 
     if ordered[0] != endpoints[0]:
         log.info(

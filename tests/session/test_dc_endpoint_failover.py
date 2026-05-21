@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from pyrogram import Client, raw
-from pyrogram.dc_options import get_dc_endpoints
+from pyrogram.dc_options import get_dc_endpoints, select_dc_option
 from pyrogram.session import Auth, Session
 from pyrogram.storage.sqlite_storage import SQLiteStorage
 from pyrogram.storage.storage import Storage
@@ -546,6 +546,24 @@ def make_loaded_client(loop, attempts, failures, *, ipv6=False, proxy=None):
     client.system_version = "test"
 
     return client
+
+
+@pytest.mark.asyncio
+async def test_select_dc_option_orders_equal_latency_candidates_deterministically(monkeypatch):
+    options = [
+        dc_option(5, DC5_CONFIG_ENDPOINT),
+        dc_option(5, DC5_PRIMARY),
+        dc_option(5, DC5_FALLBACK),
+    ]
+
+    async def fake_probe(server_address, port, timeout):
+        return True, 0.100, None
+
+    monkeypatch.setattr("pyrogram.dc_options.probe_tcp_endpoint", fake_probe)
+
+    selected = await select_dc_option(5, options)
+
+    assert selected.ip_address == DC5_CONFIG_ENDPOINT
 
 
 @pytest.mark.asyncio
