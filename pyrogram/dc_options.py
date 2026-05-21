@@ -21,7 +21,6 @@ from contextlib import contextmanager
 import json
 import logging
 import os
-import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -59,9 +58,9 @@ PROD_FALLBACKS = {
 
 DC_ENDPOINT_PROBE_TIMEOUT = 1.0
 ENDPOINT_CACHE_VERSION = 1
-ENDPOINT_CACHE_PATH_VARIABLES = ("KURIGRAM_DC_ENDPOINT_CACHE", "PYROGRAM_DC_ENDPOINT_CACHE")
-SHARED_ENDPOINT_CACHE_PATH = Path("/var/cache/kurigram/dc_endpoints.json")
-ENDPOINT_CACHE_FILE_MODE = 0o664
+SHARED_ENDPOINT_CACHE_PATH = Path("/var/tmp/kurigram/dc_endpoints.json")
+ENDPOINT_CACHE_DIR_MODE = 0o1777
+ENDPOINT_CACHE_FILE_MODE = 0o666
 
 
 def get_dc_endpoint(dc_id: int, test_mode: bool) -> Tuple[str, int]:
@@ -108,24 +107,17 @@ def endpoint_cache_key(
 
 
 def endpoint_cache_path() -> Path:
-    for variable in ENDPOINT_CACHE_PATH_VARIABLES:
-        cache_path = os.getenv(variable)
-
-        if cache_path:
-            return Path(cache_path).expanduser()
-
-    if is_endpoint_cache_path_available(SHARED_ENDPOINT_CACHE_PATH):
+    if ensure_endpoint_cache_dir(SHARED_ENDPOINT_CACHE_PATH.parent):
         return SHARED_ENDPOINT_CACHE_PATH
 
     return Path.home() / ".cache" / "kurigram" / "dc_endpoints.json"
 
 
-def is_endpoint_cache_path_available(path: Path) -> bool:
+def ensure_endpoint_cache_dir(path: Path) -> bool:
     try:
-        if path.exists():
-            return os.access(path, os.R_OK)
-
-        return path.parent.exists() and os.access(path.parent, os.W_OK | os.X_OK)
+        path.mkdir(parents=True, exist_ok=True)
+        os.chmod(path, ENDPOINT_CACHE_DIR_MODE)
+        return os.access(path, os.W_OK | os.X_OK)
     except OSError:
         return False
 
@@ -159,7 +151,9 @@ def endpoint_cache_write_lock(path: Path):
     lock_path = path.with_name(f"{path.name}.lock")
 
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if not ensure_endpoint_cache_dir(path.parent):
+            raise OSError(f"Unable to use cache directory {path.parent}")
+
         lock_file = lock_path.open("a")
 
         try:
@@ -235,22 +229,12 @@ def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -
             "updated_at": time.time(),
         }
 
-        tmp_path = None
-
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
+            if not ensure_endpoint_cache_dir(path.parent):
+                raise OSError(f"Unable to use cache directory {path.parent}")
 
-            with tempfile.NamedTemporaryFile(
-                "w",
-                dir=path.parent,
-                prefix=f"{path.name}.",
-                suffix=".tmp",
-                delete=False,
-            ) as tmp:
-                tmp_path = Path(tmp.name)
-                json.dump(data, tmp, sort_keys=True)
-
-            os.replace(tmp_path, path)
+            with path.open("w") as cache_file:
+                json.dump(data, cache_file, sort_keys=True)
 
             try:
                 os.chmod(path, ENDPOINT_CACHE_FILE_MODE)
@@ -258,12 +242,6 @@ def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -
                 pass
         except OSError as e:
             log.debug("Unable to update DC endpoint cache %s: %s", path, e)
-        finally:
-            if tmp_path:
-                try:
-                    tmp_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
 
 
 async def probe_tcp_endpoint(server_address: str, port: int, timeout: float) -> Tuple[bool, float, Optional[Exception]]:

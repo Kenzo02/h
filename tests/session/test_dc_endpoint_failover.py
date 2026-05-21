@@ -45,28 +45,27 @@ def test_dc_endpoint_helper_has_same_dc_prod_fallbacks_for_known_builtin_options
     )
 
 
-def test_endpoint_cache_path_prefers_explicit_shared_env(monkeypatch, tmp_path: Path):
-    cache_file = tmp_path / "shared" / "dc_endpoints.json"
+def test_endpoint_cache_path_creates_host_shared_cache_dir(monkeypatch, tmp_path: Path):
+    cache_file = tmp_path / "var-tmp" / "kurigram" / "dc_endpoints.json"
 
-    monkeypatch.setenv("KURIGRAM_DC_ENDPOINT_CACHE", str(cache_file))
+    monkeypatch.setattr(dc_options, "SHARED_ENDPOINT_CACHE_PATH", cache_file, raising=False)
 
     assert dc_options.endpoint_cache_path() == cache_file
+    assert cache_file.parent.is_dir()
+    assert stat.S_IMODE(cache_file.parent.stat().st_mode) == 0o1777
 
 
-def test_endpoint_cache_path_uses_provisioned_shared_cache(monkeypatch, tmp_path: Path):
-    shared_cache = tmp_path / "var-cache" / "kurigram" / "dc_endpoints.json"
+def test_endpoint_cache_path_falls_back_to_user_cache_if_shared_dir_unavailable(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(dc_options, "ensure_endpoint_cache_dir", lambda path: False, raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path, raising=False)
 
-    shared_cache.parent.mkdir(parents=True)
-    monkeypatch.delenv("KURIGRAM_DC_ENDPOINT_CACHE", raising=False)
-    monkeypatch.setattr(dc_options, "SHARED_ENDPOINT_CACHE_PATH", shared_cache, raising=False)
-
-    assert dc_options.endpoint_cache_path() == shared_cache
+    assert dc_options.endpoint_cache_path() == tmp_path / ".cache" / "kurigram" / "dc_endpoints.json"
 
 
-def test_update_endpoint_cache_writes_shared_file_group_writable(monkeypatch, tmp_path: Path):
+def test_update_endpoint_cache_writes_host_shared_file_world_writable(monkeypatch, tmp_path: Path):
     cache_file = tmp_path / "shared" / "dc_endpoints.json"
 
-    monkeypatch.setenv("KURIGRAM_DC_ENDPOINT_CACHE", str(cache_file))
+    monkeypatch.setattr(dc_options, "SHARED_ENDPOINT_CACHE_PATH", cache_file, raising=False)
 
     dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
 
@@ -75,7 +74,8 @@ def test_update_endpoint_cache_writes_shared_file_group_writable(monkeypatch, tm
 
     assert cached["server_address"] == DC5_FALLBACK
     assert cached["port"] == 443
-    assert stat.S_IMODE(cache_file.stat().st_mode) == 0o664
+    assert stat.S_IMODE(cache_file.stat().st_mode) == 0o666
+    assert stat.S_IMODE((cache_file.with_name(f"{cache_file.name}.lock")).stat().st_mode) == 0o666
     assert not list(cache_file.parent.glob("*.tmp"))
 
 
