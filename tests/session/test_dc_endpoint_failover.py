@@ -2,12 +2,14 @@ import asyncio
 import base64
 import json
 import logging
+import stat
 import struct
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import pyrogram.dc_options as dc_options
 from pyrogram import Client, raw
 from pyrogram.dc_options import get_dc_endpoints, select_dc_option
 from pyrogram.session import Auth, Session
@@ -41,6 +43,40 @@ def test_dc_endpoint_helper_has_same_dc_prod_fallbacks_for_known_builtin_options
         (DC5_PRIMARY, 443),
         (DC5_FALLBACK, 443),
     )
+
+
+def test_endpoint_cache_path_prefers_explicit_shared_env(monkeypatch, tmp_path: Path):
+    cache_file = tmp_path / "shared" / "dc_endpoints.json"
+
+    monkeypatch.setenv("KURIGRAM_DC_ENDPOINT_CACHE", str(cache_file))
+
+    assert dc_options.endpoint_cache_path() == cache_file
+
+
+def test_endpoint_cache_path_uses_provisioned_shared_cache(monkeypatch, tmp_path: Path):
+    shared_cache = tmp_path / "var-cache" / "kurigram" / "dc_endpoints.json"
+
+    shared_cache.parent.mkdir(parents=True)
+    monkeypatch.delenv("KURIGRAM_DC_ENDPOINT_CACHE", raising=False)
+    monkeypatch.setattr(dc_options, "SHARED_ENDPOINT_CACHE_PATH", shared_cache, raising=False)
+
+    assert dc_options.endpoint_cache_path() == shared_cache
+
+
+def test_update_endpoint_cache_writes_shared_file_group_writable(monkeypatch, tmp_path: Path):
+    cache_file = tmp_path / "shared" / "dc_endpoints.json"
+
+    monkeypatch.setenv("KURIGRAM_DC_ENDPOINT_CACHE", str(cache_file))
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    cache = json.loads(cache_file.read_text())
+    cached = cache["endpoints"]["prod:v4:dc5:api"]
+
+    assert cached["server_address"] == DC5_FALLBACK
+    assert cached["port"] == 443
+    assert stat.S_IMODE(cache_file.stat().st_mode) == 0o664
+    assert not list(cache_file.parent.glob("*.tmp"))
 
 
 @pytest.mark.asyncio

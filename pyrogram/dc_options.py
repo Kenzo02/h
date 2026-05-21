@@ -17,14 +17,23 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+from contextlib import contextmanager
 import json
 import logging
+import os
+import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 
 log = logging.getLogger(__name__)
+
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None
 
 
 TEST = {
@@ -50,6 +59,9 @@ PROD_FALLBACKS = {
 
 DC_ENDPOINT_PROBE_TIMEOUT = 1.0
 ENDPOINT_CACHE_VERSION = 1
+ENDPOINT_CACHE_PATH_VARIABLES = ("KURIGRAM_DC_ENDPOINT_CACHE", "PYROGRAM_DC_ENDPOINT_CACHE")
+SHARED_ENDPOINT_CACHE_PATH = Path("/var/cache/kurigram/dc_endpoints.json")
+ENDPOINT_CACHE_FILE_MODE = 0o664
 
 
 def get_dc_endpoint(dc_id: int, test_mode: bool) -> Tuple[str, int]:
@@ -96,11 +108,30 @@ def endpoint_cache_key(
 
 
 def endpoint_cache_path() -> Path:
+    for variable in ENDPOINT_CACHE_PATH_VARIABLES:
+        cache_path = os.getenv(variable)
+
+        if cache_path:
+            return Path(cache_path).expanduser()
+
+    if is_endpoint_cache_path_available(SHARED_ENDPOINT_CACHE_PATH):
+        return SHARED_ENDPOINT_CACHE_PATH
+
     return Path.home() / ".cache" / "kurigram" / "dc_endpoints.json"
 
 
-def load_endpoint_cache() -> dict:
-    path = endpoint_cache_path()
+def is_endpoint_cache_path_available(path: Path) -> bool:
+    try:
+        if path.exists():
+            return os.access(path, os.R_OK)
+
+        return path.parent.exists() and os.access(path.parent, os.W_OK | os.X_OK)
+    except OSError:
+        return False
+
+
+def load_endpoint_cache(path: Optional[Path] = None) -> dict:
+    path = path or endpoint_cache_path()
 
     try:
         data = json.loads(path.read_text())
@@ -116,6 +147,41 @@ def load_endpoint_cache() -> dict:
         data["endpoints"] = {}
 
     return data
+
+
+@contextmanager
+def endpoint_cache_write_lock(path: Path):
+    if fcntl is None:
+        yield
+        return
+
+    lock_file = None
+    lock_path = path.with_name(f"{path.name}.lock")
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = lock_path.open("a")
+
+        try:
+            os.chmod(lock_path, ENDPOINT_CACHE_FILE_MODE)
+        except OSError:
+            pass
+
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+    except OSError as e:
+        log.debug("Unable to lock DC endpoint cache %s: %s", lock_path, e)
+        yield
+        return
+
+    try:
+        yield
+    finally:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+
+        lock_file.close()
 
 
 def cached_dc_endpoint(cache_key: Optional[str], endpoints: Tuple[Tuple[str, int], ...]) -> Optional[Tuple[str, int]]:
@@ -159,22 +225,45 @@ def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -
         return
 
     server_address, port = endpoint
-    data = load_endpoint_cache()
-    data.setdefault("endpoints", {})[cache_key] = {
-        "server_address": server_address,
-        "port": port,
-        "updated_at": time.time(),
-    }
-
     path = endpoint_cache_path()
 
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_name(f"{path.name}.tmp")
-        tmp_path.write_text(json.dumps(data, sort_keys=True))
-        tmp_path.replace(path)
-    except OSError as e:
-        log.debug("Unable to update DC endpoint cache %s: %s", path, e)
+    with endpoint_cache_write_lock(path):
+        data = load_endpoint_cache(path)
+        data.setdefault("endpoints", {})[cache_key] = {
+            "server_address": server_address,
+            "port": port,
+            "updated_at": time.time(),
+        }
+
+        tmp_path = None
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            with tempfile.NamedTemporaryFile(
+                "w",
+                dir=path.parent,
+                prefix=f"{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as tmp:
+                tmp_path = Path(tmp.name)
+                json.dump(data, tmp, sort_keys=True)
+
+            os.replace(tmp_path, path)
+
+            try:
+                os.chmod(path, ENDPOINT_CACHE_FILE_MODE)
+            except OSError:
+                pass
+        except OSError as e:
+            log.debug("Unable to update DC endpoint cache %s: %s", path, e)
+        finally:
+            if tmp_path:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 async def probe_tcp_endpoint(server_address: str, port: int, timeout: float) -> Tuple[bool, float, Optional[Exception]]:
