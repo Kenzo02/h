@@ -91,6 +91,8 @@ class Session:
     STORED_MSG_IDS_MAX_SIZE = 1000 * 2
     CRYPTO_EXECUTOR_WORKERS = 1
     MAX_CONSECUTIVE_IGNORED = 30
+    RESTART_RETRY_DELAY = 1
+    RESTART_RETRY_MAX_DELAY = 30
 
     def __init__(
         self,
@@ -144,6 +146,7 @@ class Session:
 
         self.is_started = asyncio.Event()
         self.restart_lock = asyncio.Lock()
+        self.restart_task: Optional[asyncio.Task] = None
 
     @property
     def state(self) -> SessionState:
@@ -324,6 +327,38 @@ class Session:
             await self.stop()
             await self.start()
 
+    def schedule_restart(self, reason: str):
+        if self.restart_task and not self.restart_task.done():
+            log.debug("Session restart already scheduled; latest reason: %s", reason)
+            return
+
+        self.restart_task = self.client.loop.create_task(self._restart_until_started(reason))
+
+    async def _restart_until_started(self, reason: str):
+        retry_delay = self.RESTART_RETRY_DELAY
+
+        while getattr(self.client, "is_connected", True):
+            try:
+                await self.restart()
+            except (AuthKeyDuplicated, Unauthorized):
+                log.exception("Background session restart aborted due to unrecoverable auth error: %s", reason)
+                return
+            except Exception as e:
+                log.warning(
+                    "Background session restart failed due to %s: %s; retrying in %.1fs; reason: %s",
+                    e.__class__.__name__,
+                    e,
+                    retry_delay,
+                    reason,
+                )
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, self.RESTART_RETRY_MAX_DELAY)
+            else:
+                log.info("Background session restart completed: %s", reason)
+                return
+
+        log.info("Background session restart skipped because client is disconnected: %s", reason)
+
     async def handle_packet(self, packet):
         try:
             data = await self.client.loop.run_in_executor(
@@ -337,7 +372,7 @@ class Session:
         except ValueError as e:
             log.debug(e)
             log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-            self.client.loop.create_task(self.restart())
+            self.schedule_restart(f"{e.__class__.__name__}: {e}")
             return
 
         messages = (
@@ -401,7 +436,7 @@ class Session:
 
                 if self.ignore_count >= self.MAX_CONSECUTIVE_IGNORED:
                     log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-                    self.client.loop.create_task(self.restart())
+                    self.schedule_restart(f"{e.__class__.__name__}: {e}")
 
                 return
             else:
@@ -461,7 +496,7 @@ class Session:
                 )
             except OSError as e:
                 log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-                self.client.loop.create_task(self.restart())
+                self.schedule_restart(f"{e.__class__.__name__}: {e}")
                 break
             except RPCError:
                 pass
@@ -507,7 +542,7 @@ class Session:
                         error = "Server sent a null packet."
 
                     log.info("Restarting session due to - %s", error)
-                    self.client.loop.create_task(self.restart())
+                    self.schedule_restart(error)
 
                 break
 

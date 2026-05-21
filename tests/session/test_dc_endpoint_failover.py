@@ -920,6 +920,119 @@ async def test_session_start_raises_when_all_endpoints_fail(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_scheduled_restart_retries_transient_connection_failure(monkeypatch, caplog):
+    client = make_client(asyncio.get_running_loop(), [], {})
+    client.is_connected = True
+    restart_attempts = 0
+
+    async def flaky_restart(self):
+        nonlocal restart_attempts
+
+        restart_attempts += 1
+
+        if restart_attempts == 1:
+            raise ConnectionError("transient DC1 outage")
+
+        self.is_started.set()
+
+    monkeypatch.setattr(Session, "restart", flaky_restart)
+    monkeypatch.setattr(Session, "RESTART_RETRY_DELAY", 0.01, raising=False)
+    monkeypatch.setattr(Session, "RESTART_RETRY_MAX_DELAY", 0.01, raising=False)
+    caplog.set_level(logging.WARNING)
+
+    session = Session(
+        client,
+        1,
+        "149.154.175.53",
+        443,
+        b"s" * 256,
+        False,
+        fallback_endpoints=(("149.154.175.53", 443), ("149.154.175.50", 443)),
+    )
+
+    session.schedule_restart("test transient reconnect")
+    await asyncio.wait_for(session.restart_task, timeout=1)
+
+    assert restart_attempts == 2
+    assert session.is_started.is_set()
+    assert session.restart_task.exception() is None
+    assert "transient DC1 outage" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_scheduled_restart_deduplicates_concurrent_restart_requests(monkeypatch):
+    client = make_client(asyncio.get_running_loop(), [], {})
+    client.is_connected = True
+    release_restart = asyncio.Event()
+    restart_attempts = 0
+
+    async def slow_restart(self):
+        nonlocal restart_attempts
+
+        restart_attempts += 1
+        await release_restart.wait()
+        self.is_started.set()
+
+    monkeypatch.setattr(Session, "restart", slow_restart)
+
+    session = Session(
+        client,
+        1,
+        "149.154.175.53",
+        443,
+        b"s" * 256,
+        False,
+        fallback_endpoints=(("149.154.175.53", 443), ("149.154.175.50", 443)),
+    )
+
+    session.schedule_restart("first transport error")
+    restart_task = session.restart_task
+    session.schedule_restart("second transport error")
+    await asyncio.sleep(0)
+
+    assert session.restart_task is restart_task
+    assert restart_attempts == 1
+
+    release_restart.set()
+    await asyncio.wait_for(restart_task, timeout=1)
+
+    assert session.is_started.is_set()
+
+
+@pytest.mark.asyncio
+async def test_scheduled_restart_stops_retrying_after_client_disconnect(monkeypatch):
+    client = make_client(asyncio.get_running_loop(), [], {})
+    client.is_connected = True
+    restart_attempts = 0
+
+    async def failing_restart(self):
+        nonlocal restart_attempts
+
+        restart_attempts += 1
+        client.is_connected = False
+        raise ConnectionError("network down during shutdown")
+
+    monkeypatch.setattr(Session, "restart", failing_restart)
+    monkeypatch.setattr(Session, "RESTART_RETRY_DELAY", 0.01, raising=False)
+
+    session = Session(
+        client,
+        1,
+        "149.154.175.53",
+        443,
+        b"s" * 256,
+        False,
+        fallback_endpoints=(("149.154.175.53", 443), ("149.154.175.50", 443)),
+    )
+
+    session.schedule_restart("disconnecting client")
+    await asyncio.wait_for(session.restart_task, timeout=1)
+
+    assert restart_attempts == 1
+    assert session.restart_task.exception() is None
+
+
+@pytest.mark.asyncio
 async def test_auth_create_falls_back_before_failing():
     attempts = []
     failures = {
