@@ -868,8 +868,11 @@ class Gift(Object):
         Returns:
             :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
         """
+        if not self.type == enums.GiftType.UPGRADED:
+            raise ValueError("Only upgraded gifts can be transferred.")
+
         return await self._client.transfer_gift(
-            owned_gift_id=self.owned_gift_id,
+            owned_gift_id=self.owned_gift_id or self.link,
             new_owner_chat_id=to_chat_id
         )
 

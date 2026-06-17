@@ -66,6 +66,8 @@ class SendVoice:
         quote_text: str = None,
         quote_entities: List["types.MessageEntity"] = None,
         quote_offset: int = None,
+        *,
+        waveform: Optional[bytes] = None,
     ) -> Optional["types.Message"]:
         """Send audio files.
 
@@ -96,6 +98,9 @@ class SendVoice:
 
             duration (``int``, *optional*):
                 Duration of the voice message in seconds.
+
+            waveform (``bytes``, *optional*):
+                A 5-bit byte-string waveform info.
 
             disable_notification (``bool``, *optional*):
                 Sends the message silently.
@@ -189,6 +194,9 @@ class SendVoice:
                 # Send self-destructing voice note
                 await app.send_voice("me", "voice.ogg", view_once=True)
         """
+        if isinstance(waveform, (bytearray, memoryview)):
+            waveform = bytes(waveform)
+
         if any(
             (
                 reply_to_message_id is not None,
@@ -254,7 +262,8 @@ class SendVoice:
                         attributes=[
                             raw.types.DocumentAttributeAudio(
                                 voice=True,
-                                duration=duration
+                                duration=duration,
+                                waveform=waveform,
                             )
                         ],
                         ttl_seconds=(1 << 31) - 1 if view_once else None
@@ -276,7 +285,8 @@ class SendVoice:
                     attributes=[
                         raw.types.DocumentAttributeAudio(
                             voice=True,
-                            duration=duration
+                            duration=duration,
+                            waveform=waveform,
                         )
                     ],
                     ttl_seconds=(1 << 31) - 1 if view_once else None
