@@ -19,8 +19,7 @@
 from typing import AsyncGenerator, Union
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types
 
 
 class GetArchivedStories:
@@ -54,7 +53,7 @@ class GetArchivedStories:
             .. code-block:: python
 
                 # Get archived stories from specific chat
-                async for story in app.get_stories_archive(chat_id):
+                async for story in app.get_archived_stories(chat_id):
                     print(story)
         """
         current = 0
