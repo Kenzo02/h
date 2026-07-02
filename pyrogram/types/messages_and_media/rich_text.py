@@ -25,6 +25,23 @@ from pyrogram import raw, types, utils
 from ..object import Object
 
 
+def _plain_rich_text_value(content) -> str:
+    if content is None:
+        return ""
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, (list, tuple, types.List)):
+        return "".join(_plain_rich_text_value(item) for item in content)
+
+    text = getattr(content, "text", None)
+    if text is not None:
+        return _plain_rich_text_value(text)
+
+    return str(content)
+
+
 class RichText(Object):
     """This object represents a rich formatted text.
 
@@ -196,7 +213,7 @@ class RichText(Object):
 
             return RichTextMention(
                 text=content,
-                username=content.lstrip("@"),
+                username=_plain_rich_text_value(content).lstrip("@"),
             )
 
         if isinstance(rich_text, raw.types.TextHashtag):
@@ -204,7 +221,7 @@ class RichText(Object):
 
             return RichTextHashtag(
                 text=content,
-                hashtag=content.lstrip("#"),
+                hashtag=_plain_rich_text_value(content).lstrip("#"),
             )
 
         if isinstance(rich_text, raw.types.TextCashtag):
@@ -212,7 +229,7 @@ class RichText(Object):
 
             return RichTextCashtag(
                 text=content,
-                cashtag=content.lstrip("$"),
+                cashtag=_plain_rich_text_value(content).lstrip("$"),
             )
 
         if isinstance(rich_text, raw.types.TextBotCommand):
@@ -220,7 +237,7 @@ class RichText(Object):
 
             return RichTextBotCommand(
                 text=content,
-                bot_command=content.lstrip("/"),
+                bot_command=_plain_rich_text_value(content).lstrip("/"),
             )
 
         if isinstance(rich_text, raw.types.TextAnchor):
