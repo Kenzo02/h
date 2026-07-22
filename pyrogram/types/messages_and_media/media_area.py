@@ -30,8 +30,7 @@ def _normalize_int64(value: int) -> int:
     try:
         if value is None:
             return value
-        if not isinstance(value, int):
-            return int(value)
+        value = int(value)
         if value >= (1 << 63):
             return value - (1 << 64)
         return value

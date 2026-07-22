@@ -37,6 +37,7 @@ from typing import AsyncGenerator, Callable, List, Optional, Type, Union
 
 import pyrogram
 from pyrogram import __license__, __version__, enums, raw, utils
+from pyrogram.connection.transport.tcp import ProxyDict
 from pyrogram.crypto import aes
 from pyrogram.dc_options import (
     dedupe_dc_options,
@@ -50,17 +51,15 @@ from pyrogram.dc_options import (
 )
 from pyrogram.errors import (
     AuthBytesInvalid,
+    AuthTokenExpired,
     BadRequest,
     CDNFileHashMismatch,
     ChannelPrivate,
-    FloodPremiumWait,
-    FloodWait,
     PersistentTimestampInvalid,
     PersistentTimestampOutdated,
     SessionPasswordNeeded,
     Unauthorized,
     VolumeLocNotFound,
-    AuthTokenExpired
 )
 from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
@@ -127,8 +126,8 @@ class Client(Methods):
             after which the server address will be updated (works both ways).
             Defaults to False (IPv4).
 
-        proxy (``dict`` | ``str``, *optional*):
-            The Proxy settings as dict.
+        proxy (``str`` | ``dict``, *optional*):
+            The Proxy settings as url or dict.
             E.g.: *dict(scheme="socks5", hostname="11.22.33.44", port=1234, username="user", password="pass")*
             or *"http://11.22.33.44:1234"* or *"socks5://user:pass@11.22.33.44:1234"* or *"tg://user:pass@11.22.33.44:1234"*.
             The *username* and *password* can be omitted if the proxy doesn't require authorization.
@@ -298,7 +297,7 @@ class Client(Methods):
         lang_code: str = LANG_CODE,
         system_lang_code: str = SYSTEM_LANG_CODE,
         ipv6: Optional[bool] = False,
-        proxy: Optional[Union[dict, str]] = None,
+        proxy: Optional[Union[str, ProxyDict]] = None,
         test_mode: Optional[bool] = False,
         bot_token: Optional[str] = None,
         session_string: Optional[str] = None,

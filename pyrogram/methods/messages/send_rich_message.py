@@ -50,7 +50,7 @@ class SendRichMessage:
     ) -> "types.Message":
         """Send text messages.
 
-        .. include:: /_includes/usable-by/bots.rst
+        .. include:: /_includes/usable-by/users-bots.rst
 
         Parameters:
             chat_id (``int`` | ``str``):

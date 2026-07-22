@@ -24,7 +24,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Tuple, TypedDict, Union
 from urllib.parse import parse_qs
 
-from python_socks import ProxyType
 from python_socks.async_.asyncio import Proxy
 
 from pyrogram import utils
@@ -46,7 +45,7 @@ class TCP:
     def __init__(
         self,
         ipv6: bool = False,
-        proxy: Union[str, ProxyDict, None] = None,
+        proxy: Optional[Union[str, ProxyDict]] = None,
         crypto_executor_workers: int = 1,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
@@ -110,6 +109,20 @@ class TCP:
 
         return Proxy.from_url(url)
 
+    @staticmethod
+    def _enable_keepalive(sock: socket.socket) -> None:
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            if hasattr(socket, "TCP_KEEPINTVL"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)
+            if hasattr(socket, "TCP_KEEPCNT"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        except Exception as e:
+            log.debug("Could not configure TCP Keep-Alive: %s %s", type(e).__name__, e)
+
     async def _connect_via_proxy(self, destination: Tuple[str, int]) -> None:
         dest_host, dest_port = destination
         proxy = await self._build_proxy()
@@ -131,6 +144,8 @@ class TCP:
             log.error("Proxy connection failed: %s %s", type(e).__name__, e)
             raise
 
+        self._enable_keepalive(sock)
+
         log.info("Proxy connection established")
 
         self.reader, self.writer = await asyncio.open_connection(sock=sock)
@@ -147,6 +162,11 @@ class TCP:
                 port=port,
                 family=family,
             )
+
+            raw_socket = self.writer.get_extra_info("socket")
+
+            if raw_socket:
+                self._enable_keepalive(raw_socket)
         except Exception as e:
             log.error("Connection failed: %s %s", type(e).__name__, e)
             raise

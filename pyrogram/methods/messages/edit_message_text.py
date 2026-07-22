@@ -123,11 +123,11 @@ class EditMessageText:
         message = ""
         input_rich_message = None
 
-        if text:
+        if text is not None:
             message, entities = (
                 await utils.parse_text_entities(self, text, parse_mode, entities)
             ).values()
-        elif rich_message:
+        elif rich_message is not None:
             input_rich_message = rich_message.write()
         else:
             raise ValueError("Either text or rich_message must be specified")
