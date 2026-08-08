@@ -129,5 +129,4 @@ venv.bak/
 
 # mypy
 .mypy_cache/
-.gitnexus
 .claude
