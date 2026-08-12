@@ -258,6 +258,10 @@ async def parse_messages(
                     raw.types.UpdateNewChannelMessage,
                     raw.types.UpdateNewScheduledMessage,
                     raw.types.UpdateBotNewBusinessMessage,
+                    raw.types.UpdateNewEphemeralMessage,
+                    raw.types.UpdateEditMessage,
+                    raw.types.UpdateEditChannelMessage,
+                    raw.types.UpdateEditEphemeralMessage
                 )
             ):
                 parsed_messages.append(
@@ -277,7 +281,9 @@ async def parse_messages(
 
 
 def parse_deleted_messages(client, update, users, chats) -> List["types.Message"]:
-    messages = update.messages
+    is_ephemeral = isinstance(update, raw.types.UpdateDeleteEphemeralMessages)
+
+    messages = update.ids if is_ephemeral else update.messages
     channel_id = getattr(update, "channel_id", None)
     peer = getattr(update, "peer", None)
 
@@ -303,17 +309,15 @@ def parse_deleted_messages(client, update, users, chats) -> List["types.Message"
                     client, chats[chat_id]
                 )
 
-    parsed_messages = []
-
-    for message in messages:
-        parsed_messages.append(
-            types.Message(
-                id=message,
-                chat=chat,
-                business_connection_id=getattr(update, "connection_id", None),
-                client=client
-            )
-        )
+    parsed_messages = [
+        types.Message(
+            id=0 if is_ephemeral else message,
+            ephemeral_message_id=message if is_ephemeral else None,
+            chat=chat,
+            business_connection_id=getattr(update, "connection_id", None),
+            client=client
+        ) for message in messages
+    ]
 
     return types.List(parsed_messages)
 
@@ -438,7 +442,7 @@ async def get_reply_to(
     reply_parameters: Optional["types.ReplyParameters"] = None,
     message_thread_id: Optional[int] = None,
     direct_messages_topic_id: Optional[int] = None
-) -> Optional[Union[raw.types.InputReplyToMessage, raw.types.InputReplyToStory, raw.types.InputReplyToMonoForum]]:
+) -> Optional["raw.base.InputReplyTo"]:
     """Get InputReply for reply_to argument"""
     if reply_parameters:
         if reply_parameters.chat_id and reply_parameters.story_id:
@@ -471,6 +475,11 @@ async def get_reply_to(
                 monoforum_peer_id=await client.resolve_peer(direct_messages_topic_id),
                 todo_item_id=reply_parameters.checklist_task_id,
                 poll_option=reply_parameters.poll_option_id.encode() if reply_parameters.poll_option_id is not None else None,
+            )
+
+        if reply_parameters.ephemeral_message_id:
+            return raw.types.InputReplyToEphemeralMessage(
+                id=reply_parameters.ephemeral_message_id
             )
 
     if message_thread_id:

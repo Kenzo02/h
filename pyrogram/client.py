@@ -756,7 +756,7 @@ class Client(Methods):
 
         self.parse_mode = parse_mode
 
-    async def fetch_peers(self, peers: List[Union[raw.types.User, raw.types.Chat, raw.types.Channel]]) -> bool:
+    async def fetch_peers(self, peers: List[Union["raw.base.User", "raw.base.Chat"]]) -> bool:
         is_min = False
         parsed_peers = []
         parsed_usernames = []
@@ -796,6 +796,10 @@ class Client(Methods):
                 peer_id = utils.get_channel_id(peer.id)
                 access_hash = peer.access_hash
                 peer_type = "channel" if peer.broadcast else "supergroup"
+            elif isinstance(peer, (raw.types.Community, raw.types.CommunityForbidden)):
+                peer_id = utils.get_channel_id(peer.id)
+                access_hash = peer.access_hash
+                peer_type = "community"
             else:
                 continue
 

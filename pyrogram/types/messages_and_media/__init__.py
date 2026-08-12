@@ -36,6 +36,8 @@ from .checklist import Checklist
 from .checklist_task import ChecklistTask
 from .checklist_tasks_added import ChecklistTasksAdded
 from .checklist_tasks_done import ChecklistTasksDone
+from .community_chat_added import CommunityChatAdded
+from .community_chat_removed import CommunityChatRemoved
 from .contact import Contact
 from .contact_registered import ContactRegistered
 from .craft_gift_result import CraftGiftResult, CraftGiftResultFail, CraftGiftResultSuccess
@@ -235,6 +237,8 @@ __all__ = [
     "ChecklistTask",
     "ChecklistTasksAdded",
     "ChecklistTasksDone",
+    "CommunityChatAdded",
+    "CommunityChatRemoved",
     "Contact",
     "ContactRegistered",
     "CraftGiftResult",

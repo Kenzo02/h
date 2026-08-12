@@ -51,6 +51,8 @@ class SendVideo:
         disable_notification: bool = None,
         message_thread_id: int = None,
         direct_messages_topic_id: int = None,
+        receiver_user_id: Optional[Union[int, str]] = None,
+        callback_query_id: Optional[str] = None,
         effect_id: int = None,
         show_caption_above_media: bool = None,
         reply_parameters: "types.ReplyParameters" = None,
@@ -165,7 +167,16 @@ class SendVideo:
 
             direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
-                For directs only only.
+                For direct chats only.only.
+
+            receiver_user_id (``int`` | ``str``, *optional*):
+                For outgoing ephemeral messages, unique identifier (int) or username (str) of the user who will receive the message.
+                For group and supergroup chats only.
+                It is not guaranteed that the user will receive the message, especially if they are offline.
+                See `ephemeral message sending <https://core.telegram.org/bots/api#ephemeral-messages-and-commands>`__ for more details.
+
+            callback_query_id (``str``, *optional*):
+                For outgoing ephemeral messages, identifier of the callback query which triggered the message if any.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -414,8 +425,24 @@ class SendVideo:
 
             while True:
                 try:
-                    r = await self.invoke(
-                        raw.functions.messages.SendMedia(
+                    if receiver_user_id:
+                        rpc = raw.functions.ephemeral.SendMessage(
+                            peer=peer,
+                            receiver_id=await self.resolve_peer(receiver_user_id),
+                            query_id=int(callback_query_id) if callback_query_id is not None else None,
+                            media=media,
+                            reply_to=await utils.get_reply_to(
+                                self,
+                                reply_parameters,
+                                message_thread_id,
+                                direct_messages_topic_id
+                            ),
+                            random_id=self.rnd_id(),
+                            reply_markup=await reply_markup.write(self) if reply_markup else None,
+                            **await utils.parse_text_entities(self, caption, parse_mode, caption_entities)
+                        )
+                    else:
+                        rpc = raw.functions.messages.SendMedia(
                             peer=peer,
                             media=media,
                             silent=disable_notification or None,
@@ -428,6 +455,7 @@ class SendVideo:
                             ),
                             random_id=self.rnd_id(),
                             schedule_date=utils.datetime_to_timestamp(schedule_date),
+                            schedule_repeat_period=repeat_period,
                             noforwards=protect_content,
                             allow_paid_floodskip=allow_paid_broadcast,
                             allow_paid_stars=paid_message_star_count,
@@ -435,9 +463,9 @@ class SendVideo:
                             reply_markup=await reply_markup.write(self) if reply_markup else None,
                             effect=effect_id,
                             **await utils.parse_text_entities(self, caption, parse_mode, caption_entities)
-                        ),
-                        business_connection_id=business_connection_id
-                    )
+                        )
+
+                    r = await self.invoke(rpc, business_connection_id=business_connection_id)
                 except FilePartMissing as e:
                     await self.save_file(video, file_id=file.id, file_part=e.value)
                 else:

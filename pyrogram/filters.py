@@ -984,6 +984,13 @@ gift_offer_rejected = create(gift_offer_rejected_filter)
 
 # endregion
 
+# region ephemeral_filter
+ephemeral = create(lambda _, __, m: m.ephemeral_message_id is not None)
+"""Filter ephemeral messages."""
+
+
+# endregion
+
 # region command_filter
 def command(commands: Union[str, List[str]], prefixes: Optional[Union[str, List[str]]] = "/", case_sensitive: bool = False):
     """Filter commands, i.e.: text messages starting with "/" or any other custom prefix.

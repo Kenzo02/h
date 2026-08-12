@@ -127,7 +127,7 @@ def get_input_peer(peer_id: int, access_hash: int, peer_type: str):
             chat_id=-peer_id
         )
 
-    if peer_type in ["direct", "channel", "forum", "supergroup"]:
+    if peer_type in ["direct", "channel", "forum", "supergroup", "community"]:
         return raw.types.InputPeerChannel(
             channel_id=utils.get_channel_id(peer_id),
             access_hash=access_hash

@@ -222,6 +222,12 @@ class MessageServiceType(AutoName):
     CHECKLIST_TASKS_ADDED = auto()
     "Checklist tasks added"
 
+    COMMUNITY_CHAT_ADDED = auto()
+    "Community chat added"
+
+    COMMUNITY_CHAT_REMOVED = auto()
+    "Community chat removed"
+
     UPGRADED_GIFT_PURCHASE_OFFER = auto()
     "Upgraded gift purchase offer"
 

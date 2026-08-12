@@ -27,6 +27,11 @@ from .check_bot_username import CheckBotUsername
 from .create_bot import CreateBot
 from .create_invoice_link import CreateInvoiceLink
 from .delete_bot_commands import DeleteBotCommands
+from .delete_ephemeral_message import DeleteEphemeralMessage
+from .edit_ephemeral_message_caption import EditEphemeralMessageCaption
+from .edit_ephemeral_message_media import EditEphemeralMessageMedia
+from .edit_ephemeral_message_reply_markup import EditEphemeralMessageReplyMarkup
+from .edit_ephemeral_message_text import EditEphemeralMessageText
 from .edit_user_star_subscription import EditUserStarSubscription
 from .get_bot_commands import GetBotCommands
 from .get_bot_default_privileges import GetBotDefaultPrivileges
@@ -78,6 +83,11 @@ class Bots(
     SetBotCommands,
     GetBotCommands,
     DeleteBotCommands,
+    DeleteEphemeralMessage,
+    EditEphemeralMessageCaption,
+    EditEphemeralMessageMedia,
+    EditEphemeralMessageReplyMarkup,
+    EditEphemeralMessageText,
     EditUserStarSubscription,
     SetBotDefaultPrivileges,
     SetBotInfoDescription,

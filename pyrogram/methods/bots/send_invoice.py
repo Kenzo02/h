@@ -167,7 +167,7 @@ class SendInvoice:
 
             direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
-                For directs only only.
+                For direct chats only.
 
             suggested_post_parameters (:obj:`~pyrogram.types.SuggestedPostParameters`, *optional*):
                 Information about the suggested post.

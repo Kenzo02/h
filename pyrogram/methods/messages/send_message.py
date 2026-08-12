@@ -37,6 +37,8 @@ class SendMessage:
         disable_notification: Optional[bool] = None,
         message_thread_id: Optional[int] = None,
         direct_messages_topic_id: Optional[int] = None,
+        receiver_user_id: Optional[Union[int, str]] = None,
+        callback_query_id: Optional[str] = None,
         effect_id: Optional[int] = None,
         show_caption_above_media: Optional[bool] = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
@@ -95,7 +97,16 @@ class SendMessage:
 
             direct_messages_topic_id (``int``, *optional*):
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
-                For directs only only.
+                For direct chats only.
+
+            receiver_user_id (``int`` | ``str``, *optional*):
+                For outgoing ephemeral messages, unique identifier (int) or username (str) of the user who will receive the message.
+                For group and supergroup chats only.
+                It is not guaranteed that the user will receive the message, especially if they are offline.
+                See `ephemeral message sending <https://core.telegram.org/bots/api#ephemeral-messages-and-commands>`__ for more details.
+
+            callback_query_id (``str``, *optional*):
+                For outgoing ephemeral messages, identifier of the callback query which triggered the message if any.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -266,7 +277,23 @@ class SendMessage:
 
         peer = await self.resolve_peer(chat_id)
 
-        if link_preview_options and link_preview_options.url:
+        if receiver_user_id:
+            rpc = raw.functions.ephemeral.SendMessage(
+                peer=peer,
+                receiver_id=await self.resolve_peer(receiver_user_id),
+                query_id=int(callback_query_id) if callback_query_id is not None else None,
+                reply_to=await utils.get_reply_to(
+                    self,
+                    reply_parameters,
+                    message_thread_id,
+                    direct_messages_topic_id
+                ),
+                random_id=self.rnd_id(),
+                reply_markup=await reply_markup.write(self) if reply_markup else None,
+                message=message,
+                entities=entities,
+            )
+        elif link_preview_options and link_preview_options.url:
             rpc = raw.functions.messages.SendMedia(
                 peer=peer,
                 media=raw.types.InputMediaWebPage(

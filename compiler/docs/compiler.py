@@ -376,7 +376,8 @@ def pyrogram_api():
             edit_forum_topic
             get_forum_topics
             get_forum_topics_by_id
-            update_color
+            set_chat_accent_color
+            set_chat_profile_accent_color
             set_upgraded_gift_colors
             update_chat_notifications
             toggle_forum_topics
@@ -552,6 +553,11 @@ def pyrogram_api():
             get_managed_bot_token
             replace_managed_bot_token
             get_owned_bots
+            delete_ephemeral_message
+            edit_ephemeral_message_text
+            edit_ephemeral_message_media
+            edit_ephemeral_message_caption
+            edit_ephemeral_message_reply_markup
         """,
         business="""
         Business
@@ -706,7 +712,6 @@ def pyrogram_api():
             FailedToAddMember
             Folder
             GroupCallMember
-            ChatColor
             FoundContacts
             PrivacyRule
             StoriesStealthMode
@@ -717,6 +722,15 @@ def pyrogram_api():
             GlobalPrivacySettings
             HistoryCleared
             ChatFolderInviteLinkInfo
+            Community
+            CommunityAdministratorRights
+            CommunityMemberStatus
+            CommunityMemberStatusCreator
+            CommunityMemberStatusAdministrator
+            CommunityMemberStatusMember
+            CommunityMemberStatusLeft
+            CommunityMemberStatusBanned
+            CommunityPermissions
         """,
         messages_media="""
         Messages & Media
@@ -859,6 +873,8 @@ def pyrogram_api():
             ChecklistTask
             ChecklistTasksAdded
             ChecklistTasksDone
+            CommunityChatAdded
+            CommunityChatRemoved
             Checklist
             RefundedPayment
             ReplyParameters
@@ -1136,6 +1152,8 @@ def pyrogram_api():
             Message.answer_inline_bot_result
             Message.reply_checklist
             Message.answer_checklist
+            Message.reply_rich
+            Message.answer_rich
             Message.edit_text
             Message.edit
             Message.edit_caption
@@ -1335,9 +1353,7 @@ def pyrogram_api():
             PhoneNumberCodeType
             PollType
             PrivacyKey
-            ProfileColor
             ProfileTab
-            ReplyColor
             SentCodeType
             StoriesPrivacyRules
             UserStatus
