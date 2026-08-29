@@ -63,6 +63,17 @@ DC_ENDPOINT_PROBE_TIMEOUT = 1.0
 ENDPOINT_CACHE_VERSION = 1
 ENDPOINT_CACHE_DIR_MODE = 0o700
 ENDPOINT_CACHE_FILE_MODE = 0o600
+ENDPOINT_CACHE_OPERATION_ERRORS = (OSError, NotImplementedError, TypeError)
+
+_OS_SUPPORTS_DIR_FD = getattr(os, "supports_dir_fd", ())
+_OS_SUPPORTS_FOLLOW_SYMLINKS = getattr(os, "supports_follow_symlinks", ())
+_ENDPOINT_CACHE_DIR_FD_SUPPORTED = all(
+    getattr(os, name, None) in _OS_SUPPORTS_DIR_FD
+    for name in ("open", "mkdir", "stat", "unlink")
+)
+_ENDPOINT_CACHE_FOLLOW_SYMLINKS_SUPPORTED = os.stat in _OS_SUPPORTS_FOLLOW_SYMLINKS
+_ENDPOINT_CACHE_REPLACE_DIR_FD_SUPPORTED = os.replace in _OS_SUPPORTS_DIR_FD
+_ENDPOINT_CACHE_RENAME_DIR_FD_SUPPORTED = os.rename in _OS_SUPPORTS_DIR_FD
 
 
 def get_dc_endpoint(dc_id: int, test_mode: bool) -> Tuple[str, int]:
@@ -145,16 +156,53 @@ def _is_owned_by_current_user(file_stat: os.stat_result) -> bool:
     return user_id is None or file_stat.st_uid == user_id
 
 
+def _endpoint_cache_capabilities_available(*, write: bool = False) -> bool:
+    required_flags = ("O_NOFOLLOW", "O_NONBLOCK", "O_DIRECTORY")
+    required_functions = ("open", "close", "mkdir", "fstat", "fchmod", "stat", "unlink")
+
+    if any(getattr(os, name, None) is None for name in required_flags):
+        return False
+
+    if any(not callable(getattr(os, name, None)) for name in required_functions):
+        return False
+
+    if not _ENDPOINT_CACHE_DIR_FD_SUPPORTED or not _ENDPOINT_CACHE_FOLLOW_SYMLINKS_SUPPORTED:
+        return False
+
+    if not (_ENDPOINT_CACHE_REPLACE_DIR_FD_SUPPORTED or _ENDPOINT_CACHE_RENAME_DIR_FD_SUPPORTED):
+        return False
+
+    if write:
+        if fcntl is None or not callable(getattr(fcntl, "flock", None)):
+            return False
+
+        if not callable(getattr(os, "fdopen", None)) or not callable(getattr(os, "fsync", None)):
+            return False
+
+    return True
+
+
 def _endpoint_cache_open_flags() -> Optional[int]:
     nofollow = getattr(os, "O_NOFOLLOW", None)
 
-    if nofollow is None or not hasattr(os, "fchmod"):
+    if nofollow is None or not callable(getattr(os, "fchmod", None)):
         return None
 
     return nofollow | getattr(os, "O_CLOEXEC", 0)
 
 
+def _is_safe_endpoint_cache_file(file_stat: os.stat_result) -> bool:
+    return (
+        stat.S_ISREG(file_stat.st_mode)
+        and file_stat.st_nlink == 1
+        and _is_owned_by_current_user(file_stat)
+    )
+
+
 def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
+    if not _endpoint_cache_capabilities_available():
+        return None
+
     secure_flags = _endpoint_cache_open_flags()
 
     if secure_flags is None:
@@ -172,14 +220,16 @@ def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
     if any(part in ("", ".", "..") for part in path_parts):
         return None
 
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | secure_flags
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NONBLOCK | secure_flags
 
     try:
         directory_fd = os.open(root, directory_flags)
-    except OSError:
+    except ENDPOINT_CACHE_OPERATION_ERRORS:
         return None
 
     try:
+        shared_sticky_ancestor = False
+
         for index, part in enumerate(path_parts):
             try:
                 child_fd = os.open(part, directory_flags, dir_fd=directory_fd)
@@ -203,7 +253,18 @@ def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
                 raise OSError(f"Unsafe endpoint cache directory: {path}")
 
             if index < len(path_parts) - 1:
-                if stat.S_IMODE(file_stat.st_mode) & 0o022:
+                mode = stat.S_IMODE(file_stat.st_mode)
+                owned_by_current_or_root = _is_owned_by_current_user(file_stat) or file_stat.st_uid == 0
+
+                if shared_sticky_ancestor and not owned_by_current_or_root:
+                    raise OSError(f"Unsafe endpoint cache parent owner: {path}")
+
+                if mode & 0o022:
+                    if file_stat.st_uid != 0 or not file_stat.st_mode & stat.S_ISVTX:
+                        raise OSError(f"Writable endpoint cache parent: {path}")
+
+                    shared_sticky_ancestor = True
+                elif not owned_by_current_or_root:
                     raise OSError(f"Writable endpoint cache parent: {path}")
             elif not _is_owned_by_current_user(file_stat):
                 raise OSError(f"Unsafe endpoint cache directory: {path}")
@@ -215,7 +276,7 @@ def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
                     raise OSError(f"Unable to secure endpoint cache directory: {path}")
 
         return directory_fd
-    except OSError:
+    except ENDPOINT_CACHE_OPERATION_ERRORS:
         os.close(directory_fd)
         return None
 
@@ -237,6 +298,9 @@ def _open_endpoint_cache_file(
     create: bool = False,
     non_blocking: bool = False,
 ) -> Optional[int]:
+    if not _endpoint_cache_capabilities_available(write=write or create):
+        return None
+
     secure_flags = _endpoint_cache_open_flags()
 
     if secure_flags is None:
@@ -263,17 +327,17 @@ def _open_endpoint_cache_file(
         except FileExistsError:
             try:
                 file_fd = os.open(name, flags, ENDPOINT_CACHE_FILE_MODE, dir_fd=directory_fd)
-            except OSError:
+            except ENDPOINT_CACHE_OPERATION_ERRORS:
                 return None
-        except OSError:
+        except ENDPOINT_CACHE_OPERATION_ERRORS:
             return None
-    except OSError:
+    except ENDPOINT_CACHE_OPERATION_ERRORS:
         return None
 
     try:
         file_stat = os.fstat(file_fd)
 
-        if not stat.S_ISREG(file_stat.st_mode) or not _is_owned_by_current_user(file_stat):
+        if not _is_safe_endpoint_cache_file(file_stat):
             raise OSError(f"Unsafe endpoint cache file: {name}")
 
         os.fchmod(file_fd, ENDPOINT_CACHE_FILE_MODE)
@@ -282,7 +346,7 @@ def _open_endpoint_cache_file(
             raise OSError(f"Unable to secure endpoint cache file: {name}")
 
         return file_fd
-    except OSError:
+    except ENDPOINT_CACHE_OPERATION_ERRORS:
         os.close(file_fd)
         return None
 
@@ -292,10 +356,10 @@ def _cache_file_is_safe_or_missing(directory_fd: int, name: str) -> bool:
         file_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     except FileNotFoundError:
         return True
-    except OSError:
+    except ENDPOINT_CACHE_OPERATION_ERRORS:
         return False
 
-    return stat.S_ISREG(file_stat.st_mode) and _is_owned_by_current_user(file_stat)
+    return _is_safe_endpoint_cache_file(file_stat)
 
 
 def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
@@ -304,7 +368,7 @@ def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
     if name is None:
         return _empty_endpoint_cache(), False
 
-    file_fd = _open_endpoint_cache_file(directory_fd, name)
+    file_fd = _open_endpoint_cache_file(directory_fd, name, non_blocking=True)
 
     if file_fd is None:
         if _cache_file_is_safe_or_missing(directory_fd, name):
@@ -312,7 +376,7 @@ def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
                 os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
             except FileNotFoundError:
                 return _empty_endpoint_cache(), True
-            except OSError:
+            except ENDPOINT_CACHE_OPERATION_ERRORS:
                 pass
 
         return _empty_endpoint_cache(), False
@@ -321,7 +385,7 @@ def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
         with os.fdopen(file_fd, "r", encoding="utf-8") as cache_file:
             file_fd = None
             data = json.load(cache_file)
-    except (OSError, json.JSONDecodeError):
+    except (*ENDPOINT_CACHE_OPERATION_ERRORS, json.JSONDecodeError):
         return _empty_endpoint_cache(), True
     finally:
         if file_fd is not None:
@@ -337,6 +401,9 @@ def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
 
 
 def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> Tuple[int, str]:
+    if not _endpoint_cache_capabilities_available(write=True):
+        raise OSError("Secure endpoint cache file creation is unavailable")
+
     secure_flags = _endpoint_cache_open_flags()
     name_prefix = f".{path.name}.{os.getpid()}."
 
@@ -350,8 +417,8 @@ def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> Tuple[int, str
 
         try:
             file_fd = os.open(name, flags, ENDPOINT_CACHE_FILE_MODE, dir_fd=directory_fd)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
+        except ENDPOINT_CACHE_OPERATION_ERRORS as e:
+            if isinstance(e, OSError) and e.errno == errno.EEXIST:
                 continue
 
             raise
@@ -359,7 +426,7 @@ def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> Tuple[int, str
         try:
             file_stat = os.fstat(file_fd)
 
-            if not stat.S_ISREG(file_stat.st_mode) or not _is_owned_by_current_user(file_stat):
+            if not _is_safe_endpoint_cache_file(file_stat):
                 raise OSError(f"Unsafe endpoint cache temporary file: {name}")
 
             os.fchmod(file_fd, ENDPOINT_CACHE_FILE_MODE)
@@ -368,12 +435,12 @@ def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> Tuple[int, str
                 raise OSError(f"Unable to secure endpoint cache temporary file: {name}")
 
             return file_fd, name
-        except OSError:
+        except ENDPOINT_CACHE_OPERATION_ERRORS:
             os.close(file_fd)
 
             try:
                 os.unlink(name, dir_fd=directory_fd)
-            except OSError:
+            except ENDPOINT_CACHE_OPERATION_ERRORS:
                 pass
 
             raise
@@ -382,16 +449,17 @@ def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> Tuple[int, str
 
 
 def _replace_endpoint_cache(temp_name: str, path: Path, directory_fd: int) -> None:
-    supports_dir_fd = getattr(os, "supports_dir_fd", ())
+    if not _endpoint_cache_capabilities_available(write=True):
+        raise OSError("Secure endpoint cache replacement is unavailable")
 
-    if os.replace in supports_dir_fd:
+    if _ENDPOINT_CACHE_REPLACE_DIR_FD_SUPPORTED:
         os.replace(
             temp_name,
             path.name,
             src_dir_fd=directory_fd,
             dst_dir_fd=directory_fd,
         )
-    elif os.rename in supports_dir_fd:
+    elif _ENDPOINT_CACHE_RENAME_DIR_FD_SUPPORTED:
         os.rename(
             temp_name,
             path.name,
@@ -403,6 +471,9 @@ def _replace_endpoint_cache(temp_name: str, path: Path, directory_fd: int) -> No
 
 
 def load_endpoint_cache(path: Optional[Path] = None) -> dict:
+    if not _endpoint_cache_capabilities_available():
+        return _empty_endpoint_cache()
+
     path = path or endpoint_cache_path()
     directory_fd = _open_endpoint_cache_dir(path.parent)
 
@@ -418,6 +489,10 @@ def load_endpoint_cache(path: Optional[Path] = None) -> dict:
 
 @contextmanager
 def endpoint_cache_write_lock(path: Path):
+    if not _endpoint_cache_capabilities_available(write=True):
+        yield None
+        return
+
     directory_fd = _open_endpoint_cache_dir(path.parent)
     lock_path = path.with_name(f"{path.name}.lock")
     lock_name = _cache_file_name(lock_path)
@@ -442,9 +517,8 @@ def endpoint_cache_write_lock(path: Path):
         return
 
     try:
-        if fcntl is not None:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
-    except OSError as e:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    except ENDPOINT_CACHE_OPERATION_ERRORS as e:
         log.debug("Unable to lock DC endpoint cache %s: %s", lock_path, e)
         os.close(lock_fd)
         os.close(directory_fd)
@@ -454,11 +528,10 @@ def endpoint_cache_write_lock(path: Path):
     try:
         yield directory_fd
     finally:
-        if fcntl is not None:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        except ENDPOINT_CACHE_OPERATION_ERRORS:
+            pass
 
         os.close(lock_fd)
         os.close(directory_fd)
@@ -501,7 +574,7 @@ def reorder_with_cached_endpoint(
 
 
 def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -> None:
-    if not cache_key:
+    if not cache_key or not _endpoint_cache_capabilities_available(write=True):
         return
 
     server_address, port = endpoint
@@ -545,9 +618,9 @@ def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -
 
             try:
                 os.fsync(directory_fd)
-            except OSError:
+            except ENDPOINT_CACHE_OPERATION_ERRORS:
                 pass
-        except OSError as e:
+        except ENDPOINT_CACHE_OPERATION_ERRORS as e:
             log.debug("Unable to update DC endpoint cache %s: %s", path, e)
         finally:
             if temp_fd is not None:
@@ -556,7 +629,7 @@ def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -
             if temp_name is not None:
                 try:
                     os.unlink(temp_name, dir_fd=directory_fd)
-                except OSError:
+                except ENDPOINT_CACHE_OPERATION_ERRORS:
                     pass
 
 

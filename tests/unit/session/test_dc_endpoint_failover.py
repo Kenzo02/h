@@ -8,6 +8,7 @@ import stat
 import subprocess
 import struct
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,6 +29,12 @@ DC5_CONFIG_ENDPOINT = "91.108.56.194"
 
 def encode_session_string(fmt, *values):
     return base64.urlsafe_b64encode(struct.pack(fmt, *values)).decode().rstrip("=")
+
+
+def stat_with_uid(file_stat, uid):
+    values = list(file_stat)
+    values[stat.ST_UID] = uid
+    return os.stat_result(values)
 
 
 def test_dc_endpoint_helper_keeps_test_mode_single_endpoint():
@@ -152,6 +159,229 @@ def test_endpoint_cache_rejects_non_directory_cache_parent(monkeypatch, tmp_path
     dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
 
     assert cache_parent.read_bytes() == b"keep-me"
+
+
+@pytest.mark.parametrize("operation", ["load", "update"])
+def test_endpoint_cache_rejects_fifo_without_blocking(operation, tmp_path: Path):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("FIFO files are unavailable")
+
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    cache_file = cache_dir / "dc_endpoints.json"
+    os.mkfifo(cache_file, 0o640)
+    before = cache_file.lstat()
+    repo_root = Path(__file__).parents[3]
+    script = """
+import sys
+from pathlib import Path
+
+import pyrogram.dc_options as dc_options
+
+operation = sys.argv[1]
+cache_path = Path(sys.argv[2])
+dc_options.endpoint_cache_path = lambda: cache_path
+
+if operation == "load":
+    assert dc_options.load_endpoint_cache(cache_path) == {"version": 1, "endpoints": {}}
+else:
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", ("149.154.171.5", 443))
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script, operation, str(cache_file)],
+        cwd=repo_root,
+        env={**os.environ, "PYTHONPATH": str(repo_root)},
+        capture_output=True,
+        text=True,
+        timeout=2,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    after = cache_file.lstat()
+
+    assert stat.S_ISFIFO(after.st_mode)
+    assert after.st_ino == before.st_ino
+    assert after.st_nlink == before.st_nlink
+    assert stat.S_IMODE(after.st_mode) == stat.S_IMODE(before.st_mode)
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_accepts_trusted_sticky_root_ancestor(monkeypatch, tmp_path: Path):
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    shared_dir.chmod(0o1777)
+    owner_dir = shared_dir / "owner"
+    owner_dir.mkdir(mode=0o700)
+    cache_file = owner_dir / "cache" / "dc_endpoints.json"
+    shared_inode = shared_dir.stat().st_ino
+    original_fstat = dc_options.os.fstat
+
+    def root_owned_shared_fstat(file_fd):
+        file_stat = original_fstat(file_fd)
+        return stat_with_uid(file_stat, 0) if file_stat.st_ino == shared_inode else file_stat
+
+    monkeypatch.setattr(dc_options.os, "fstat", root_owned_shared_fstat)
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert json.loads(cache_file.read_text())["endpoints"]["prod:v4:dc5:api"]["server_address"] == DC5_FALLBACK
+
+
+def test_endpoint_cache_rejects_unowned_descendant_after_sticky_ancestor(monkeypatch, tmp_path: Path):
+    if not hasattr(os, "getuid"):
+        pytest.skip("POSIX ownership is unavailable")
+
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    shared_dir.chmod(0o1777)
+    attacker_dir = shared_dir / "attacker"
+    attacker_dir.mkdir(mode=0o700)
+    cache_file = attacker_dir / "cache" / "dc_endpoints.json"
+    shared_inode = shared_dir.stat().st_ino
+    attacker_inode = attacker_dir.stat().st_ino
+    attacker_uid = os.getuid() + 1
+    original_fstat = dc_options.os.fstat
+
+    def simulated_ownership_fstat(file_fd):
+        file_stat = original_fstat(file_fd)
+
+        if file_stat.st_ino == shared_inode:
+            return stat_with_uid(file_stat, 0)
+
+        if file_stat.st_ino == attacker_inode:
+            return stat_with_uid(file_stat, attacker_uid)
+
+        return file_stat
+
+    monkeypatch.setattr(dc_options.os, "fstat", simulated_ownership_fstat)
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert not cache_file.parent.exists()
+
+
+def test_endpoint_cache_accepts_real_root_owned_sticky_tmp(monkeypatch):
+    shared_tmp = Path("/tmp").resolve()
+    shared_stat = shared_tmp.stat()
+
+    if shared_stat.st_uid != 0 or not shared_stat.st_mode & stat.S_ISVTX:
+        pytest.skip("No root-owned sticky /tmp is available")
+
+    with tempfile.TemporaryDirectory(prefix="kurigram-endpoint-", dir=shared_tmp) as directory:
+        cache_file = Path(directory) / "cache" / "dc_endpoints.json"
+        monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+        dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+        assert json.loads(cache_file.read_text())["endpoints"]["prod:v4:dc5:api"]["server_address"] == DC5_FALLBACK
+
+
+@pytest.mark.parametrize("error_type", [NotImplementedError, TypeError])
+@pytest.mark.parametrize("operation", ["load", "update"])
+def test_endpoint_cache_dir_fd_capability_errors_fail_closed(
+    monkeypatch,
+    tmp_path: Path,
+    error_type,
+    operation,
+):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    cache_file = cache_dir / "dc_endpoints.json"
+    original_bytes = b'{"version": 1, "endpoints": {}}'
+    cache_file.write_bytes(original_bytes)
+    cache_file.chmod(0o640)
+    original_mode = stat.S_IMODE(cache_file.stat().st_mode)
+    original_open = dc_options.os.open
+
+    def unsupported_dir_fd_open(path, flags, *args, **kwargs):
+        if kwargs.get("dir_fd") is not None:
+            raise error_type("dir_fd is unavailable")
+
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(dc_options.os, "open", unsupported_dir_fd_open)
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    if operation == "load":
+        assert dc_options.load_endpoint_cache(cache_file) == {"version": 1, "endpoints": {}}
+    else:
+        dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert cache_file.read_bytes() == original_bytes
+    assert stat.S_IMODE(cache_file.stat().st_mode) == original_mode
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_write_fails_closed_without_fcntl(monkeypatch, tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    cache_file = cache_dir / "dc_endpoints.json"
+    original_bytes = b'{"version": 1, "endpoints": {}}'
+    cache_file.write_bytes(original_bytes)
+    cache_file.chmod(0o640)
+    original_mode = stat.S_IMODE(cache_file.stat().st_mode)
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+    monkeypatch.setattr(dc_options, "fcntl", None)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert cache_file.read_bytes() == original_bytes
+    assert stat.S_IMODE(cache_file.stat().st_mode) == original_mode
+    assert not cache_file.with_name(f"{cache_file.name}.lock").exists()
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_rejects_cache_hardlink_without_touching_target(monkeypatch, tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    target = tmp_path / "target.json"
+    target.write_bytes(b"keep-me")
+    target.chmod(0o640)
+    target_mode = stat.S_IMODE(target.stat().st_mode)
+    cache_file = cache_dir / "dc_endpoints.json"
+    os.link(target, cache_file)
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    assert dc_options.load_endpoint_cache(cache_file) == {"version": 1, "endpoints": {}}
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert os.path.samefile(cache_file, target)
+    assert target.read_bytes() == b"keep-me"
+    assert stat.S_IMODE(target.stat().st_mode) == target_mode
+    assert target.stat().st_nlink == 2
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_rejects_lock_hardlink_without_touching_target(monkeypatch, tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    cache_file = cache_dir / "dc_endpoints.json"
+    cache_bytes = b'{"version": 1, "endpoints": {}}'
+    cache_file.write_bytes(cache_bytes)
+    cache_file.chmod(0o600)
+    target = tmp_path / "target.lock"
+    target.write_bytes(b"keep-me")
+    target.chmod(0o640)
+    target_mode = stat.S_IMODE(target.stat().st_mode)
+    lock_file = cache_file.with_name(f"{cache_file.name}.lock")
+    os.link(target, lock_file)
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert os.path.samefile(lock_file, target)
+    assert target.read_bytes() == b"keep-me"
+    assert stat.S_IMODE(target.stat().st_mode) == target_mode
+    assert target.stat().st_nlink == 2
+    assert cache_file.read_bytes() == cache_bytes
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
 
 
 def test_endpoint_cache_retries_existing_file_after_exclusive_create_race(monkeypatch, tmp_path: Path):
