@@ -133,6 +133,21 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
+    async def update_state(
+        self, update_state: Union[int, Tuple[int, int, int, int, int]] = object
+    ):
+        """Compatibility adapter for the pre-split update-state API."""
+        if update_state is object:
+            return [
+                (state.id, state.pts, state.qts, state.date, state.seq)
+                for state in await self.get_update_states()
+            ]
+
+        if isinstance(update_state, int):
+            return await self.delete_update_state(update_state)
+
+        return await self.set_update_state(UpdateState(*update_state))
+
     @abstractmethod
     async def get_peer_by_id(self, peer_id: int) -> Optional["raw.base.InputPeer"]:
         """Retrieve a peer by its ID.
