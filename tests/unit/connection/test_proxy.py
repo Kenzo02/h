@@ -268,6 +268,58 @@ def test_normalize_proxy_generic_url_form() -> None:
     assert proxy == SOCKS5Proxy(hostname="1.2.3.4", port=1080, username="user", password="pass")
 
 
+@pytest.mark.parametrize(("scheme", "port"), [("socks4", 1080), ("socks5", 1080), ("http", 8080)])
+def test_normalize_proxy_generic_url_decodes_credentials_once(scheme: str, port: int) -> None:
+    proxy = normalize_proxy(f"{scheme}://user%40example:pa%3Ass%25word@1.2.3.4:{port}")
+
+    assert proxy.username == "user@example"
+    assert proxy.password == "pa:ss%word"
+
+
+def test_normalize_proxy_generic_url_does_not_decode_credentials_twice() -> None:
+    proxy = normalize_proxy("socks5://user%2540example:pa%253Ass%2525word@1.2.3.4:1080")
+
+    assert proxy.username == "user%40example"
+    assert proxy.password == "pa%3Ass%25word"
+
+
+def test_normalize_proxy_dict_keeps_percent_credentials_raw() -> None:
+    proxy = normalize_proxy(
+        {
+            "scheme": "socks5",
+            "hostname": "1.2.3.4",
+            "port": 1080,
+            "username": "user%40example",
+            "password": "pa%3Ass%25word",
+        }
+    )
+
+    assert proxy == SOCKS5Proxy(
+        hostname="1.2.3.4",
+        port=1080,
+        username="user%40example",
+        password="pa%3Ass%25word",
+    )
+
+
+def test_normalize_proxy_object_keeps_percent_credentials_raw() -> None:
+    proxy = SOCKS5Proxy(
+        hostname="1.2.3.4",
+        port=1080,
+        username="user%40example",
+        password="pa%3Ass%25word",
+    )
+
+    assert normalize_proxy(proxy) is proxy
+
+
+def test_normalize_proxy_generic_url_without_credentials_keeps_none() -> None:
+    proxy = normalize_proxy("socks5://1.2.3.4:1080")
+
+    assert proxy.username is None
+    assert proxy.password is None
+
+
 def test_normalize_proxy_generic_url_form_without_port_raises() -> None:
     with pytest.raises(ValueError):
         normalize_proxy("socks5://1.2.3.4")

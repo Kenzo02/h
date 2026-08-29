@@ -1700,8 +1700,8 @@ class Client(Methods):
 
 class Cache:
     def __init__(self, capacity: int):
-        if capacity <= 0:
-            raise ValueError("capacity must be greater than 0")
+        if capacity < 0:
+            raise ValueError("capacity must be non-negative")
 
         self.capacity = capacity
         self._cache: OrderedDict[Any, Any] = OrderedDict()

@@ -46,6 +46,12 @@ class ChatPhoto(Object):
             Unique file identifier of big (640x640) chat photo, which is supposed to be the same over time and for
             different accounts. Can't be used to download or reuse the file.
 
+        has_animation (``bool``):
+            True, if animated profile picture is available for this user.
+
+        is_personal (``bool``):
+            True, if the photo is visible only for the current user.
+
         added_date (:py:obj:`~datetime.datetime`, *optional*):
             Date when the photo has been added.
 
@@ -64,6 +70,8 @@ class ChatPhoto(Object):
         small_photo_unique_id: str,
         big_file_id: str,
         big_photo_unique_id: str,
+        has_animation: Optional[bool] = None,
+        is_personal: Optional[bool] = None,
         added_date: Optional[datetime] = None,
         animation: Optional["types.AnimatedChatPhoto"] = None,
         sticker: Optional["types.ChatPhotoSticker"] = None,
@@ -74,6 +82,8 @@ class ChatPhoto(Object):
         self.small_photo_unique_id = small_photo_unique_id
         self.big_file_id = big_file_id
         self.big_photo_unique_id = big_photo_unique_id
+        self.has_animation = has_animation
+        self.is_personal = is_personal
         self.added_date = added_date
         self.animation = animation
         self.sticker = sticker
@@ -165,6 +175,8 @@ class ChatPhoto(Object):
             small_photo_unique_id=file_unique_id,
             big_file_id=big_file_id.encode(),
             big_photo_unique_id=file_unique_id,
+            has_animation=getattr(chat_photo, "has_video", None),
+            is_personal=getattr(chat_photo, "personal", None),
             added_date=utils.timestamp_to_datetime(getattr(chat_photo, "date", None)),
             animation=await types.AnimatedChatPhoto._parse(client, chat_photo),
             sticker=await types.ChatPhotoSticker._parse(

@@ -65,10 +65,12 @@ class AnimatedChatPhoto(Object):
         if not photo.video_sizes:
             return None
 
-        video_size = max(
-            [v for v in photo.video_sizes if isinstance(v, raw.types.VideoSize)],
-            key=lambda v: v.w * v.h,
-        )
+        video_sizes = [v for v in photo.video_sizes if isinstance(v, raw.types.VideoSize)]
+
+        if not video_sizes:
+            return None
+
+        video_size = max(video_sizes, key=lambda v: v.w * v.h)
 
         return AnimatedChatPhoto(
             length=video_size.w,

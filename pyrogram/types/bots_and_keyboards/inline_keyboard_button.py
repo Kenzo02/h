@@ -80,7 +80,7 @@ class InlineKeyboardButton(Object):
             the bot's username and the specified inline query in the input field.
             Not supported for messages sent in channel direct messages chats and on behalf of a business account.
 
-        copy_text (:obj:`~pyrogram.types.CopyTextButton`, *optional*):
+        copy_text (``str`` | :obj:`~pyrogram.types.CopyTextButton`, *optional*):
             A button that copies specified text to clipboard.
             Limited to 256 character.
 
@@ -102,20 +102,20 @@ class InlineKeyboardButton(Object):
     def __init__(
         self,
         text: str,
-        icon_custom_emoji_id: Optional[str] = None,
-        style: "enums.ButtonStyle" = enums.ButtonStyle.DEFAULT,
-        url: Optional[str] = None,
         callback_data: Optional[Union[str, bytes]] = None,
-        requires_password: Optional[bool] = None,
+        url: Optional[str] = None,
         web_app: Optional["types.WebAppInfo"] = None,
         login_url: Optional["types.LoginUrl"] = None,
         user_id: Optional[int] = None,
         switch_inline_query: Optional[str] = None,
         switch_inline_query_current_chat: Optional[str] = None,
-        switch_inline_query_chosen_chat: Optional["types.SwitchInlineQueryChosenChat"] = None,
-        copy_text: Optional["types.CopyTextButton"] = None,
         callback_game: Optional["types.CallbackGame"] = None,
+        requires_password: Optional[bool] = None,
         pay: Optional[bool] = None,
+        copy_text: Optional[Union[str, "types.CopyTextButton"]] = None,
+        icon_custom_emoji_id: Optional[str] = None,
+        style: "enums.ButtonStyle" = enums.ButtonStyle.DEFAULT,
+        switch_inline_query_chosen_chat: Optional["types.SwitchInlineQueryChosenChat"] = None,
         disabled: Optional[bool] = None,
     ):
         super().__init__()
@@ -286,12 +286,17 @@ class InlineKeyboardButton(Object):
                     bytes(self.callback_data, "utf-8")
                     if isinstance(self.callback_data, str)
                     else self.callback_data
-                )
+                ),
+                requires_password=self.requires_password,
             )
 
         if self.copy_text is not None:
             button_type = raw.types.InlineButtonTypeCopy(
-                copy_text=self.copy_text.text,
+                copy_text=(
+                    self.copy_text.text
+                    if isinstance(self.copy_text, types.CopyTextButton)
+                    else self.copy_text
+                ),
             )
 
         if self.disabled is not None:
@@ -318,8 +323,8 @@ class InlineKeyboardButton(Object):
                 peer_types.append(raw.types.InlineQueryPeerTypeBroadcast())
 
             button_type = raw.types.InlineButtonTypeSwitchInline(
-                query=self.switch_inline_query_current_chat,
-                peer_types=peer_types
+                query=self.switch_inline_query_chosen_chat.query,
+                peer_types=peer_types,
             )
 
         if self.switch_inline_query_current_chat is not None:
@@ -335,9 +340,9 @@ class InlineKeyboardButton(Object):
 
         if self.login_url is not None:
             button_type = raw.types.InputInlineButtonTypeUrlAuth(
-                url=self.url,
-                request_write_access=self.request_write_access,
-                fwd_text=self.forward_text,
+                url=self.login_url.url,
+                request_write_access=self.login_url.request_write_access,
+                fwd_text=self.login_url.forward_text,
                 bot=await client.resolve_peer(self.login_url.bot_username or "self"),
             )
 

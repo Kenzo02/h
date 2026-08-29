@@ -35,7 +35,7 @@ from typing import (
     TypedDict,
     Union,
 )
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from pyrogram.enums import ProxyScheme
 
@@ -489,8 +489,8 @@ def _parse_proxy_link(link: str) -> Proxy:
         scheme=scheme,
         hostname=parts.hostname,
         port=parts.port,
-        username=parts.username,
-        password=parts.password,
+        username=unquote(parts.username) if parts.username is not None else None,
+        password=unquote(parts.password) if parts.password is not None else None,
     )
 
 

@@ -2,12 +2,47 @@ import asyncio
 
 import pytest
 
-from pyrogram.client import Cache
+from pyrogram.client import Cache, Client
 
 
-def test_cache_rejects_non_positive_capacity():
-    with pytest.raises(ValueError, match="capacity must be greater than 0"):
-        Cache(0)
+def test_cache_rejects_negative_capacity():
+    with pytest.raises(ValueError, match="capacity must be non-negative"):
+        Cache(-1)
+
+
+@pytest.mark.asyncio
+async def test_zero_capacity_cache_is_a_no_op():
+    cache = Cache(0)
+
+    await cache.set("message", 1)
+
+    assert await cache.get("message") is None
+    assert len(cache) == 0
+    assert not cache
+    assert "capacity=0" in repr(cache)
+
+
+@pytest.mark.parametrize(
+    ("message_capacity", "topic_capacity"),
+    [(0, 1), (1, 0), (0, 0)],
+)
+def test_client_accepts_disabled_cache_capacity(
+    tmp_path,
+    message_capacity,
+    topic_capacity,
+):
+    client = Client(
+        "cache-disabled",
+        api_id=1,
+        api_hash="hash",
+        in_memory=True,
+        workdir=tmp_path,
+        max_message_cache_size=message_capacity,
+        max_topic_cache_size=topic_capacity,
+    )
+
+    assert client.message_cache.capacity == message_capacity
+    assert client.topic_cache.capacity == topic_capacity
 
 
 @pytest.mark.asyncio

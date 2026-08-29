@@ -19,6 +19,7 @@
 import base64
 import struct
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple, Union
 
@@ -35,8 +36,36 @@ class UpdateState:
     seq: Optional[int]
 
 
+_UPDATE_STATE_BRIDGE_STACK = ContextVar("storage_update_state_bridge_stack", default=())
+
+
 class Storage(ABC):
     """Abstract class for storage engines."""
+
+    _UPDATE_STATE_SPLIT_METHODS = (
+        "get_update_states",
+        "set_update_state",
+        "delete_update_state",
+    )
+
+    @abstractmethod
+    def _update_state_api(self):
+        """Keep subclasses abstract until one update-state API is implemented."""
+        raise NotImplementedError
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        has_legacy_api = getattr(cls, "update_state") is not Storage.update_state
+        has_split_api = all(
+            getattr(cls, method_name) is not getattr(Storage, method_name)
+            for method_name in Storage._UPDATE_STATE_SPLIT_METHODS
+        )
+
+        if has_legacy_api or has_split_api:
+            cls._update_state_api = None
+        else:
+            cls._update_state_api = Storage._update_state_api
 
     OLD_SESSION_STRING_FORMAT = ">B?256sI?"
     OLD_SESSION_STRING_FORMAT_64 = ">B?256sQ?"
@@ -97,7 +126,6 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     async def get_update_states(
         self, ids: Optional[Union[int, Iterable[int]]] = None
     ) -> List[UpdateState]:
@@ -111,9 +139,24 @@ class Storage(ABC):
         Returns:
             List of ``UpdateState``: On success, a list of update states is returned.
         """
-        raise NotImplementedError
+        if ids is None:
+            state_ids = None
+        else:
+            state_ids = (ids,) if isinstance(ids, int) else tuple(ids)
 
-    @abstractmethod
+            if not state_ids:
+                return []
+
+        states = [
+            self._coerce_update_state(state)
+            for state in await self._call_legacy_update_state()
+        ]
+
+        if state_ids is None:
+            return states
+
+        return [state for state in states if state.id in state_ids]
+
     async def set_update_state(self, update_state: Union[UpdateState, Iterable[UpdateState]]):
         """Set the update state of the current session.
 
@@ -121,9 +164,18 @@ class Storage(ABC):
             update_state (``UpdateState`` | Iterable of ``UpdateState``):
                 The update state or states to set.
         """
-        raise NotImplementedError
+        states = [update_state] if isinstance(update_state, UpdateState) else update_state
 
-    @abstractmethod
+        for state in states:
+            current = await self.get_update_states(state.id)
+
+            if current:
+                state = self._merge_update_state(current[0], state)
+
+            await self._call_legacy_update_state(
+                (state.id, state.pts, state.qts, state.date, state.seq)
+            )
+
     async def delete_update_state(self, state_id: Union[int, Iterable[int]]):
         """Delete the update state of the current session.
 
@@ -131,7 +183,50 @@ class Storage(ABC):
             state_id (``int`` | List of ``int``):
                 The id of the update state to delete.
         """
-        raise NotImplementedError
+        state_ids = (state_id,) if isinstance(state_id, int) else tuple(state_id)
+
+        for state_id in state_ids:
+            await self._call_legacy_update_state(state_id)
+
+    @staticmethod
+    def _coerce_update_state(state) -> UpdateState:
+        return state if isinstance(state, UpdateState) else UpdateState(*state)
+
+    @staticmethod
+    def _merge_update_state(current: UpdateState, update: UpdateState) -> UpdateState:
+        return UpdateState(
+            update.id,
+            update.pts if update.pts is not None else current.pts,
+            update.qts if update.qts is not None else current.qts,
+            update.date if update.date is not None else current.date,
+            update.seq if update.seq is not None else current.seq,
+        )
+
+    async def _call_legacy_update_state(
+        self, update_state: Union[int, Tuple[int, int, int, int, int]] = object
+    ):
+        update_state_method = getattr(type(self), "update_state")
+
+        if update_state_method is Storage.update_state:
+            raise NotImplementedError("No legacy update_state implementation found")
+
+        bridge_stack = _UPDATE_STATE_BRIDGE_STACK.get()
+        storage_id = id(self)
+
+        if storage_id in bridge_stack:
+            raise RuntimeError("Recursive update-state compatibility bridge")
+
+        token = _UPDATE_STATE_BRIDGE_STACK.set(bridge_stack + (storage_id,))
+
+        try:
+            update_state_method = getattr(self, "update_state")
+
+            if update_state is object:
+                return await update_state_method()
+
+            return await update_state_method(update_state)
+        finally:
+            _UPDATE_STATE_BRIDGE_STACK.reset(token)
 
     async def update_state(
         self, update_state: Union[int, Tuple[int, int, int, int, int]] = object
