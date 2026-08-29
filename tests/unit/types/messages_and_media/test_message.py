@@ -57,6 +57,12 @@ def message(*, saved_peer_id=None):
     )
 
 
+class CapturingClient:
+    async def edit_message_text(self, **kwargs):
+        self.edit_message_text_kwargs = kwargs
+        return "edited"
+
+
 @pytest.mark.asyncio
 async def test_a_direct_message_without_a_topic_parses():
     parsed = await types.Message._parse(
@@ -81,3 +87,37 @@ async def test_a_direct_message_with_a_topic_keeps_its_id():
     )
 
     assert parsed.direct_messages_topic_id == USER_ID
+
+
+@pytest.mark.asyncio
+async def test_message_edit_text_preserves_legacy_positional_forwarding():
+    client = CapturingClient()
+    bound_message = types.Message(client=client, id=1, chat=types.Chat(id=CHANNEL_ID))
+    reply_markup = object()
+    rich_message = object()
+
+    result = await bound_message.edit_text(
+        "updated",
+        None,
+        None,
+        None,
+        reply_markup,
+        True,
+        False,
+        rich_message=rich_message,
+    )
+
+    assert result == "edited"
+    assert client.edit_message_text_kwargs == {
+        "chat_id": CHANNEL_ID,
+        "message_id": 1,
+        "text": "updated",
+        "parse_mode": None,
+        "entities": None,
+        "link_preview_options": None,
+        "business_connection_id": None,
+        "reply_markup": reply_markup,
+        "rich_message": rich_message,
+        "show_caption_above_media": True,
+        "disable_web_page_preview": False,
+    }

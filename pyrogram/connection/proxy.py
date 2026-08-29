@@ -160,7 +160,7 @@ _DIALED_PROXY_TYPES: Final[Dict[ProxyScheme, Type[Union[SOCKS4Proxy, SOCKS5Proxy
 # The dict form accepted at the public boundary, Client(proxy={...}).
 
 class _SOCKS4ProxyDictRequired(TypedDict):
-    scheme: Literal["socks4"]
+    scheme: Literal["socks4", ProxyScheme.SOCKS4]
     hostname: str
     port: int
 
@@ -171,7 +171,7 @@ class SOCKS4ProxyDict(_SOCKS4ProxyDictRequired, total=False):
 
 
 class _SOCKS5ProxyDictRequired(TypedDict):
-    scheme: Literal["socks5"]
+    scheme: Literal["socks5", ProxyScheme.SOCKS5]
     hostname: str
     port: int
 
@@ -182,7 +182,7 @@ class SOCKS5ProxyDict(_SOCKS5ProxyDictRequired, total=False):
 
 
 class _HTTPProxyDictRequired(TypedDict):
-    scheme: Literal["http"]
+    scheme: Literal["http", ProxyScheme.HTTP]
     hostname: str
     port: int
 
@@ -193,14 +193,14 @@ class HTTPProxyDict(_HTTPProxyDictRequired, total=False):
 
 
 class MTProxyDict(TypedDict):
-    scheme: Literal["mtproxy"]
+    scheme: Literal["mtproxy", ProxyScheme.MTPROXY]
     hostname: str
     port: int
     secret: str
 
 
 class WebProxyDict(TypedDict):
-    scheme: Literal["web"]
+    scheme: Literal["web", ProxyScheme.WEB]
     hostname: str
     secret: str
 
@@ -395,7 +395,10 @@ def _build_dialed_proxy(
     return proxy_type(hostname=hostname, port=int(port), username=username, password=password)
 
 
-def _parse_scheme(scheme_value: Optional[str]) -> ProxyScheme:
+def _parse_scheme(scheme_value: Optional[Union[str, ProxyScheme]]) -> ProxyScheme:
+    if isinstance(scheme_value, ProxyScheme):
+        return scheme_value
+
     if not scheme_value:
         msg = "proxy dict must contain 'scheme'"
         raise ValueError(msg)

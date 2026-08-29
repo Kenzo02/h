@@ -27,6 +27,7 @@ from pyrogram.connection.proxy import (
     MTProxy,
     Proxy,
     ProxyAddress,
+    ProxyDict,
     SOCKS4Proxy,
     SOCKS5Proxy,
     WebProxy,
@@ -87,6 +88,40 @@ def test_normalize_proxy_scheme_is_case_insensitive() -> None:
     web_proxy = normalize_proxy({"scheme": "WEB", "hostname": "relay.example.com", "secret": PLAIN_SECRET_HEX})
 
     assert isinstance(web_proxy, WebProxy)
+
+
+@pytest.mark.parametrize(
+    ("proxy_config", "expected"),
+    [
+        pytest.param(
+            {"scheme": ProxyScheme.SOCKS4, "hostname": "1.2.3.4", "port": 1080},
+            SOCKS4Proxy(hostname="1.2.3.4", port=1080),
+            id="socks4",
+        ),
+        pytest.param(
+            {"scheme": ProxyScheme.SOCKS5, "hostname": "1.2.3.4", "port": 1080},
+            SOCKS5Proxy(hostname="1.2.3.4", port=1080),
+            id="socks5",
+        ),
+        pytest.param(
+            {"scheme": ProxyScheme.HTTP, "hostname": "1.2.3.4", "port": 8080},
+            HTTPProxy(hostname="1.2.3.4", port=8080),
+            id="http",
+        ),
+        pytest.param(
+            {"scheme": ProxyScheme.MTPROXY, "hostname": "1.2.3.4", "port": 443, "secret": PLAIN_SECRET_HEX},
+            MTProxy(hostname="1.2.3.4", port=443, secret=bytes.fromhex(PLAIN_SECRET_HEX)),
+            id="mtproxy",
+        ),
+        pytest.param(
+            {"scheme": ProxyScheme.WEB, "hostname": "relay.example.com", "secret": PLAIN_SECRET_HEX},
+            WebProxy(hostname="relay.example.com", secret=bytes.fromhex(PLAIN_SECRET_HEX)),
+            id="web",
+        ),
+    ],
+)
+def test_normalize_proxy_dict_accepts_proxy_scheme_enum(proxy_config: ProxyDict, expected: Proxy) -> None:
+    assert normalize_proxy(proxy_config) == expected
 
 
 def test_normalize_proxy_socks5_dict_form() -> None:

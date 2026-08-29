@@ -9264,10 +9264,10 @@ class Message(Object, Update):
         entities: Optional[List["types.MessageEntity"]] = None,
         link_preview_options: Optional["types.LinkPreviewOptions"] = None,
         reply_markup: Optional["types.InlineKeyboardMarkup"] = None,
-        rich_message: Optional["types.InputRichMessage"] = None,
 
         show_caption_above_media: Optional[bool] = None,
         disable_web_page_preview: Optional[bool] = None,
+        rich_message: Optional["types.InputRichMessage"] = None,
     ) -> "Message":
         """Shortcut for method :obj:`~pyrogram.Client.edit_message_text` will automatically fill method attributes:
 

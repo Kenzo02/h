@@ -69,6 +69,7 @@ from .found_contacts import FoundContacts
 from .global_privacy_settings import GlobalPrivacySettings
 from .group_call_member import GroupCallMember
 from .history_cleared import HistoryCleared
+from .invite_link_importer import InviteLinkImporter
 from .phone_call_ended import PhoneCallEnded
 from .phone_call_started import PhoneCallStarted
 from .privacy_rule import PrivacyRule
@@ -134,6 +135,7 @@ __all__ = [
     "GlobalPrivacySettings",
     "GroupCallMember",
     "HistoryCleared",
+    "InviteLinkImporter",
     "PhoneCallEnded",
     "PhoneCallStarted",
     "PrivacyRule",
