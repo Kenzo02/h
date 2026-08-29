@@ -244,14 +244,29 @@ def _open_endpoint_cache_file(
 
     flags = (os.O_RDWR if write else os.O_RDONLY) | secure_flags
 
-    if create:
-        flags |= os.O_CREAT
-
     if non_blocking:
         flags |= getattr(os, "O_NONBLOCK", 0)
 
     try:
         file_fd = os.open(name, flags, ENDPOINT_CACHE_FILE_MODE, dir_fd=directory_fd)
+    except FileNotFoundError:
+        if not create:
+            return None
+
+        try:
+            file_fd = os.open(
+                name,
+                flags | os.O_CREAT | os.O_EXCL,
+                ENDPOINT_CACHE_FILE_MODE,
+                dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            try:
+                file_fd = os.open(name, flags, ENDPOINT_CACHE_FILE_MODE, dir_fd=directory_fd)
+            except OSError:
+                return None
+        except OSError:
+            return None
     except OSError:
         return None
 

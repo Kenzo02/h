@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import errno
 import json
 import logging
 import os
@@ -153,6 +154,52 @@ def test_endpoint_cache_rejects_non_directory_cache_parent(monkeypatch, tmp_path
     assert cache_parent.read_bytes() == b"keep-me"
 
 
+def test_endpoint_cache_retries_existing_file_after_exclusive_create_race(monkeypatch, tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    lock_name = "dc_endpoints.json.lock"
+    lock_path = cache_dir / lock_name
+    lock_path.write_bytes(b"")
+    lock_path.chmod(0o600)
+    directory_fd = os.open(cache_dir, os.O_RDONLY | os.O_DIRECTORY)
+    original_open = os.open
+    open_flags = []
+
+    def racing_open(path, flags, *args, **kwargs):
+        if path == lock_name:
+            open_flags.append(flags)
+
+            if len(open_flags) == 1:
+                raise FileNotFoundError(errno.ENOENT, "simulated cache creation race")
+
+            if len(open_flags) == 2:
+                raise FileExistsError(errno.EEXIST, "simulated competing creator")
+
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(dc_options.os, "open", racing_open)
+
+    try:
+        file_fd = dc_options._open_endpoint_cache_file(
+            directory_fd,
+            lock_name,
+            write=True,
+            create=True,
+            non_blocking=True,
+        )
+    finally:
+        os.close(directory_fd)
+
+    assert file_fd is not None
+    os.close(file_fd)
+    assert open_flags[1] & os.O_CREAT
+    assert open_flags[1] & os.O_EXCL
+    assert not open_flags[2] & os.O_CREAT
+    assert not open_flags[2] & os.O_EXCL
+    assert all(flags & os.O_NOFOLLOW for flags in open_flags)
+    assert all(flags & os.O_NONBLOCK for flags in open_flags)
+
+
 def test_endpoint_cache_preserves_entries_for_same_user_processes(monkeypatch, tmp_path: Path):
     cache_file = tmp_path / "private" / "dc_endpoints.json"
 
@@ -172,11 +219,13 @@ def test_endpoint_cache_serializes_same_user_process_updates(tmp_path: Path):
     cache_file = tmp_path / "private" / "dc_endpoints.json"
     repo_root = Path(__file__).parents[3]
     update_script = """
+import logging
 import sys
 from pathlib import Path
 
 import pyrogram.dc_options as dc_options
 
+logging.basicConfig(level=logging.DEBUG)
 cache_path = Path(sys.argv[1])
 dc_options.endpoint_cache_path = lambda: cache_path
 dc_options.update_endpoint_cache(sys.argv[2], (sys.argv[3], 443))
@@ -193,6 +242,8 @@ dc_options.update_endpoint_cache(sys.argv[2], (sys.argv[3], 443))
             ],
             cwd=repo_root,
             env={**os.environ, "PYTHONPATH": str(repo_root)},
+            stderr=subprocess.PIPE,
+            text=True,
         )
         for cache_key, endpoint in (
             ("prod:v4:dc1:api", "149.154.175.50"),
@@ -201,6 +252,7 @@ dc_options.update_endpoint_cache(sys.argv[2], (sys.argv[3], 443))
     ]
 
     assert [process.wait() for process in processes] == [0, 0]
+    assert all("Unable to secure DC endpoint cache lock" not in process.stderr for process in processes)
 
     cache = dc_options.load_endpoint_cache(cache_file)
 
