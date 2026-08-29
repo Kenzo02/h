@@ -27,7 +27,7 @@ class SetDirectMessagesChatTopicIsMarkedAsUnread:
     async def set_direct_messages_chat_topic_is_marked_as_unread(
         self: "pyrogram.Client",
         chat_id: Union[int, str],
-        topic_id: int = None,
+        topic_id: int,
         is_marked_as_unread: bool = True
     ) -> int:
         """Change the marked as unread state of the topic in a channel direct messages chat administered by the current user.

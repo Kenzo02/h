@@ -33,19 +33,19 @@ class SendInlineBotResult:
         result_id: str,
         disable_notification: Optional[bool] = None,
         message_thread_id: Optional[int] = None,
-        direct_messages_topic_id: int = None,
+        direct_messages_topic_id: Optional[int] = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
-        paid_message_star_count: int = None,
-        schedule_date: datetime = None,
+        paid_message_star_count: Optional[int] = None,
+        schedule_date: Optional[datetime] = None,
 
         reply_to_message_id: Optional[int] = None,
-        reply_to_chat_id: Union[int, str] = None,
+        reply_to_chat_id: Optional[Union[int, str]] = None,
         reply_to_story_id: Optional[int] = None,
         quote_text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
         quote_offset: Optional[int] = None,
-    ) -> "types.Message":
+    ) -> Optional["types.Message"]:
         """Send an inline bot result.
         Bot results can be retrieved using :meth:`~pyrogram.Client.get_inline_bot_results`
 
@@ -85,7 +85,8 @@ class SendInlineBotResult:
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned or False if no message was sent.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise,
+            in case the server answered with no message, None is returned.
 
         Example:
             .. code-block:: python

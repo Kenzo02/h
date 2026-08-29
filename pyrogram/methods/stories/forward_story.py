@@ -29,21 +29,21 @@ class ForwardStory:
         chat_id: Union[int, str],
         from_chat_id: Union[int, str],
         story_id: int,
-        disable_notification: bool = None,
-        message_thread_id: int = None,
-        schedule_date: datetime = None,
-        repeat_period: int = None,
-        paid_message_star_count: int = None,
-        protect_content: bool = None,
-        allow_paid_broadcast: bool = None,
-        reply_parameters: "types.ReplyParameters" = None,
-        reply_markup: Union[
+        disable_notification: Optional[bool] = None,
+        message_thread_id: Optional[int] = None,
+        schedule_date: Optional[datetime] = None,
+        repeat_period: Optional[int] = None,
+        paid_message_star_count: Optional[int] = None,
+        protect_content: Optional[bool] = None,
+        allow_paid_broadcast: Optional[bool] = None,
+        reply_parameters: Optional["types.ReplyParameters"] = None,
+        reply_markup: Optional[Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
             "types.ReplyKeyboardRemove",
             "types.ForceReply"
-        ] = None,
-        message_effect_id: int = None
+        ]] = None,
+        message_effect_id: Optional[int] = None
     ) -> Optional["types.Message"]:
         """Forward story.
 
@@ -97,7 +97,8 @@ class ForwardStory:
                 Unique identifier of the message effect to be added to the message; for private chats only.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent story message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent story message is returned, otherwise,
+            in case the server answered with no message, None is returned.
 
         Example:
             .. code-block:: python

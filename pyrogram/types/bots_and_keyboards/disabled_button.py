@@ -16,21 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-class Client:
+from ..object import Object
+
+
+class DisabledButton(Object):
+    """This object represents a disabled button which does nothing.
+    Currently holds no information.
+    """
+
     def __init__(self):
-        self.me = User("username")
-
-    async def get_me(self):
-        return self.me
-
-
-class User:
-    def __init__(self, username: str = None):
-        self.username = username
-
-
-class Message:
-    def __init__(self, text: str = None, caption: str = None):
-        self.text = text
-        self.caption = caption
-        self.command = None
+        super().__init__()

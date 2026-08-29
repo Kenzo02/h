@@ -31,15 +31,15 @@ class CopyStory:
         chat_id: Union[int, str],
         from_chat_id: Union[int, str],
         story_id: int,
-        caption: str = None,
+        caption: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
-        caption_entities: List["types.MessageEntity"] = None,
-        period: int = None,
-        privacy: "enums.StoriesPrivacyRules" = None,
-        allowed_users: List[Union[int, str]] = None,
-        disallowed_users: List[Union[int, str]] = None,
-        protect_content: bool = None
-    ) -> "types.Story":
+        caption_entities: Optional[List["types.MessageEntity"]] = None,
+        period: Optional[int] = None,
+        privacy: Optional["enums.StoriesPrivacyRules"] = None,
+        allowed_users: Optional[List[Union[int, str]]] = None,
+        disallowed_users: Optional[List[Union[int, str]]] = None,
+        protect_content: Optional[bool] = None
+    ) -> Optional["types.Story"]:
         """Copy story.
 
         .. include:: /_includes/usable-by/users.rst
@@ -92,7 +92,9 @@ class CopyStory:
                 List of special entities that appear in the new caption, which can be specified instead of *parse_mode*.
 
         Returns:
-            :obj:`~pyrogram.types.Story`: On success, the copied story is returned.
+            :obj:`~pyrogram.types.Story` | ``None``: On success, the copied story is returned, otherwise,
+            in case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`,
+            None is returned.
 
         Example:
             .. code-block:: python

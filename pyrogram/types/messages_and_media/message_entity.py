@@ -80,17 +80,17 @@ class MessageEntity(Object):
     def __init__(
         self,
         *,
-        client: "pyrogram.Client" = None,
+        client: Optional["pyrogram.Client"] = None,
         type: "enums.MessageEntityType",
         offset: int,
         length: int,
-        url: str = None,
-        user: "types.User" = None,
-        language: str = None,
-        custom_emoji_id: str = None,
-        expandable: bool = None,
-        unix_time: int = None,
-        date_time_format: str = None
+        url: Optional[str] = None,
+        user: Optional["types.User"] = None,
+        language: Optional[str] = None,
+        custom_emoji_id: Optional[str] = None,
+        expandable: Optional[bool] = None,
+        unix_time: Optional[int] = None,
+        date_time_format: Optional[str] = None
     ):
         super().__init__(client)
 
@@ -106,7 +106,7 @@ class MessageEntity(Object):
         self.date_time_format = date_time_format
 
     @staticmethod
-    def _parse(client, entity: "raw.base.MessageEntity", users: dict) -> Optional["MessageEntity"]:
+    async def _parse(client, entity: "raw.base.MessageEntity", users: dict) -> "MessageEntity":
         user_id = None
         unix_time = None
         date_time_format = None
@@ -148,7 +148,7 @@ class MessageEntity(Object):
             offset=entity.offset,
             length=entity.length,
             url=getattr(entity, "url", None),
-            user=types.User._parse(client, users.get(user_id, None)),
+            user=await types.User._parse(client, users.get(user_id, None)),
             language=getattr(entity, "language", None),
             custom_emoji_id=str(custom_emoji_id) if custom_emoji_id else None,
             expandable=getattr(entity, "collapsed", None),

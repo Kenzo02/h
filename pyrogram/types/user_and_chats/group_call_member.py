@@ -17,7 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 import pyrogram
 from pyrogram import raw, types, utils
@@ -77,22 +77,22 @@ class GroupCallMember(Object):
     def __init__(
         self,
         *,
-        client: "pyrogram.Client" = None,
-        chat: "types.Chat" = None,
-        date: datetime = None,
-        active_date: datetime = None,
-        volume: int = None,
-        can_self_unmute: bool = None,
-        is_muted: bool = None,
-        is_left: bool = None,
-        is_just_joined: bool = None,
-        is_muted_by_you: bool = None,
-        is_volume_by_admin: bool = None,
-        is_self: bool = None,
-        is_video_joined: bool = None,
-        is_hand_raised: bool = None,
-        is_video_enabled: bool = None,
-        is_screen_sharing_enabled: bool = None
+        client: Optional["pyrogram.Client"] = None,
+        chat: Optional["types.Chat"] = None,
+        date: Optional[datetime] = None,
+        active_date: Optional[datetime] = None,
+        volume: Optional[int] = None,
+        can_self_unmute: Optional[bool] = None,
+        is_muted: Optional[bool] = None,
+        is_left: Optional[bool] = None,
+        is_just_joined: Optional[bool] = None,
+        is_muted_by_you: Optional[bool] = None,
+        is_volume_by_admin: Optional[bool] = None,
+        is_self: Optional[bool] = None,
+        is_video_joined: Optional[bool] = None,
+        is_hand_raised: Optional[bool] = None,
+        is_video_enabled: Optional[bool] = None,
+        is_screen_sharing_enabled: Optional[bool] = None
     ):
         super().__init__(client)
 
@@ -113,7 +113,7 @@ class GroupCallMember(Object):
         self.is_screen_sharing_enabled = is_screen_sharing_enabled
 
     @staticmethod
-    def _parse(
+    async def _parse(
         client: "pyrogram.Client",
         member: "raw.types.GroupCallParticipant",
         users: Dict[int, "raw.base.User"],
@@ -122,7 +122,7 @@ class GroupCallMember(Object):
         peer = member.peer
         peer_id = utils.get_raw_peer_id(peer)
 
-        parsed_chat = types.Chat._parse_chat(
+        parsed_chat = await types.Chat._parse_chat(
             client,
             users[peer_id] if isinstance(peer, raw.types.PeerUser) else chats[peer_id],
         )

@@ -17,6 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
+from typing import Optional
 
 from pyrogram import raw, types, utils
 from ..object import Object
@@ -57,11 +58,11 @@ class CheckedGiftCode(Object):
         date: datetime,
         month_count: int,
         day_count: int,
-        via_giveaway: bool = None,
-        from_chat: "types.Chat" = None,
-        winner: "types.User" = None,
-        giveaway_message_id: int = None,
-        used_date: datetime = None
+        via_giveaway: Optional[bool] = None,
+        from_chat: Optional["types.Chat"] = None,
+        winner: Optional["types.User"] = None,
+        giveaway_message_id: Optional[int] = None,
+        used_date: Optional[datetime] = None
     ):
         super().__init__()
 
@@ -75,16 +76,16 @@ class CheckedGiftCode(Object):
         self.used_date = used_date
 
     @staticmethod
-    def _parse(client, checked_gift_code: "raw.types.payments.CheckedGiftCode", users, chats):
+    async def _parse(client, checked_gift_code: "raw.types.payments.CheckedGiftCode", users, chats):
         from_chat = None
         winner = None
 
         if getattr(checked_gift_code, "from_id", None):
-            from_chat = types.Chat._parse_chat(
+            from_chat = await types.Chat._parse_chat(
                 client, chats.get(utils.get_raw_peer_id(checked_gift_code.from_id))
             )
         if getattr(checked_gift_code, "to_id", None):
-            winner = types.User._parse(client, users.get(checked_gift_code.to_id))
+            winner = await types.User._parse(client, users.get(checked_gift_code.to_id))
 
         return CheckedGiftCode(
             date=utils.timestamp_to_datetime(checked_gift_code.date),

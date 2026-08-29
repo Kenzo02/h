@@ -119,8 +119,10 @@ class Message(Object, Update):
         from_offline (``bool``, *optional*):
             True, if the message was sent by an implicit action, for example, as an away or a greeting business message, or as a scheduled message.
 
-        topic (:obj:`~pyrogram.types.ForumTopic`, *optional*):
+        topic (:obj:`~pyrogram.types.ForumTopic` | :obj:`~pyrogram.types.DirectMessagesTopic`, *optional*):
             Topic the message belongs to.
+            A :obj:`~pyrogram.types.ForumTopic` in a forum, a :obj:`~pyrogram.types.DirectMessagesTopic` in a channel
+            direct messages chat.
 
         forward_origin (:obj:`~pyrogram.types.MessageOrigin`, *optional*):
             Information about the original message for forwarded messages.
@@ -634,7 +636,7 @@ class Message(Object, Update):
     def __init__(
         self,
         *,
-        client: "pyrogram.Client" = None,
+        client: Optional["pyrogram.Client"] = None,
         id: int,
         from_user: Optional["types.User"] = None,
         sender_chat: Optional["types.Chat"] = None,
@@ -652,7 +654,7 @@ class Message(Object, Update):
         show_caption_above_media: Optional[bool] = None,
         external_reply: Optional["types.ExternalReplyInfo"] = None,
         quote: Optional["types.TextQuote"] = None,
-        topic: Optional["types.ForumTopic"] = None,
+        topic: Optional[Union["types.ForumTopic", "types.DirectMessagesTopic"]] = None,
         forward_origin: Optional["types.MessageOrigin"] = None,
         message_thread_id: Optional[int] = None,
         direct_messages_topic_id: Optional[int] = None,
@@ -989,8 +991,8 @@ class Message(Object, Update):
         users: Dict[int, "raw.base.User"],
         chats: Dict[int, "raw.base.Chat"],
         replies: int = 1,
-        business_connection_id: str = None,
-        raw_reply_to_message: "raw.base.Message" = None
+        business_connection_id: Optional[str] = None,
+        raw_reply_to_message: Optional["raw.base.Message"] = None
     ) -> "Message":
         from_id = utils.get_raw_peer_id(message.from_id)
         peer_id = utils.get_raw_peer_id(message.peer_id)
@@ -1011,9 +1013,9 @@ class Message(Object, Update):
                 else:
                     users.update({i.id: i for i in r})
 
-        from_user = types.User._parse(client, users.get(from_id or peer_id))
-        sender_chat = types.Chat._parse(client, message, users, chats, is_chat=False) if not from_user else None
-        chat = types.Chat._parse(client, message, users, chats, is_chat=True)
+        from_user = await types.User._parse(client, users.get(from_id or peer_id))
+        sender_chat = await types.Chat._parse(client, message, users, chats, is_chat=False) if not from_user else None
+        chat = await types.Chat._parse(client, message, users, chats, is_chat=True)
 
         action = message.action
 
@@ -1116,7 +1118,7 @@ class Message(Object, Update):
             migrate_from_chat_id = -action.chat_id
         elif isinstance(action, raw.types.MessageActionChatAddUser):
             service_type = enums.MessageServiceType.NEW_CHAT_MEMBERS
-            new_chat_members = [types.User._parse(client, users[i]) for i in action.users]
+            new_chat_members = [await types.User._parse(client, users[i]) for i in action.users]
             chat_join_type = enums.ChatJoinType.BY_ADD
         elif isinstance(action, raw.types.MessageActionChatCreate):
             service_type = enums.MessageServiceType.GROUP_CHAT_CREATED
@@ -1126,13 +1128,13 @@ class Message(Object, Update):
             delete_chat_photo = True
         elif isinstance(action, raw.types.MessageActionChatDeleteUser):
             service_type = enums.MessageServiceType.LEFT_CHAT_MEMBER
-            left_chat_member = types.User._parse(client, users[action.user_id])
+            left_chat_member = await types.User._parse(client, users[action.user_id])
         elif isinstance(action, raw.types.MessageActionNewCreatorPending):
             service_type = enums.MessageServiceType.CHAT_OWNER_LEFT
-            chat_owner_left = types.ChatOwnerLeft._parse(client, action, users)
+            chat_owner_left = await types.ChatOwnerLeft._parse(client, action, users)
         elif isinstance(action, raw.types.MessageActionChangeCreator):
             service_type = enums.MessageServiceType.CHAT_OWNER_CHANGED
-            chat_owner_changed = types.ChatOwnerChanged._parse(client, action, users)
+            chat_owner_changed = await types.ChatOwnerChanged._parse(client, action, users)
         elif isinstance(action, raw.types.MessageActionChatEditPhoto):
             service_type = enums.MessageServiceType.NEW_CHAT_PHOTO
             new_chat_photo = types.Photo._parse(client, action.photo)
@@ -1141,11 +1143,11 @@ class Message(Object, Update):
             new_chat_title = action.title
         elif isinstance(action, raw.types.MessageActionChatJoinedByLink):
             service_type = enums.MessageServiceType.NEW_CHAT_MEMBERS
-            new_chat_members = [types.User._parse(client, users[utils.get_raw_peer_id(message.from_id)])]
+            new_chat_members = [await types.User._parse(client, users[utils.get_raw_peer_id(message.from_id)])]
             chat_join_type = enums.ChatJoinType.BY_LINK
         elif isinstance(action, raw.types.MessageActionChatJoinedByRequest):
             service_type = enums.MessageServiceType.NEW_CHAT_MEMBERS
-            new_chat_members = [types.User._parse(client, users[utils.get_raw_peer_id(message.from_id)])]
+            new_chat_members = [await types.User._parse(client, users[utils.get_raw_peer_id(message.from_id)])]
             chat_join_type = enums.ChatJoinType.BY_REQUEST
         elif isinstance(action, raw.types.MessageActionChatMigrateTo):
             service_type = enums.MessageServiceType.MIGRATE_TO_CHAT_ID
@@ -1159,7 +1161,7 @@ class Message(Object, Update):
         # TODO: elif isinstance(action, raw.types.MessageActionEmpty):
         elif isinstance(action, raw.types.MessageActionGeoProximityReached):
             service_type = enums.MessageServiceType.PROXIMITY_ALERT_TRIGGERED
-            proximity_alert_triggered = types.ProximityAlertTriggered._parse(client, action, users, chats)
+            proximity_alert_triggered = await types.ProximityAlertTriggered._parse(client, action, users, chats)
         elif isinstance(action, raw.types.MessageActionGiftCode):
             service_type = enums.MessageServiceType.PREMIUM_GIFT_CODE
             premium_gift_code = await types.PremiumGiftCode._parse(client, action, users, chats)
@@ -1196,7 +1198,7 @@ class Message(Object, Update):
             giveaway_completed = await types.GiveawayCompleted._parse(
                 client,
                 action,
-                types.Chat._parse(client, message, users, chats, is_chat=True),
+                await types.Chat._parse(client, message, users, chats, is_chat=True),
                 getattr(
                     getattr(
                         message,
@@ -1225,7 +1227,7 @@ class Message(Object, Update):
             history_cleared = types.HistoryCleared()
         elif isinstance(action, raw.types.MessageActionInviteToGroupCall):
             service_type = enums.MessageServiceType.VIDEO_CHAT_MEMBERS_INVITED
-            video_chat_members_invited = types.VideoChatMembersInvited._parse(client, action, users)
+            video_chat_members_invited = await types.VideoChatMembersInvited._parse(client, action, users)
         elif isinstance(action, (raw.types.MessageActionPaymentSent, raw.types.MessageActionPaymentSentMe)):
             service_type = enums.MessageServiceType.SUCCESSFUL_PAYMENT
             successful_payment = types.SuccessfulPayment._parse(action)
@@ -1259,11 +1261,11 @@ class Message(Object, Update):
             service_type = enums.MessageServiceType.GIVEAWAY_PRIZE_STARS
             giveaway_prize_stars = await types.GiveawayPrizeStars._parse(client, action, chats)
         elif isinstance(action, (raw.types.MessageActionRequestedPeer, raw.types.MessageActionRequestedPeerSentMe)):
-            _requested_chat = types.ChatShared._parse(client, action, chats)
+            _requested_chat = await types.ChatShared._parse(client, action, chats)
 
             if _requested_chat is None:
                 service_type = enums.MessageServiceType.USERS_SHARED
-                users_shared = types.UsersShared._parse(client, action, users)
+                users_shared = await types.UsersShared._parse(client, action, users)
             else:
                 service_type = enums.MessageServiceType.CHAT_SHARED
                 chat_shared = _requested_chat
@@ -1359,11 +1361,11 @@ class Message(Object, Update):
             checklist_tasks_done = types.ChecklistTasksDone._parse(message)
         elif isinstance(action, raw.types.MessageActionTodoAppendTasks):
             service_type = enums.MessageServiceType.CHECKLIST_TASKS_ADDED
-            checklist_tasks_added = types.ChecklistTasksAdded._parse(client, message, users, chats)
+            checklist_tasks_added = await types.ChecklistTasksAdded._parse(client, message, users, chats)
         elif isinstance(action, raw.types.MessageActionChangeCommunity):
             if action.community_id:
                 service_type = enums.MessageServiceType.COMMUNITY_CHAT_ADDED
-                community_chat_added = types.CommunityChatAdded._parse(client, action, chats)
+                community_chat_added = await types.CommunityChatAdded._parse(client, action, chats)
             else:
                 service_type = enums.MessageServiceType.COMMUNITY_CHAT_REMOVED
                 community_chat_removed = types.CommunityChatRemoved()
@@ -1446,7 +1448,7 @@ class Message(Object, Update):
             checklist_tasks_added=checklist_tasks_added,
             community_chat_added=community_chat_added,
             community_chat_removed=community_chat_removed,
-            reactions=types.MessageReactions._parse(client, message.reactions, users, chats),
+            reactions=await types.MessageReactions._parse(client, message.reactions, users, chats),
             business_connection_id=business_connection_id,
             raw=message,
             client=client
@@ -1466,7 +1468,7 @@ class Message(Object, Update):
 
         if isinstance(action, raw.types.MessageActionGameScore):
             parsed_message.service = enums.MessageServiceType.GAME_HIGH_SCORE
-            parsed_message.game_high_score = types.GameHighScore._parse_action(client, message, users)
+            parsed_message.game_high_score = await types.GameHighScore._parse_action(client, message, users)
         elif isinstance(action, raw.types.MessageActionPinMessage):
             parsed_message.service = enums.MessageServiceType.PINNED_MESSAGE
             parsed_message.pinned_message = parsed_message.reply_to_message # Why...
@@ -1477,7 +1479,7 @@ class Message(Object, Update):
             parsed_message.service = enums.MessageServiceType.POLL_OPTION_DELETED
             parsed_message.poll_option_deleted = await types.PollOptionDeleted._parse(client, parsed_message.reply_to_message, action)
 
-        client.message_cache[(parsed_message.chat.id, parsed_message.id)] = parsed_message
+        await client.message_cache.set((parsed_message.chat.id, parsed_message.id), parsed_message)
 
         return parsed_message
 
@@ -1492,7 +1494,7 @@ class Message(Object, Update):
         replies: int = 1,
         business_connection_id: Optional[str] = None,
         guest_query_id: Optional[str] = None,
-        raw_reply_to_message: "raw.base.Message" = None
+        raw_reply_to_message: Optional["raw.base.Message"] = None
     ) -> "Message":
         from_id = utils.get_raw_peer_id(message.from_id)
         peer_id = utils.get_raw_peer_id(message.peer_id)
@@ -1513,14 +1515,14 @@ class Message(Object, Update):
                 else:
                     users.update({i.id: i for i in r})
 
-        from_user = types.User._parse(client, users.get(from_id or peer_id))
-        sender_chat = types.Chat._parse(client, message, users, chats, is_chat=False) if not from_user else None
-        chat = types.Chat._parse(client, message, users, chats, is_chat=True)
+        from_user = await types.User._parse(client, users.get(from_id or peer_id))
+        sender_chat = await types.Chat._parse(client, message, users, chats, is_chat=False) if not from_user else None
+        chat = await types.Chat._parse(client, message, users, chats, is_chat=True)
 
         entities = types.List(
             filter(
                 lambda x: x is not None,
-                [types.MessageEntity._parse(client, entity, users) for entity in message.entities]
+                [await types.MessageEntity._parse(client, entity, users) for entity in message.entities]
             )
         )
 
@@ -1528,7 +1530,7 @@ class Message(Object, Update):
         forward_origin = None
 
         if forward_header:
-            forward_origin = types.MessageOrigin._parse(
+            forward_origin = await types.MessageOrigin._parse(
                 client,
                 forward_header,
                 users,
@@ -1598,7 +1600,7 @@ class Message(Object, Update):
                 game = types.Game._parse(client, media)
                 media_type = enums.MessageMediaType.GAME
             elif isinstance(media, raw.types.MessageMediaGiveaway):
-                giveaway = types.Giveaway._parse(client, media, chats)
+                giveaway = await types.Giveaway._parse(client, media, chats)
                 media_type = enums.MessageMediaType.GIVEAWAY
             elif isinstance(media, raw.types.MessageMediaGiveawayResults):
                 giveaway_winners = await types.GiveawayWinners._parse(client, media, users, chats)
@@ -1662,7 +1664,7 @@ class Message(Object, Update):
                 poll = await types.Poll._parse(
                     client,
                     media,
-                    description=types.FormattedText._parse(
+                    description=await types.FormattedText._parse(
                         client,
                         raw.types.TextWithEntities(
                             text=message.message,
@@ -1681,7 +1683,7 @@ class Message(Object, Update):
                 media_type = enums.MessageMediaType.PAID_MEDIA
             elif isinstance(media, raw.types.MessageMediaToDo):
                 media_type = enums.MessageMediaType.CHECKLIST
-                checklist = types.Checklist._parse(client, media, users, chats)
+                checklist = await types.Checklist._parse(client, media, users, chats)
             else:
                 media_type = enums.MessageMediaType.UNSUPPORTED
                 media = None
@@ -1706,7 +1708,7 @@ class Message(Object, Update):
             else:
                 reply_markup = None
 
-        reactions = types.MessageReactions._parse(client, message.reactions, users, chats)
+        reactions = await types.MessageReactions._parse(client, message.reactions, users, chats)
 
         parsed_message = Message(
             id=message.id,
@@ -1717,7 +1719,7 @@ class Message(Object, Update):
             chat=chat,
             from_user=from_user,
             sender_chat=sender_chat,
-            sender_business_bot=types.User._parse(
+            sender_business_bot=await types.User._parse(
                 client,
                 users.get(getattr(message, "via_business_bot_id", None))
             ),
@@ -1782,7 +1784,7 @@ class Message(Object, Update):
             views=message.views,
             forwards=message.forwards,
             sender_boost_count=message.from_boosts_applied,
-            via_bot=types.User._parse(client, users.get(message.via_bot_id)),
+            via_bot=await types.User._parse(client, users.get(message.via_bot_id)),
             outgoing=message.out,
             business_connection_id=business_connection_id,
             reply_markup=reply_markup,
@@ -1796,13 +1798,13 @@ class Message(Object, Update):
                 types.RestrictionReason._parse(reason)
                 for reason in getattr(message, "restriction_reason", [])
             ) or None,
-            fact_check=types.FactCheck._parse(client, message.factcheck, users),
+            fact_check=await types.FactCheck._parse(client, message.factcheck, users),
             suggested_post_info=types.SuggestedPostInfo._parse(message.suggested_post),
             channel_post=message.post,
             repeat_period=message.schedule_repeat_period,
             summary_language_code=message.summary_from_language,
-            guest_bot_caller_user=types.User._parse(client, users.get(utils.get_raw_peer_id(message.guestchat_via_from))),
-            guest_bot_caller_chat=types.Chat._parse_chat(client, chats.get(utils.get_raw_peer_id(message.guestchat_via_from))),
+            guest_bot_caller_user=await types.User._parse(client, users.get(utils.get_raw_peer_id(message.guestchat_via_from))),
+            guest_bot_caller_chat=await types.Chat._parse_chat(client, chats.get(utils.get_raw_peer_id(message.guestchat_via_from))),
             raw=message,
             client=client
         )
@@ -1833,16 +1835,16 @@ class Message(Object, Update):
             )
 
         if topics:
-            parsed_message.topic = types.ForumTopic._parse(
+            parsed_message.topic = await types.ForumTopic._parse(
                 client,
                 topics.get(parsed_message.message_thread_id), users=users, chats=chats
             )
 
             if parsed_message.topic:
-                client.topic_cache[(parsed_message.chat.id, parsed_message.topic.id)] = parsed_message.topic
+                await client.topic_cache.set((parsed_message.chat.id, parsed_message.topic.id), parsed_message.topic)
 
         if not parsed_message.topic and parsed_message.chat.is_forum:
-            parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.message_thread_id)]
+            parsed_topic = await client.topic_cache.get((parsed_message.chat.id, parsed_message.message_thread_id))
 
             if parsed_topic:
                 parsed_message.topic = parsed_topic
@@ -1854,14 +1856,14 @@ class Message(Object, Update):
                     )
 
                     if parsed_message.topic:
-                        client.topic_cache[(parsed_message.chat.id, parsed_message.topic.id)] = parsed_message.topic
+                        await client.topic_cache.set((parsed_message.chat.id, parsed_message.topic.id), parsed_message.topic)
                 except (ChannelPrivate, ChannelForumMissing):
                     pass
 
-        if chat.type == enums.ChatType.DIRECT:
+        if chat.type == enums.ChatType.DIRECT and message.saved_peer_id:
             parsed_message.direct_messages_topic_id = message.saved_peer_id.user_id
 
-            parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.direct_messages_topic_id)]
+            parsed_topic = await client.topic_cache.get((parsed_message.chat.id, parsed_message.direct_messages_topic_id))
 
             if parsed_topic:
                 parsed_message.topic = parsed_topic
@@ -1873,12 +1875,12 @@ class Message(Object, Update):
                     )
 
                     if parsed_message.topic:
-                        client.topic_cache[(parsed_message.chat.id, parsed_message.topic.id)] = parsed_message.topic
+                        await client.topic_cache.set((parsed_message.chat.id, parsed_message.topic.id), parsed_message.topic)
                 except (ChannelPrivate, ChatAdminRequired):
                     pass
 
         if not parsed_message.poll:  # Do not cache poll messages
-            client.message_cache[(parsed_message.chat.id, parsed_message.id)] = parsed_message
+            await client.message_cache.set((parsed_message.chat.id, parsed_message.id), parsed_message)
 
         return parsed_message
 
@@ -1909,14 +1911,14 @@ class Message(Object, Update):
                 else:
                     users.update({i.id: i for i in r})
 
-        from_user = types.User._parse(client, users.get(from_id or peer_id))
-        sender_chat = types.Chat._parse(client, message, users, chats, is_chat=False) if not from_user else None
-        chat = types.Chat._parse(client, message, users, chats, is_chat=True)
+        from_user = await types.User._parse(client, users.get(from_id or peer_id))
+        sender_chat = await types.Chat._parse(client, message, users, chats, is_chat=False) if not from_user else None
+        chat = await types.Chat._parse(client, message, users, chats, is_chat=True)
 
         entities = types.List(
             filter(
                 lambda x: x is not None,
-                [types.MessageEntity._parse(client, entity, users) for entity in message.entities]
+                [await types.MessageEntity._parse(client, entity, users) for entity in message.entities]
             )
         )
 
@@ -1983,7 +1985,7 @@ class Message(Object, Update):
                 game = types.Game._parse(client, media)
                 media_type = enums.MessageMediaType.GAME
             elif isinstance(media, raw.types.MessageMediaGiveaway):
-                giveaway = types.Giveaway._parse(client, media, chats)
+                giveaway = await types.Giveaway._parse(client, media, chats)
                 media_type = enums.MessageMediaType.GIVEAWAY
             elif isinstance(media, raw.types.MessageMediaGiveawayResults):
                 giveaway_winners = await types.GiveawayWinners._parse(client, media, users, chats)
@@ -2047,7 +2049,7 @@ class Message(Object, Update):
                 poll = await types.Poll._parse(
                     client,
                     media,
-                    description=types.FormattedText._parse(
+                    description=await types.FormattedText._parse(
                         client,
                         raw.types.TextWithEntities(
                             text=message.message,
@@ -2066,7 +2068,7 @@ class Message(Object, Update):
                 media_type = enums.MessageMediaType.PAID_MEDIA
             elif isinstance(media, raw.types.MessageMediaToDo):
                 media_type = enums.MessageMediaType.CHECKLIST
-                checklist = types.Checklist._parse(client, media, users, chats)
+                checklist = await types.Checklist._parse(client, media, users, chats)
             else:
                 media_type = enums.MessageMediaType.UNSUPPORTED
                 media = None
@@ -2097,7 +2099,7 @@ class Message(Object, Update):
             chat=chat,
             from_user=from_user,
             sender_chat=sender_chat,
-            receiver_user=types.User._parse(client, users.get(message.receiver_id)),
+            receiver_user=await types.User._parse(client, users.get(message.receiver_id)),
             text=(
                 Str(message.message).init(entities) or None
                 if media is None or web_page is not None
@@ -2160,7 +2162,7 @@ class Message(Object, Update):
             )
 
         if not parsed_message.topic and parsed_message.chat.is_forum:
-            parsed_topic = client.topic_cache[(parsed_message.chat.id, parsed_message.message_thread_id)]
+            parsed_topic = await client.topic_cache.get((parsed_message.chat.id, parsed_message.message_thread_id))
 
             if parsed_topic:
                 parsed_message.topic = parsed_topic
@@ -2172,12 +2174,12 @@ class Message(Object, Update):
                     )
 
                     if parsed_message.topic:
-                        client.topic_cache[(parsed_message.chat.id, parsed_message.topic.id)] = parsed_message.topic
+                        await client.topic_cache.set((parsed_message.chat.id, parsed_message.topic.id), parsed_message.topic)
                 except (ChannelPrivate, ChannelForumMissing):
                     pass
 
         if not parsed_message.poll:  # Do not cache poll messages
-            client.message_cache[(parsed_message.chat.id, parsed_message.id)] = parsed_message
+            await client.message_cache.set((parsed_message.chat.id, parsed_message.id), parsed_message)
 
         return parsed_message
 
@@ -2206,7 +2208,7 @@ class Message(Object, Update):
                     key = (parsed_message.chat.id, parsed_message.reply_to_message_id)
                     reply_to_params = {'chat_id': key[0], 'message_ids': message.id, 'reply': True}
 
-                parsed_message.reply_to_message = client.message_cache[key]
+                parsed_message.reply_to_message = await client.message_cache.get(key)
 
                 if raw_reply_to_message: # For business bots only
                     parsed_message.reply_to_message = await types.Message._parse(
@@ -2235,7 +2237,7 @@ class Message(Object, Update):
                     parsed_message.message_thread_id = 1
 
             if message.reply_to.quote:
-                parsed_message.quote = types.TextQuote._parse(
+                parsed_message.quote = await types.TextQuote._parse(
                     client,
                     users,
                     message.reply_to
@@ -2560,9 +2562,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -2779,9 +2780,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -2977,9 +2977,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -3186,9 +3185,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -3259,7 +3257,7 @@ class Message(Object, Update):
         quote_text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_contact` will automatically fill method attributes:
 
         * chat_id
@@ -3324,7 +3322,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -3400,7 +3399,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_contact` will automatically fill method attributes:
 
         * chat_id
@@ -3464,7 +3463,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -3652,9 +3652,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -3864,9 +3863,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -3927,7 +3925,7 @@ class Message(Object, Update):
 
         quote: Optional[bool] = None,
         reply_to_message_id: Optional[int] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_game` will automatically fill method attributes:
 
         * chat_id
@@ -3969,7 +3967,8 @@ class Message(Object, Update):
                 If not empty, the first button must launch the game.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -4020,7 +4019,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_game` will automatically fill method attributes:
 
         * chat_id
@@ -4061,7 +4060,8 @@ class Message(Object, Update):
                 If not empty, the first button must launch the game.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -4243,7 +4243,8 @@ class Message(Object, Update):
                 List of special entities that appear in the caption, which can be specified instead of *parse_mode*.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent invoice message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent invoice message is returned, otherwise, in
+            case the server answered with no message, None is returned.
         """
         if reply_parameters is None:
             reply_parameters = types.ReplyParameters(
@@ -4456,7 +4457,8 @@ class Message(Object, Update):
                 List of special entities that appear in the caption, which can be specified instead of *parse_mode*.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent invoice message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent invoice message is returned, otherwise, in
+            case the server answered with no message, None is returned.
         """
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
@@ -4532,7 +4534,7 @@ class Message(Object, Update):
         reply_to_message_id: Optional[int] = None,
         quote_text: Optional[str] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_location` will automatically fill method attributes:
 
         * chat_id
@@ -4607,7 +4609,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -4686,7 +4689,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_location` will automatically fill method attributes:
 
         * chat_id
@@ -4760,7 +4763,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -5011,7 +5015,7 @@ class Message(Object, Update):
         reply_to_message_id: Optional[int] = None,
         quote_text: Optional[str] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_message` will automatically fill method attributes:
 
         * chat_id
@@ -5092,7 +5096,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -5180,7 +5185,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_message` will automatically fill method attributes:
 
         * chat_id
@@ -5260,7 +5265,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -5453,9 +5459,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -5667,9 +5672,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -5751,7 +5755,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_poll` will automatically fill method attributes:
 
         * chat_id
@@ -5876,7 +5880,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent poll message is returned, otherwise, in case
+            the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -5962,7 +5967,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_poll` will automatically fill method attributes:
 
         * chat_id
@@ -6086,7 +6091,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent poll message is returned, otherwise, in case
+            the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -6208,7 +6214,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent dice message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent dice message is returned, otherwise, in case
+            the server answered with no message, None is returned.
         """
         if reply_parameters is None:
             reply_parameters = types.ReplyParameters(
@@ -6314,7 +6321,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent dice message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent dice message is returned, otherwise, in case
+            the server answered with no message, None is returned.
         """
         if message_thread_id is None:
             message_thread_id = self.message_thread_id
@@ -6473,9 +6481,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -6664,9 +6671,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -6736,7 +6742,7 @@ class Message(Object, Update):
         quote_text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_venue` will automatically fill method attributes:
 
         * chat_id
@@ -6808,7 +6814,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -6888,7 +6895,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_venue` will automatically fill method attributes:
 
         * chat_id
@@ -6959,7 +6966,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -7186,9 +7194,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -7443,9 +7450,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -7640,9 +7646,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -7840,9 +7845,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8024,9 +8028,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8221,9 +8224,8 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
-            In case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned
-            instead.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8478,7 +8480,7 @@ class Message(Object, Update):
         reply_to_message_id: Optional[int] = None,
         quote_text: Optional[str] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_cached_media` will automatically fill method attributes:
 
         * chat_id
@@ -8534,7 +8536,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent media message is returned, otherwise, in
+            case the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8601,7 +8604,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_cached_media` will automatically fill method attributes:
 
         * chat_id
@@ -8656,7 +8659,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent media message is returned, otherwise, in
+            case the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8742,7 +8746,7 @@ class Message(Object, Update):
         quote_text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_inline_bot_result` will automatically fill method attributes:
 
         * chat_id
@@ -8776,7 +8780,8 @@ class Message(Object, Update):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8826,7 +8831,7 @@ class Message(Object, Update):
         direct_messages_topic_id: Optional[int] = None,
         reply_parameters: Optional["types.ReplyParameters"] = None,
         paid_message_star_count: Optional[int] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_inline_bot_result` will automatically fill method attributes:
 
         * chat_id
@@ -8859,7 +8864,8 @@ class Message(Object, Update):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -8902,7 +8908,7 @@ class Message(Object, Update):
         ] = None,
 
         quote: Optional[bool] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_checklist` will automatically fill method attributes:
 
         * chat_id
@@ -8954,7 +8960,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -9010,7 +9017,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_checklist` will automatically fill method attributes:
 
         * chat_id
@@ -9061,7 +9068,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -9101,7 +9109,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_rich_message` will automatically fill method attributes:
 
         * chat_id
@@ -9143,7 +9151,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent text message is returned, otherwise, in case
+            the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -9187,7 +9196,7 @@ class Message(Object, Update):
                 "types.ForceReply"
             ]
         ] = None,
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.send_rich_message` will automatically fill method attributes:
 
         * chat_id
@@ -9228,7 +9237,8 @@ class Message(Object, Update):
                 instructions to remove reply keyboard or to force a reply from the user.
 
         Returns:
-            On success, the sent :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent text message is returned, otherwise, in case
+            the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -9249,11 +9259,12 @@ class Message(Object, Update):
 
     async def edit_text(
         self,
-        text: str,
+        text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
         entities: Optional[List["types.MessageEntity"]] = None,
         link_preview_options: Optional["types.LinkPreviewOptions"] = None,
         reply_markup: Optional["types.InlineKeyboardMarkup"] = None,
+        rich_message: Optional["types.InputRichMessage"] = None,
 
         show_caption_above_media: Optional[bool] = None,
         disable_web_page_preview: Optional[bool] = None,
@@ -9272,6 +9283,7 @@ class Message(Object, Update):
         Parameters:
             text (``str``):
                 New text of the message.
+                Required if ``rich_message`` isn't specified.
 
             parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
@@ -9285,6 +9297,10 @@ class Message(Object, Update):
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup`, *optional*):
                 An InlineKeyboardMarkup object.
+
+            rich_message (:obj:`~pyrogram.types.InputRichMessage`, *optional*):
+                New rich content of the message.
+                Required if ``text`` isn't specified.
 
         Returns:
             On success, the edited :obj:`~pyrogram.types.Message` is returned.
@@ -9301,6 +9317,7 @@ class Message(Object, Update):
             link_preview_options=link_preview_options,
             business_connection_id=self.business_connection_id,
             reply_markup=reply_markup,
+            rich_message=rich_message,
 
             show_caption_above_media=show_caption_above_media,
             disable_web_page_preview=disable_web_page_preview,
@@ -9426,7 +9443,7 @@ class Message(Object, Update):
             reply_markup=reply_markup
         )
 
-    async def edit_reply_markup(self, reply_markup: "types.InlineKeyboardMarkup" = None) -> "Message":
+    async def edit_reply_markup(self, reply_markup: Optional["types.InlineKeyboardMarkup"] = None) -> "Message":
         """Shortcut for method :obj:`~pyrogram.Client.edit_message_reply_markup` will automatically fill method attributes:
 
         * chat_id
@@ -9457,7 +9474,7 @@ class Message(Object, Update):
         live_period: Optional[int] = None,
         heading: Optional[int] = None,
         proximity_alert_radius: Optional[int] = None
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Use this method to edit live location messages.
 
         Parameters:
@@ -9487,7 +9504,8 @@ class Message(Object, Update):
                 Can't be enabled in channels and Saved Messages.
 
         Returns:
-            On success, the edited :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the edited message is returned,
+            otherwise, in case the server answered with no message, None is returned.
         """
         r = await self._client.invoke(
             raw.functions.messages.EditMessage(
@@ -9510,11 +9528,12 @@ class Message(Object, Update):
 
     async def stop_live_location(
         self
-    ) -> "Message":
+    ) -> Optional["Message"]:
         """Use this method to stop updating a live location message before live_period expires.
 
         Returns:
-            On success, the edited :obj:`~pyrogram.types.Message` is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the edited message is returned,
+            otherwise, in case the server answered with no message, None is returned.
         """
         r = await self._client.invoke(
             raw.functions.messages.EditMessage(
@@ -9541,7 +9560,7 @@ class Message(Object, Update):
         allow_paid_broadcast: Optional[bool] = None,
         video_start_timestamp: Optional[int] = None,
         paid_message_star_count: Optional[int] = None
-    ) -> Union["types.Message", List["types.Message"]]:
+    ) -> Optional[Union['types.Message', List['types.Message']]]:
         """Shortcut for method :obj:`~pyrogram.Client.forward_messages` will automatically fill method attributes:
 
         * from_chat_id
@@ -9586,7 +9605,8 @@ class Message(Object, Update):
                 The number of Telegram Stars the user agreed to pay to send the messages.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the forwarded message is returned.
+            :obj:`~pyrogram.types.Message` | List of :obj:`~pyrogram.types.Message` | ``None``: On success, the
+            forwarded messages are returned, otherwise, in case the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -9633,7 +9653,7 @@ class Message(Object, Update):
         reply_to_message_id: Optional[int] = None,
         quote_text: Optional[str] = None,
         quote_entities: Optional[List["types.MessageEntity"]] = None,
-    ) -> "types.Message":
+    ) -> Optional["types.Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.copy_message` will automatically fill method attributes:
 
         * from_chat_id
@@ -9696,7 +9716,8 @@ class Message(Object, Update):
                 Pass None to remove the reply markup.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the copied message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the copied message is returned, otherwise, in case
+            no message was sent, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -9864,23 +9885,23 @@ class Message(Object, Update):
     async def copy_media_group(
         self,
         chat_id: Union[int, str],
-        captions: Union[List[str], str] = None,
-        has_spoilers: Union[List[bool], bool] = None,
-        disable_notification: bool = None,
-        message_thread_id: int = None,
-        reply_parameters: "types.ReplyParameters" = None,
-        schedule_date: datetime = None,
-        show_caption_above_media: bool = None,
-        allow_paid_broadcast: bool = None,
-        paid_message_star_count: int = None,
+        captions: Optional[Union[List[str], str]] = None,
+        has_spoilers: Optional[Union[List[bool], bool]] = None,
+        disable_notification: Optional[bool] = None,
+        message_thread_id: Optional[int] = None,
+        reply_parameters: Optional["types.ReplyParameters"] = None,
+        schedule_date: Optional[datetime] = None,
+        show_caption_above_media: Optional[bool] = None,
+        allow_paid_broadcast: Optional[bool] = None,
+        paid_message_star_count: Optional[int] = None,
 
-        reply_to_message_id: int = None,
-        reply_to_chat_id: Union[int, str] = None,
-        reply_to_story_id: int = None,
-        quote_text: str = None,
+        reply_to_message_id: Optional[int] = None,
+        reply_to_chat_id: Optional[Union[int, str]] = None,
+        reply_to_story_id: Optional[int] = None,
+        quote_text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
-        quote_entities: List["types.MessageEntity"] = None,
-        quote_offset: int = None,
+        quote_entities: Optional[List["types.MessageEntity"]] = None,
+        quote_offset: Optional[int] = None,
     ) -> List["types.Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.copy_media_group` will automatically fill method attributes:
 
@@ -9993,10 +10014,10 @@ class Message(Object, Update):
     async def click(
         self,
         x: Union[int, str] = 0,
-        y: int = None,
-        quote: bool = None,
+        y: Optional[int] = None,
+        quote: Optional[bool] = None,
         timeout: int = 10,
-        password: str = None
+        password: Optional[str] = None
     ):
         """Bound method *click* of :obj:`~pyrogram.types.Message`.
 
@@ -10241,9 +10262,9 @@ class Message(Object, Update):
         file_name: str = "",
         in_memory: bool = False,
         block: bool = True,
-        progress: Callable = None,
+        progress: Optional[Callable] = None,
         progress_args: tuple = ()
-    ) -> str:
+    ) -> Optional[Union[str, BinaryIO, List[str], List[BinaryIO]]]:
         """Shortcut for method :obj:`~pyrogram.Client.download_media` will automatically fill method attributes:
 
         * message
@@ -10287,7 +10308,11 @@ class Message(Object, Update):
                 You can either keep ``*args`` or add every single extra argument in your function signature.
 
         Returns:
-            On success, the absolute path of the downloaded file as string is returned, None otherwise.
+            ``str`` | ``BinaryIO`` | ``List[str]`` | ``List[BinaryIO]`` | ``None``: On success, the absolute path of the
+            downloaded file is returned. In case ``in_memory=True``, a binary file-like object with its attribute
+            ".name" set is returned. If the message contains multiple media (purchased paid media), a list of paths or
+            binary file-like objects is returned. In case the download failed or was deliberately stopped with
+            :meth:`~pyrogram.Client.stop_transmission`, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -10345,7 +10370,8 @@ class Message(Object, Update):
                 Applicable to private chats only. Defaults to False.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the service message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the service message is returned, otherwise, in case
+            the server answered with no message, None is returned.
 
         Raises:
             RPCError: In case of a Telegram RPC error.
@@ -10450,26 +10476,28 @@ class Message(Object, Update):
             input_invoice=invoice
         )
 
-    async def accept_gift_purchase_offer(self) -> "types.Message":
+    async def accept_gift_purchase_offer(self) -> Optional["types.Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.process_gift_purchase_offer` will automatically fill method attributes:
 
         * message_id
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
         """
         return await self._client.process_gift_purchase_offer(
             message_id=self.id,
             accept=True
         )
 
-    async def reject_gift_purchase_offer(self) -> "types.Message":
+    async def reject_gift_purchase_offer(self) -> Optional["types.Message"]:
         """Shortcut for method :obj:`~pyrogram.Client.process_gift_purchase_offer` will automatically fill method attributes:
 
         * message_id
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
         """
         return await self._client.process_gift_purchase_offer(
             message_id=self.id,

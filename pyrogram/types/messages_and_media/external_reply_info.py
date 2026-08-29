@@ -115,9 +115,9 @@ class ExternalReplyInfo(Object):
     def __init__(
         self,
         *,
-        client: "pyrogram.Client" = None,
-        origin: "types.MessageOrigin" = None,
-        chat: "types.Chat" = None,
+        client: Optional["pyrogram.Client"] = None,
+        origin: Optional["types.MessageOrigin"] = None,
+        chat: Optional["types.Chat"] = None,
         message_id: int,
         link_preview_options: Optional["types.LinkPreviewOptions"] = None,
         media: Optional["enums.MessageMediaType"] = None,
@@ -228,7 +228,7 @@ class ExternalReplyInfo(Object):
                 game = types.Game._parse(client, media)
                 media_type = enums.MessageMediaType.GAME
             elif isinstance(media, raw.types.MessageMediaGiveaway):
-                giveaway = types.Giveaway._parse(client, media, chats)
+                giveaway = await types.Giveaway._parse(client, media, chats)
                 media_type = enums.MessageMediaType.GIVEAWAY
             elif isinstance(media, raw.types.MessageMediaGiveawayResults):
                 giveaway_winners = await types.GiveawayWinners._parse(client, media, users, chats)
@@ -291,19 +291,19 @@ class ExternalReplyInfo(Object):
                 paid_media = types.PaidMediaInfo._parse(client, media)
                 media_type = enums.MessageMediaType.PAID_MEDIA
             elif isinstance(media, raw.types.MessageMediaToDo):
-                checklist = types.Checklist._parse(client, media, users, chats)
+                checklist = await types.Checklist._parse(client, media, users, chats)
                 media_type = enums.MessageMediaType.CHECKLIST
             else:
                 media = None
 
         return ExternalReplyInfo(
-            origin=types.MessageOrigin._parse(
+            origin=await types.MessageOrigin._parse(
                 client,
                 reply.reply_from,
                 users,
                 chats,
             ),
-            chat=types.Chat._parse_chat(
+            chat=await types.Chat._parse_chat(
                 client,
                 chats.get(utils.get_raw_peer_id(reply.reply_to_peer_id)),
             ),

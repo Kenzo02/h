@@ -28,7 +28,7 @@ class GetGameHighScores:
         self: "pyrogram.Client",
         user_id: Union[int, str],
         chat_id: Union[int, str],
-        message_id: int = None
+        message_id: int
     ) -> List["types.GameHighScore"]:
         """Get data for high score tables.
 
@@ -40,15 +40,13 @@ class GetGameHighScores:
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
 
-            chat_id (``int`` | ``str``, *optional*):
+            chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
-                Required if inline_message_id is not specified.
 
-            message_id (``int``, *optional*):
+            message_id (``int``):
                 Identifier of the sent message.
-                Required if inline_message_id is not specified.
 
         Returns:
             List of :obj:`~pyrogram.types.GameHighScore`: On success.
@@ -69,4 +67,4 @@ class GetGameHighScores:
             )
         )
 
-        return types.List(types.GameHighScore._parse(self, score, r.users) for score in r.scores)
+        return types.List([await types.GameHighScore._parse(self, score, r.users) for score in r.scores])

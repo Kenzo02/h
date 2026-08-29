@@ -46,7 +46,8 @@ async def test_send_voice_keeps_positional_disable_notification_compatibility(mo
 
 
 @pytest.mark.asyncio
-async def test_send_voice_preserves_waveform_keyword_for_upload(monkeypatch, tmp_path):
+@pytest.mark.parametrize("waveform", [b"\x01\x02\x03", bytearray(b"\x01\x02\x03"), memoryview(b"\x01\x02\x03")])
+async def test_send_voice_preserves_waveform_keyword_for_upload(monkeypatch, tmp_path, waveform):
     async def parse_messages(**kwargs):
         return []
 
@@ -60,10 +61,8 @@ async def test_send_voice_preserves_waveform_keyword_for_upload(monkeypatch, tmp
     path.write_bytes(b"voice")
 
     client = Client()
-    waveform = b"\x01\x02\x03"
-
     await client.send_voice("me", str(path), waveform=waveform)
 
     [attribute] = client.query.media.attributes
 
-    assert attribute.waveform == waveform
+    assert attribute.waveform == bytes(waveform)

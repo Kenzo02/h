@@ -17,7 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-from typing import Union, BinaryIO
+from typing import Union, BinaryIO, Optional
 
 import pyrogram
 from pyrogram import raw
@@ -31,10 +31,10 @@ class SetChatPhoto:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         *,
-        photo: Union[str, BinaryIO] = None,
-        video: Union[str, BinaryIO] = None,
-        video_start_ts: float = None,
-    ) -> "types.Message":
+        photo: Optional[Union[str, BinaryIO]] = None,
+        video: Optional[Union[str, BinaryIO]] = None,
+        video_start_ts: Optional[float] = None,
+    ) -> Optional["types.Message"]:
         """Set a new chat photo or video (H.264/MPEG-4 AVC video, max 5 seconds).
 
         The ``photo`` and ``video`` arguments are mutually exclusive.
@@ -62,7 +62,8 @@ class SetChatPhoto:
                 The timestamp in seconds of the video frame to use as photo profile preview.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent service message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent service message is returned,
+            otherwise, in case the server answered with no message, None is returned.
 
         Raises:
             ValueError: if a chat_id belongs to user.

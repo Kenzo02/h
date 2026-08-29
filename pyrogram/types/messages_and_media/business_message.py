@@ -17,7 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from typing import Optional, Union, List
+from typing import Union, List, Optional
 
 from pyrogram import types, enums, raw, utils
 from ..object import Object
@@ -59,14 +59,14 @@ class BusinessMessage(Object):
         self,
         *,
         shortcut_id: int,
-        is_greeting: bool = None,
-        is_away: bool = None,
-        no_activity_days: int = None,
-        offline_only: bool = None,
-        recipients: List["types.User"] = None,
-        schedule: "enums.BusinessSchedule" = None,
-        start_date: datetime = None,
-        end_date: datetime = None,
+        is_greeting: Optional[bool] = None,
+        is_away: Optional[bool] = None,
+        no_activity_days: Optional[int] = None,
+        offline_only: Optional[bool] = None,
+        recipients: Optional[List["types.User"]] = None,
+        schedule: Optional["enums.BusinessSchedule"] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
 
     ):
         self.shortcut_id = shortcut_id
@@ -80,10 +80,10 @@ class BusinessMessage(Object):
         self.end_date = end_date
 
     @staticmethod
-    def _parse(
+    async def _parse(
         client,
-        message: Union["raw.types.BusinessGreetingMessage", "raw.types.BusinessAwayMessage"] = None,
-        users: dict = None
+        message: Optional[Union["raw.types.BusinessGreetingMessage", "raw.types.BusinessAwayMessage"]] = None,
+        users: Optional[dict] = None
     ) -> Optional["BusinessMessage"]:
         if not message:
             return None
@@ -99,7 +99,7 @@ class BusinessMessage(Object):
             is_away=isinstance(message, raw.types.BusinessAwayMessage),
             no_activity_days=getattr(message, "no_activity_days", None),
             offline_only=getattr(message, "offline_only", None),
-            recipients=types.BusinessRecipients._parse(client, message.recipients, users),
+            recipients=await types.BusinessRecipients._parse(client, message.recipients, users),
             schedule=schedule,
             start_date=utils.timestamp_to_datetime(message.schedule.start_date) if schedule == enums.BusinessSchedule.CUSTOM else None,
             end_date=utils.timestamp_to_datetime(message.schedule.end_date) if schedule == enums.BusinessSchedule.CUSTOM else None

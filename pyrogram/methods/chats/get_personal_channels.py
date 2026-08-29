@@ -31,7 +31,8 @@ class GetPersonalChannels:
         .. include:: /_includes/usable-by/users.rst
 
         Returns:
-            List of :obj:`~pyrogram.types.Chat`: On success, a list of personal channels is returned.
+            List of :obj:`~pyrogram.types.Chat` | ``None``: On success, a list of personal channels is
+            returned, otherwise, in case there is no personal channel, None is returned.
 
         Example:
             .. code-block:: python
@@ -45,4 +46,4 @@ class GetPersonalChannels:
             )
         )
 
-        return types.List(types.Chat._parse_chat(self, i) for i in r.chats) or None
+        return types.List([await types.Chat._parse_chat(self, i) for i in r.chats]) or None

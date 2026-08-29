@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union, List, AsyncGenerator, Optional
+from typing import Union, List, AsyncIterator, Optional
 from datetime import datetime
 
 import pyrogram
@@ -36,7 +36,7 @@ async def get_chunk(
     limit: int = 100,
     min_id: int = 0,
     max_id: int = 0,
-    from_user: Union[int, str] = None,
+    from_user: Optional[Union[int, str]] = None,
     message_thread_id: Optional[int] = None
 ) -> List["types.Message"]:
     r = await client.invoke(
@@ -79,9 +79,9 @@ class SearchMessages:
         max_id: Optional[int] = 0,
         filter: Optional["enums.MessagesFilter"] = enums.MessagesFilter.EMPTY,
         limit: Optional[int] = 0,
-        from_user: Union[int, str] = None,
+        from_user: Optional[Union[int, str]] = None,
         message_thread_id: Optional[int] = None
-    ) -> AsyncGenerator["types.Message", None]:
+    ) -> AsyncIterator["types.Message"]:
         """Search for text and media messages inside a specific chat.
 
         If you want to get the messages count only, see :meth:`~pyrogram.Client.search_messages_count`.

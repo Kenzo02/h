@@ -43,7 +43,7 @@ class QRLogin:
             )
         )
 
-    async def wait(self, timeout: float = None) -> Optional["types.User"]:
+    async def wait(self, timeout: Optional[float] = None) -> Optional["types.User"]:
         if timeout is None:
             timeout = self.r.expires - int(datetime.datetime.now().timestamp())
 
@@ -90,14 +90,14 @@ class QRLogin:
             await self.client.storage.dc_id(r.dc_id)
             await self.client.storage.server_address(self.client.session.server_address)
             await self.client.storage.port(self.client.session.port)
-            await self.client.storage.auth_key(self.client.session.auth_key)       
+            await self.client.storage.auth_key(self.client.session.auth_key)
 
             r = await self.client.invoke(
                 raw.functions.auth.ImportLoginToken(token=r.token)
             )
 
         if isinstance(r, raw.types.auth.LoginTokenSuccess):
-            user = types.User._parse(self.client, r.authorization.user)
+            user = await types.User._parse(self.client, r.authorization.user)
 
             await self.client.storage.user_id(user.id)
             await self.client.storage.is_bot(False)

@@ -17,7 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 import pyrogram
 from pyrogram import raw, types, utils
@@ -49,10 +49,10 @@ class ChatJoiner(Object):
         *,
         client: "pyrogram.Client",
         user: "types.User",
-        date: datetime = None,
-        bio: str = None,
-        pending: bool = None,
-        approved_by: "types.User" = None,
+        date: Optional[datetime] = None,
+        bio: Optional[str] = None,
+        pending: Optional[bool] = None,
+        approved_by: Optional["types.User"] = None,
     ):
         super().__init__(client)
 
@@ -63,18 +63,18 @@ class ChatJoiner(Object):
         self.approved_by = approved_by
 
     @staticmethod
-    def _parse(
+    async def _parse(
         client: "pyrogram.Client",
         joiner: "raw.base.ChatInviteImporter",
         users: Dict[int, "raw.base.User"],
     ) -> "ChatJoiner":
         return ChatJoiner(
-            user=types.User._parse(client, users[joiner.user_id]),
+            user=await types.User._parse(client, users[joiner.user_id]),
             date=utils.timestamp_to_datetime(joiner.date),
             pending=joiner.requested,
             bio=joiner.about,
             approved_by=(
-                types.User._parse(client, users[joiner.approved_by])
+                await types.User._parse(client, users[joiner.approved_by])
                 if joiner.approved_by
                 else None
             ),

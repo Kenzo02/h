@@ -16,13 +16,25 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Union
+from typing import List, Optional, Union, overload
 
 import pyrogram
 from pyrogram import raw, types
 
 
 class DeleteContacts:
+    @overload
+    async def delete_contacts(
+        self: "pyrogram.Client",
+        user_ids: Union[int, str]
+    ) -> Optional["types.User"]: ...
+
+    @overload
+    async def delete_contacts(
+        self: "pyrogram.Client",
+        user_ids: List[Union[int, str]]
+    ) -> Optional[List["types.User"]]: ...
+
     async def delete_contacts(
         self: "pyrogram.Client",
         user_ids: Union[int, str, List[Union[int, str]]]
@@ -61,6 +73,6 @@ class DeleteContacts:
         if not r.updates:
             return None
 
-        users = types.List([types.User._parse(self, i) for i in r.users])
+        users = types.List([await types.User._parse(self, i) for i in r.users])
 
         return users if is_list else users[0]

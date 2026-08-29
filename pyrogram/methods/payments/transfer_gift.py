@@ -28,7 +28,7 @@ class TransferGift:
         owned_gift_id: str,
         new_owner_chat_id: Union[int, str],
         # stars_count: int = None,
-        business_connection_id: str = None
+        business_connection_id: Optional[str] = None
     ) -> Optional["types.Message"]:
         """Transfers an owned unique gift to another user.
 
@@ -56,7 +56,8 @@ class TransferGift:
                 For bots only.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise,
+            in case the server answered with no message, None is returned.
 
         Example:
             .. code-block:: python

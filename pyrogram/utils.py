@@ -86,13 +86,13 @@ async def ainput(prompt: str = "", *, hide: bool = False, loop: Optional[asyncio
 
 def get_input_media_from_file_id(
     file_id: str,
-    expected_file_type: FileType = None,
-    ttl_seconds: int = None,
-    has_spoiler: bool = None,
-    video_cover: "raw.types.InputPhoto" = None,
-    video_start_timestamp: int = None,
-    live_photo: bool = None,
-    live_photo_video_file_id: str = None
+    expected_file_type: Optional[FileType] = None,
+    ttl_seconds: Optional[int] = None,
+    has_spoiler: Optional[bool] = None,
+    video_cover: Optional["raw.types.InputPhoto"] = None,
+    video_start_timestamp: Optional[int] = None,
+    live_photo: Optional[bool] = None,
+    live_photo_video_file_id: Optional[str] = None
 ) -> Union["raw.types.InputMediaPhoto", "raw.types.InputMediaDocument"]:
     try:
         decoded = FileId.decode(file_id)
@@ -280,7 +280,7 @@ async def parse_messages(
     return types.List(parsed_messages)
 
 
-def parse_deleted_messages(client, update, users, chats) -> List["types.Message"]:
+async def parse_deleted_messages(client, update, users, chats) -> List["types.Message"]:
     is_ephemeral = isinstance(update, raw.types.UpdateDeleteEphemeralMessages)
 
     messages = update.ids if is_ephemeral else update.messages
@@ -299,13 +299,13 @@ def parse_deleted_messages(client, update, users, chats) -> List["types.Message"
         chat_id = get_raw_peer_id(peer)
         if chat_id:
             if isinstance(peer, raw.types.PeerUser):
-                chat = types.Chat._parse_user_chat(client, users[chat_id])
+                chat = await types.Chat._parse_user_chat(client, users[chat_id])
 
             elif isinstance(peer, raw.types.PeerChat):
-                chat = types.Chat._parse_chat_chat(client, chats[chat_id])
+                chat = await types.Chat._parse_chat_chat(client, chats[chat_id])
 
             else:
-                chat = types.Chat._parse_channel_chat(
+                chat = await types.Chat._parse_channel_chat(
                     client, chats[chat_id]
                 )
 
@@ -687,12 +687,12 @@ def split_text(text: str, max_length: int = 4096) -> List[str]:
     return chunks
 
 
-def parse_text_with_entities(client, message: "raw.types.TextWithEntities", users):
+async def parse_text_with_entities(client, message: "raw.types.TextWithEntities", users):
     entities = types.List(
         filter(
             lambda x: x is not None,
             [
-                types.MessageEntity._parse(client, entity, users)
+                await types.MessageEntity._parse(client, entity, users)
                 for entity in getattr(message, "entities", [])
             ]
         )
@@ -755,7 +755,7 @@ def expand_inline_bytes(bytes_data: bytes):
     return header + bytes_data[3:] + footer
 
 
-def from_inline_bytes(data: bytes, file_name: str = None) -> BytesIO:
+def from_inline_bytes(data: bytes, file_name: Optional[str] = None) -> BytesIO:
     b = BytesIO()
 
     b.write(data)

@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union, List, AsyncGenerator, Optional
+from typing import Union, List, AsyncIterator, Optional
 
 import pyrogram
 from pyrogram import raw
@@ -30,9 +30,9 @@ class GetChatEventLog:
         query: str = "",
         offset_id: int = 0,
         limit: int = 0,
-        filters: "types.ChatEventFilter" = None,
-        user_ids: List[Union[int, str]] = None
-    ) -> AsyncGenerator["types.ChatEvent", None]:
+        filters: Optional["types.ChatEventFilter"] = None,
+        user_ids: Optional[List[Union[int, str]]] = None
+    ) -> AsyncIterator["types.ChatEvent"]:
         """Get the actions taken by chat members and administrators in the last 48h.
 
         Only available for supergroups and channels. Requires administrator rights.

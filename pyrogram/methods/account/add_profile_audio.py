@@ -36,7 +36,7 @@ class AddProfileAudio:
         file_name: Optional[str] = None,
         progress: Optional[Callable] = None,
         progress_args: Optional[tuple] = (),
-    ):
+    ) -> Optional[bool]:
         """Adds an audio file to the beginning of the profile audio files of the current user.
 
         .. include:: /_includes/usable-by/users.rst
@@ -144,7 +144,7 @@ class AddProfileAudio:
                 try:
                     r = await self.invoke(raw.functions.account.SaveMusic(id=media))
                 except FilePartMissing as e:
-                    await self.save_file(audio, file_id=file.id, file_part=e.value)
+                    await self.save_file(audio, file_id=file.id, file_part=e.file_part)
                 else:
                     return r
         except StopTransmission:

@@ -28,10 +28,10 @@ class GiftPremiumWithStars:
         self: "pyrogram.Client",
         user_id: Union[int, str],
         month_count: int,
-        text: str = None,
+        text: Optional[str] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
-        entities: List["types.MessageEntity"] = None,
-        star_count: int = None,
+        entities: Optional[List["types.MessageEntity"]] = None,
+        star_count: Optional[int] = None,
     ) -> Optional["types.Message"]:
         """Allows to buy a Telegram Premium subscription for another user with payment in Telegram Stars.
 
@@ -50,7 +50,8 @@ class GiftPremiumWithStars:
                 The number of Telegram Stars to pay for subscription.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise,
+            in case the server answered with no message, None is returned.
 
         Example:
             .. code-block:: python

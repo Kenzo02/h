@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import AsyncGenerator, Optional
+from typing import AsyncIterator, Optional
 
 import pyrogram
 from pyrogram import raw, types, utils
@@ -28,7 +28,7 @@ class GetDialogs:
         limit: int = 0,
         exclude_pinned: Optional[bool] = None,
         from_archive: Optional[bool] = None
-    ) -> AsyncGenerator["types.Dialog", None]:
+    ) -> AsyncIterator["types.Dialog"]:
         """Get a user's dialogs sequentially.
 
         .. include:: /_includes/usable-by/users.rst
@@ -111,7 +111,7 @@ class GetDialogs:
 
                 seen_dialogs_ids.add(peer_id)
 
-                dialogs.append(types.Dialog._parse(self, dialog, messages, users, chats))
+                dialogs.append(await types.Dialog._parse(self, dialog, messages, users, chats))
 
             if not dialogs:
                 return

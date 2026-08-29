@@ -691,6 +691,8 @@ def pyrogram_api():
             VerificationStatus
             Chat
             ChatPhoto
+            ChatPhotoSticker
+            AnimatedChatPhoto
             ChatMember
             ChatPermissions
             ChatAdministratorRights
@@ -971,12 +973,15 @@ def pyrogram_api():
             PreCheckoutQuery
             ShippingAddress
             ShippingQuery
+            SwitchInlineQueryChosenChat
             MessageReactionUpdated
             MessageReactionCountUpdated
             ChatBoostUpdated
             ShippingOption
             PurchasedPaidMedia
             ChatShared
+            DisabledButton
+            CopyTextButton
             UsersShared
         """,
         bot_commands="""
@@ -1338,6 +1343,7 @@ def pyrogram_api():
             ChatJoinType
             ChatMemberStatus
             ChatMembersFilter
+            ChatPhotoStickerType
             ChatType
             ClientPlatform
             FolderColor

@@ -17,7 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from typing import Union
+from typing import Optional, Union
 
 import pyrogram
 from pyrogram import raw, utils
@@ -29,11 +29,11 @@ class EditChatInviteLink:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         invite_link: str,
-        name: str = None,
-        expire_date: datetime = None,
-        member_limit: int = None,
-        creates_join_request: bool = None
-    ) -> "types.ChatInviteLink":
+        name: Optional[str] = None,
+        expire_date: Optional[datetime] = None,
+        member_limit: Optional[int] = None,
+        creates_join_request: Optional[bool] = None
+    ) -> Optional["types.ChatInviteLink"]:
         """Edit a non-primary invite link.
 
         You must be an administrator in the chat for this to work and must have the appropriate admin rights.
@@ -65,7 +65,9 @@ class EditChatInviteLink:
                 If True, member_limit can't be specified.
 
         Returns:
-            :obj:`~pyrogram.types.ChatInviteLink`: On success, the new invite link is returned
+            :obj:`~pyrogram.types.ChatInviteLink` | ``None``: On success, the new invite link is
+            returned, otherwise, in case the chat only accepts join requests through its public link, None is
+            returned.
 
         Example:
             .. code-block:: python
@@ -89,4 +91,4 @@ class EditChatInviteLink:
 
         users = {i.id: i for i in r.users}
 
-        return types.ChatInviteLink._parse(self, r.invite, users)
+        return await types.ChatInviteLink._parse(self, r.invite, users)

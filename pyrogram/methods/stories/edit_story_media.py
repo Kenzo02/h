@@ -17,7 +17,7 @@
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-from typing import List, Union, BinaryIO, Callable
+from typing import List, Union, BinaryIO, Callable, Optional
 
 import pyrogram
 from pyrogram import raw, types, utils, StopTransmission
@@ -28,17 +28,17 @@ class EditStoryMedia:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         story_id: int,
-        media: Union[str, BinaryIO] = None,
-        media_areas: List["types.MediaArea"] = None,
+        media: Optional[Union[str, BinaryIO]] = None,
+        media_areas: Optional[List["types.MediaArea"]] = None,
         duration: int = 0,
         width: int = 0,
         height: int = 0,
-        thumb: Union[str, BinaryIO] = None,
+        thumb: Optional[Union[str, BinaryIO]] = None,
         supports_streaming: bool = True,
-        file_name: str = None,
-        progress: Callable = None,
+        file_name: Optional[str] = None,
+        progress: Optional[Callable] = None,
         progress_args: tuple = ()
-    ) -> "types.Story":
+    ) -> Optional["types.Story"]:
         """Edit story media.
 
         .. include:: /_includes/usable-by/users.rst
@@ -87,7 +87,9 @@ class EditStoryMedia:
                 object or a Client instance in order to edit the message with the updated progress status.
 
         Returns:
-            :obj:`~pyrogram.types.Story`: On success, the edited story is returned.
+            :obj:`~pyrogram.types.Story` | ``None``: On success, the edited story is returned, otherwise,
+            in case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`,
+            None is returned.
 
         Example:
             .. code-block:: python
@@ -159,7 +161,7 @@ class EditStoryMedia:
                         )
                     )
                 except FilePartMissing as e:
-                    await self.save_file(media, file_id=file.id, file_part=e.value)
+                    await self.save_file(media, file_id=file.id, file_part=e.file_part)
                 else:
                     for i in r.updates:
                         if isinstance(i, raw.types.UpdateStory):

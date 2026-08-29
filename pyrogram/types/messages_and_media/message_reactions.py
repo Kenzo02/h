@@ -46,7 +46,7 @@ class MessageReactions(Object):
     def __init__(
         self,
         *,
-        client: "pyrogram.Client" = None,
+        client: Optional["pyrogram.Client"] = None,
         reactions: List["types.Reaction"],
         are_tags: Optional[bool] = None,
         paid_reactors: Optional[List["types.PaidReactor"]] = None,
@@ -60,7 +60,7 @@ class MessageReactions(Object):
         self.can_get_added_reactions = can_get_added_reactions
 
     @staticmethod
-    def _parse(
+    async def _parse(
         client: "pyrogram.Client",
         message_reactions: Optional["raw.base.MessageReactions"],
         users: Dict[int, "types.User"],
@@ -80,7 +80,7 @@ class MessageReactions(Object):
             are_tags=message_reactions.reactions_as_tags,
             paid_reactors=types.List(
                 [
-                    types.PaidReactor._parse(client, paid_reactor, users, chats)
+                    await types.PaidReactor._parse(client, paid_reactor, users, chats)
                     for paid_reactor in message_reactions.top_reactors
                 ]
             )

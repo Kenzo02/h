@@ -37,7 +37,8 @@ class GetSimilarChannels:
                 Unique identifier (int) or username (str) of the target chat.
 
         Returns:
-            List of :obj:`~pyrogram.types.Chat`: On success, the list of channels is returned.
+            List of :obj:`~pyrogram.types.Chat` | ``None``: On success, the list of channels is returned,
+            otherwise, in case there is no similar channel, None is returned.
 
         Example:
             .. code-block:: python
@@ -54,6 +55,6 @@ class GetSimilarChannels:
                 )
             )
 
-            return types.List([types.Chat._parse_channel_chat(self, chat) for chat in r.chats]) or None
+            return types.List([await types.Chat._parse_channel_chat(self, chat) for chat in r.chats]) or None
         else:
             raise ValueError(f'The chat_id "{chat_id}" belongs to a user or chat')

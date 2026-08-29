@@ -21,14 +21,35 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install tox
+          make venv-dev
 
       - name: Generate API
         run: |
-          make venv
           make api
 
+      # The integration tests need live api credentials, which a fork's runner has
+      #  no way to hold, so they stay deselected and skip on their own besides.
       - name: Run tests
         run: |
-          tox
+          make test-unit
+
+  lint:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      # The generated packages are excluded from the check, so this job needs no `make api`.
+      - name: Install dependencies
+        run: |
+          make venv-dev
+
+      - name: Run ruff
+        run: |
+          make lint

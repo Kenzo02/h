@@ -30,38 +30,38 @@ class SendWebPage:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         text: str = "",
-        url: str = None,
-        prefer_large_media: bool = None,
-        prefer_small_media: bool = None,
+        url: Optional[str] = None,
+        prefer_large_media: Optional[bool] = None,
+        prefer_small_media: Optional[bool] = None,
         parse_mode: Optional["enums.ParseMode"] = None,
-        entities: List["types.MessageEntity"] = None,
-        link_preview_options: "types.LinkPreviewOptions" = None,
-        disable_notification: bool = None,
-        message_thread_id: int = None,
-        direct_messages_topic_id: int = None,
-        effect_id: int = None,
-        show_caption_above_media: bool = None,
-        reply_parameters: "types.ReplyParameters" = None,
-        schedule_date: datetime = None,
-        repeat_period: int = None,
-        protect_content: bool = None,
-        business_connection_id: str = None,
-        allow_paid_broadcast: bool = None,
-        paid_message_star_count: int = None,
-        reply_markup: Union[
+        entities: Optional[List["types.MessageEntity"]] = None,
+        link_preview_options: Optional["types.LinkPreviewOptions"] = None,
+        disable_notification: Optional[bool] = None,
+        message_thread_id: Optional[int] = None,
+        direct_messages_topic_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
+        show_caption_above_media: Optional[bool] = None,
+        reply_parameters: Optional["types.ReplyParameters"] = None,
+        schedule_date: Optional[datetime] = None,
+        repeat_period: Optional[int] = None,
+        protect_content: Optional[bool] = None,
+        business_connection_id: Optional[str] = None,
+        allow_paid_broadcast: Optional[bool] = None,
+        paid_message_star_count: Optional[int] = None,
+        reply_markup: Optional[Union[
             "types.InlineKeyboardMarkup",
             "types.ReplyKeyboardMarkup",
             "types.ReplyKeyboardRemove",
             "types.ForceReply"
-        ] = None,
+        ]] = None,
 
-        reply_to_message_id: int = None,
-        reply_to_chat_id: Union[int, str] = None,
-        reply_to_story_id: int = None,
-        quote_text: str = None,
-        quote_entities: List["types.MessageEntity"] = None,
-        quote_offset: int = None,
-    ) -> "types.Message":
+        reply_to_message_id: Optional[int] = None,
+        reply_to_chat_id: Optional[Union[int, str]] = None,
+        reply_to_story_id: Optional[int] = None,
+        quote_text: Optional[str] = None,
+        quote_entities: Optional[List["types.MessageEntity"]] = None,
+        quote_offset: Optional[int] = None,
+    ) -> Optional["types.Message"]:
         """Send Web Page Preview.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -78,6 +78,14 @@ class SendWebPage:
             url (``str``, *optional*):
                 Link that will be previewed.
                 If url not specified, the first URL found in the text will be used.
+
+            prefer_large_media (``bool``, *optional*):
+                True, if the media in the link preview is supposed to be enlarged.
+                Ignored if the URL isn't explicitly specified or media size change isn't supported for the preview.
+
+            prefer_small_media (``bool``, *optional*):
+                True, if the media in the link preview is supposed to be shrunk.
+                Ignored if the URL isn't explicitly specified or media size change isn't supported for the preview.
 
             parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
@@ -105,11 +113,12 @@ class SendWebPage:
                 Unique identifier of the message effect.
                 For private chats only.
 
+            show_caption_above_media (``bool``, *optional*):
+                True, if the link preview must be shown above the message text.
+                Otherwise, the link preview will be shown below the message text.
+
             reply_parameters (:obj:`~pyrogram.types.ReplyParameters`, *optional*):
                 Describes reply parameters for the message that is being sent.
-
-            quote_offset (``int``, *optional*):
-                Offset for quote in original message.
 
             schedule_date (:py:obj:`~datetime.datetime`, *optional*):
                 Date when the message will be automatically sent.
@@ -136,8 +145,12 @@ class SendWebPage:
                 Additional interface options. An object for an inline keyboard, custom reply keyboard,
                 instructions to remove reply keyboard or to force a reply from the user.
 
+            quote_offset (``int``, *optional*):
+                Offset for quote in original message.
+
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise, in case the
+            server answered with no message, None is returned.
 
         Example:
             .. code-block:: python

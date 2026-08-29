@@ -151,63 +151,63 @@ class ChatEvent(Object):
         user: "types.User",
         action: str,
 
-        old_description: str = None,
-        new_description: str = None,
+        old_description: Optional[str] = None,
+        new_description: Optional[str] = None,
 
-        old_history_ttl: int = None,
-        new_history_ttl: int = None,
+        old_history_ttl: Optional[int] = None,
+        new_history_ttl: Optional[int] = None,
 
-        old_linked_chat: "types.Chat" = None,
-        new_linked_chat: "types.Chat" = None,
+        old_linked_chat: Optional["types.Chat"] = None,
+        new_linked_chat: Optional["types.Chat"] = None,
 
-        old_photo: "types.Photo" = None,
-        new_photo: "types.Photo" = None,
+        old_photo: Optional["types.Photo"] = None,
+        new_photo: Optional["types.Photo"] = None,
 
-        old_title: str = None,
-        new_title: str = None,
+        old_title: Optional[str] = None,
+        new_title: Optional[str] = None,
 
-        old_username: str = None,
-        new_username: str = None,
+        old_username: Optional[str] = None,
+        new_username: Optional[str] = None,
 
-        old_chat_permissions: "types.ChatPermissions" = None,
-        new_chat_permissions: "types.ChatPermissions" = None,
+        old_chat_permissions: Optional["types.ChatPermissions"] = None,
+        new_chat_permissions: Optional["types.ChatPermissions"] = None,
 
-        deleted_message: "types.Message" = None,
+        deleted_message: Optional["types.Message"] = None,
 
-        old_message: "types.Message" = None,
-        new_message: "types.Message" = None,
+        old_message: Optional["types.Message"] = None,
+        new_message: Optional["types.Message"] = None,
 
-        invited_member: "types.ChatMember" = None,
+        invited_member: Optional["types.ChatMember"] = None,
 
-        old_administrator_privileges: "types.ChatMember" = None,
-        new_administrator_privileges: "types.ChatMember" = None,
+        old_administrator_privileges: Optional["types.ChatMember"] = None,
+        new_administrator_privileges: Optional["types.ChatMember"] = None,
 
-        old_member_permissions: "types.ChatMember" = None,
-        new_member_permissions: "types.ChatMember" = None,
+        old_member_permissions: Optional["types.ChatMember"] = None,
+        new_member_permissions: Optional["types.ChatMember"] = None,
 
-        stopped_poll: "types.Message" = None,
+        stopped_poll: Optional["types.Message"] = None,
 
-        invites_enabled: "types.ChatMember" = None,
+        invites_enabled: Optional["types.ChatMember"] = None,
 
-        history_hidden: bool = None,
+        history_hidden: Optional[bool] = None,
 
-        signatures_enabled: bool = None,
+        signatures_enabled: Optional[bool] = None,
 
-        old_slow_mode: int = None,
-        new_slow_mode: int = None,
+        old_slow_mode: Optional[int] = None,
+        new_slow_mode: Optional[int] = None,
 
-        pinned_message: "types.Message" = None,
-        unpinned_message: "types.Message" = None,
+        pinned_message: Optional["types.Message"] = None,
+        unpinned_message: Optional["types.Message"] = None,
 
-        old_invite_link: "types.ChatInviteLink" = None,
-        new_invite_link: "types.ChatInviteLink" = None,
-        revoked_invite_link: "types.ChatInviteLink" = None,
-        deleted_invite_link: "types.ChatInviteLink" = None,
+        old_invite_link: Optional["types.ChatInviteLink"] = None,
+        new_invite_link: Optional["types.ChatInviteLink"] = None,
+        revoked_invite_link: Optional["types.ChatInviteLink"] = None,
+        deleted_invite_link: Optional["types.ChatInviteLink"] = None,
 
-        created_forum_topic: "types.ForumTopic" = None,
-        old_forum_topic: "types.ForumTopic" = None,
-        new_forum_topic: "types.ForumTopic" = None,
-        deleted_forum_topic: "types.ForumTopic" = None
+        created_forum_topic: Optional["types.ForumTopic"] = None,
+        old_forum_topic: Optional["types.ForumTopic"] = None,
+        new_forum_topic: Optional["types.ForumTopic"] = None,
+        deleted_forum_topic: Optional["types.ForumTopic"] = None
     ):
         super().__init__()
 
@@ -284,7 +284,7 @@ class ChatEvent(Object):
         users = {i.id: i for i in users}
         chats = {i.id: i for i in chats}
 
-        user = types.User._parse(client, users[event.user_id])
+        user = await types.User._parse(client, users[event.user_id])
         action = event.action
 
         old_description: Optional[str] = None
@@ -356,8 +356,8 @@ class ChatEvent(Object):
             action = enums.ChatEventAction.HISTORY_TTL_CHANGED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionChangeLinkedChat):
-            old_linked_chat = types.Chat._parse_chat(client, chats[action.prev_value])
-            new_linked_chat = types.Chat._parse_chat(client, chats[action.new_value])
+            old_linked_chat = await types.Chat._parse_chat(client, chats[action.prev_value])
+            new_linked_chat = await types.Chat._parse_chat(client, chats[action.new_value])
             action = enums.ChatEventAction.LINKED_CHAT_CHANGED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionChangePhoto):
@@ -390,17 +390,17 @@ class ChatEvent(Object):
             action = enums.ChatEventAction.MESSAGE_EDITED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionParticipantInvite):
-            invited_member = types.ChatMember._parse(client, action.participant, users, chats)
+            invited_member = await types.ChatMember._parse(client, action.participant, users, chats)
             action = enums.ChatEventAction.MEMBER_INVITED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionParticipantToggleAdmin):
-            old_administrator_privileges = types.ChatMember._parse(client, action.prev_participant, users, chats)
-            new_administrator_privileges = types.ChatMember._parse(client, action.new_participant, users, chats)
+            old_administrator_privileges = await types.ChatMember._parse(client, action.prev_participant, users, chats)
+            new_administrator_privileges = await types.ChatMember._parse(client, action.new_participant, users, chats)
             action = enums.ChatEventAction.ADMINISTRATOR_PRIVILEGES_CHANGED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionParticipantToggleBan):
-            old_member_permissions = types.ChatMember._parse(client, action.prev_participant, users, chats)
-            new_member_permissions = types.ChatMember._parse(client, action.new_participant, users, chats)
+            old_member_permissions = await types.ChatMember._parse(client, action.prev_participant, users, chats)
+            new_member_permissions = await types.ChatMember._parse(client, action.new_participant, users, chats)
             action = enums.ChatEventAction.MEMBER_PERMISSIONS_CHANGED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionStopPoll):
@@ -443,29 +443,29 @@ class ChatEvent(Object):
                 action = enums.ChatEventAction.MESSAGE_PIN_CHANGED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionExportedInviteEdit):
-            old_invite_link = types.ChatInviteLink._parse(client, action.prev_invite, users)
-            new_invite_link = types.ChatInviteLink._parse(client, action.new_invite, users)
+            old_invite_link = await types.ChatInviteLink._parse(client, action.prev_invite, users)
+            new_invite_link = await types.ChatInviteLink._parse(client, action.new_invite, users)
             action = enums.ChatEventAction.INVITE_LINK_EDITED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionExportedInviteRevoke):
-            revoked_invite_link = types.ChatInviteLink._parse(client, action.invite, users)
+            revoked_invite_link = await types.ChatInviteLink._parse(client, action.invite, users)
             action = enums.ChatEventAction.INVITE_LINK_REVOKED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionExportedInviteDelete):
-            deleted_invite_link = types.ChatInviteLink._parse(client, action.invite, users)
+            deleted_invite_link = await types.ChatInviteLink._parse(client, action.invite, users)
             action = enums.ChatEventAction.INVITE_LINK_DELETED
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionCreateTopic):
-            created_forum_topic = types.ForumTopic._parse(client, action.topic, users=users, chats=chats)
+            created_forum_topic = await types.ForumTopic._parse(client, action.topic, users=users, chats=chats)
             action = enums.ChatEventAction.CREATED_FORUM_TOPIC
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionEditTopic):
-            old_forum_topic = types.ForumTopic._parse(client, action.prev_topic, users=users, chats=chats)
-            new_forum_topic = types.ForumTopic._parse(client, action.new_topic, users=users, chats=chats)
+            old_forum_topic = await types.ForumTopic._parse(client, action.prev_topic, users=users, chats=chats)
+            new_forum_topic = await types.ForumTopic._parse(client, action.new_topic, users=users, chats=chats)
             action = enums.ChatEventAction.EDITED_FORUM_TOPIC
 
         elif isinstance(action, raw.types.ChannelAdminLogEventActionDeleteTopic):
-            created_forum_topic = types.ForumTopic._parse(client, action.topic, users=users, chats=chats)
+            created_forum_topic = await types.ForumTopic._parse(client, action.topic, users=users, chats=chats)
             action = enums.ChatEventAction.DELETED_FORUM_TOPIC
 
         else:

@@ -85,7 +85,7 @@ class GiftAttribute(Object):
     def __init__(
         self,
         *,
-        client: "pyrogram.Client" = None,
+        client: Optional["pyrogram.Client"] = None,
         type: "enums.GiftAttributeType",
         name: Optional[str] = None,
         backdrop_id: Optional[int] = None,
@@ -147,14 +147,14 @@ class GiftAttribute(Object):
 
         if isinstance(attr, raw.types.StarGiftAttributeOriginalDetails):
             caption, caption_entities = (
-                utils.parse_text_with_entities(client, attr.message, users)
+                await utils.parse_text_with_entities(client, attr.message, users)
             ).values()
 
             sender_id = utils.get_raw_peer_id(attr.sender_id)
             recipient_id = utils.get_raw_peer_id(attr.recipient_id)
 
-            from_user = types.User._parse(client, users.get(sender_id))
-            to_user = types.User._parse(client, users.get(recipient_id))
+            from_user = await types.User._parse(client, users.get(sender_id))
+            to_user = await types.User._parse(client, users.get(recipient_id))
 
         return GiftAttribute(
             name=getattr(attr, "name", None),

@@ -27,8 +27,8 @@ class UpgradeGift:
         self: "pyrogram.Client",
         owned_gift_id: str,
         keep_original_details: Optional[bool] = None,
-        star_count: int = None,
-        business_connection_id: str = None
+        star_count: Optional[int] = None,
+        business_connection_id: Optional[str] = None
     ) -> Optional["types.Message"]:
         """Upgrade a given regular gift to a unique gift.
 
@@ -57,7 +57,8 @@ class UpgradeGift:
                 For bots only.
 
         Returns:
-            :obj:`~pyrogram.types.Message`: On success, the sent message is returned.
+            :obj:`~pyrogram.types.Message` | ``None``: On success, the sent message is returned, otherwise,
+            in case the server answered with no message, None is returned.
 
         Example:
             .. code-block:: python

@@ -30,7 +30,7 @@ class Client(GetTopChats):
 async def test_get_top_chats_uses_chat_lookup(monkeypatch):
     parsed = []
 
-    def parse_chat(client, chat):
+    async def parse_chat(client, chat):
         parsed.append(chat)
         return chat
 

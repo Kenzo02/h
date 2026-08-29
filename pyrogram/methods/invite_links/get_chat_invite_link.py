@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union
+from typing import Optional, Union
 
 import pyrogram
 from pyrogram import raw, types
@@ -27,7 +27,7 @@ class GetChatInviteLink:
         self: "pyrogram.Client",
         chat_id: Union[int, str],
         invite_link: str,
-    ) -> "types.ChatInviteLink":
+    ) -> Optional["types.ChatInviteLink"]:
         """Get detailed information about a chat invite link.
 
         .. include:: /_includes/usable-by/users.rst
@@ -41,7 +41,9 @@ class GetChatInviteLink:
                 The invite link.
 
         Returns:
-            :obj:`~pyrogram.types.ChatInviteLink`: On success, the invite link is returned.
+            :obj:`~pyrogram.types.ChatInviteLink` | ``None``: On success, the invite link is returned,
+            otherwise, in case the chat only accepts join requests through its public link, None is
+            returned.
         """
         r = await self.invoke(
             raw.functions.messages.GetExportedChatInvite(
@@ -51,4 +53,4 @@ class GetChatInviteLink:
 
         users = {i.id: i for i in r.users}
 
-        return types.ChatInviteLink._parse(self, r.invite, users)
+        return await types.ChatInviteLink._parse(self, r.invite, users)

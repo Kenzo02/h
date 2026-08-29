@@ -78,4 +78,4 @@ class SummarizeMessage:
             )
         )
 
-        return types.FormattedText._parse(self, r)
+        return await types.FormattedText._parse(self, r)

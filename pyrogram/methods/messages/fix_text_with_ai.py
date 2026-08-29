@@ -54,4 +54,4 @@ class FixTextWithAI:
             )
         )
 
-        return types.FormattedText._parse(self, r.result_text)
+        return await types.FormattedText._parse(self, r.result_text)

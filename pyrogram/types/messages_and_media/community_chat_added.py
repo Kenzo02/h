@@ -38,11 +38,11 @@ class CommunityChatAdded(Object):
         self.community = community
 
     @staticmethod
-    def _parse(
+    async def _parse(
         client: "pyrogram.Client",
         action: "raw.types.MessageActionChangeCommunity",
         chats: Dict[int, "raw.base.Chat"],
     ) -> "CommunityChatAdded":
         return CommunityChatAdded(
-            community=types.Community._parse(client, chats.get(action.community_id)),
+            community=await types.Community._parse(client, chats.get(action.community_id)),
         )
