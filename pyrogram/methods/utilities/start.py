@@ -93,14 +93,15 @@ class Start:
                 self.takeout_id = (await self.invoke(raw.functions.account.InitTakeoutSession())).id
                 log.info("Takeout session %s initiated", self.takeout_id)
 
-            state = await self.invoke(raw.functions.updates.GetState())
-            local_state = await self.storage.get_update_states(0)
+            async with self._update_state_lock:
+                state = await self.invoke(raw.functions.updates.GetState())
+                local_state = await self.storage.get_update_states(0)
 
-            if not local_state:
-                await self.storage.set_update_state(
-                    UpdateState(0, state.pts, state.qts, state.date, state.seq)
-                )
-                await self.storage.save()
+                if not local_state:
+                    await self.storage.set_update_state(
+                        UpdateState(0, state.pts, state.qts, state.date, state.seq)
+                    )
+                    await self.storage.save()
         except (Exception, KeyboardInterrupt):
             await self.disconnect()
             raise

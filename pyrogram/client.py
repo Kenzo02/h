@@ -416,6 +416,7 @@ class Client(Methods):
         self.sessions = {}
         self.media_sessions = {}
         self.sessions_lock = asyncio.Lock()
+        self._update_state_lock = asyncio.Lock()
 
         self.save_file_semaphore = asyncio.Semaphore(self.max_concurrent_transmissions)
         self.get_file_semaphore = asyncio.Semaphore(self.max_concurrent_transmissions)
@@ -833,6 +834,10 @@ class Client(Methods):
         return is_min
 
     async def handle_updates(self, updates):
+        async with self._update_state_lock:
+            await self._handle_updates(updates)
+
+    async def _handle_updates(self, updates):
         self.last_update_time = datetime.now()
 
         if isinstance(updates, (raw.types.Updates, raw.types.UpdatesCombined)):
