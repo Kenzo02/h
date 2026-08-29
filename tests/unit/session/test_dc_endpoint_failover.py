@@ -2,8 +2,11 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import stat
+import subprocess
 import struct
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -45,27 +48,27 @@ def test_dc_endpoint_helper_has_same_dc_prod_fallbacks_for_known_builtin_options
     )
 
 
-def test_endpoint_cache_path_creates_host_shared_cache_dir(monkeypatch, tmp_path: Path):
-    cache_file = tmp_path / "var-tmp" / "kurigram" / "dc_endpoints.json"
+def test_endpoint_cache_path_uses_private_user_cache_dir(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path, raising=False)
 
-    monkeypatch.setattr(dc_options, "SHARED_ENDPOINT_CACHE_PATH", cache_file, raising=False)
+    cache_file = dc_options.endpoint_cache_path()
 
-    assert dc_options.endpoint_cache_path() == cache_file
+    assert cache_file == tmp_path / ".cache" / "kurigram" / "dc_endpoints.json"
     assert cache_file.parent.is_dir()
-    assert stat.S_IMODE(cache_file.parent.stat().st_mode) == 0o1777
+    assert stat.S_IMODE(cache_file.parent.stat().st_mode) == 0o700
 
 
-def test_endpoint_cache_path_falls_back_to_user_cache_if_shared_dir_unavailable(monkeypatch, tmp_path: Path):
+def test_endpoint_cache_path_does_not_fall_back_to_a_shared_cache(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(dc_options, "ensure_endpoint_cache_dir", lambda path: False, raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path, raising=False)
 
     assert dc_options.endpoint_cache_path() == tmp_path / ".cache" / "kurigram" / "dc_endpoints.json"
 
 
-def test_update_endpoint_cache_writes_host_shared_file_world_writable(monkeypatch, tmp_path: Path):
-    cache_file = tmp_path / "shared" / "dc_endpoints.json"
+def test_update_endpoint_cache_writes_private_files_atomically(monkeypatch, tmp_path: Path):
+    cache_file = tmp_path / "private" / "dc_endpoints.json"
 
-    monkeypatch.setattr(dc_options, "SHARED_ENDPOINT_CACHE_PATH", cache_file, raising=False)
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
 
     dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
 
@@ -74,9 +77,134 @@ def test_update_endpoint_cache_writes_host_shared_file_world_writable(monkeypatc
 
     assert cached["server_address"] == DC5_FALLBACK
     assert cached["port"] == 443
-    assert stat.S_IMODE(cache_file.stat().st_mode) == 0o666
-    assert stat.S_IMODE((cache_file.with_name(f"{cache_file.name}.lock")).stat().st_mode) == 0o666
-    assert not list(cache_file.parent.glob("*.tmp"))
+    assert stat.S_IMODE(cache_file.stat().st_mode) == 0o600
+    assert stat.S_IMODE((cache_file.with_name(f"{cache_file.name}.lock")).stat().st_mode) == 0o600
+    assert not list(cache_file.parent.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_rejects_directory_symlink_without_touching_target(monkeypatch, tmp_path: Path):
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    target_cache = target_dir / "dc_endpoints.json"
+    target_cache.write_bytes(b"keep-me")
+    target_cache.chmod(0o640)
+    target_mode = stat.S_IMODE(target_cache.stat().st_mode)
+    cache_file = tmp_path / "cache-link" / "dc_endpoints.json"
+    cache_file.parent.symlink_to(target_dir, target_is_directory=True)
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert target_cache.read_bytes() == b"keep-me"
+    assert stat.S_IMODE(target_cache.stat().st_mode) == target_mode
+    assert not list(target_dir.glob("*.tmp"))
+
+
+def test_endpoint_cache_rejects_cache_file_symlink_without_touching_target(monkeypatch, tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    target_cache = tmp_path / "target.json"
+    target_cache.write_bytes(b"keep-me")
+    target_cache.chmod(0o640)
+    target_mode = stat.S_IMODE(target_cache.stat().st_mode)
+    cache_file = cache_dir / "dc_endpoints.json"
+    cache_file.symlink_to(target_cache)
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert cache_file.is_symlink()
+    assert target_cache.read_bytes() == b"keep-me"
+    assert stat.S_IMODE(target_cache.stat().st_mode) == target_mode
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_rejects_lock_file_symlink_without_touching_target(monkeypatch, tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    target_lock = tmp_path / "target.lock"
+    target_lock.write_bytes(b"keep-me")
+    target_lock.chmod(0o640)
+    target_mode = stat.S_IMODE(target_lock.stat().st_mode)
+    cache_file = cache_dir / "dc_endpoints.json"
+    cache_file.with_name(f"{cache_file.name}.lock").symlink_to(target_lock)
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert not cache_file.exists()
+    assert target_lock.read_bytes() == b"keep-me"
+    assert stat.S_IMODE(target_lock.stat().st_mode) == target_mode
+    assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+def test_endpoint_cache_rejects_non_directory_cache_parent(monkeypatch, tmp_path: Path):
+    cache_parent = tmp_path / "not-a-directory"
+    cache_parent.write_bytes(b"keep-me")
+    cache_file = cache_parent / "dc_endpoints.json"
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    assert cache_parent.read_bytes() == b"keep-me"
+
+
+def test_endpoint_cache_preserves_entries_for_same_user_processes(monkeypatch, tmp_path: Path):
+    cache_file = tmp_path / "private" / "dc_endpoints.json"
+
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: cache_file)
+
+    dc_options.update_endpoint_cache("prod:v4:dc1:api", ("149.154.175.50", 443))
+    dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
+
+    cache = dc_options.load_endpoint_cache(cache_file)
+
+    assert set(cache["endpoints"]) == {"prod:v4:dc1:api", "prod:v4:dc5:api"}
+    assert cache["endpoints"]["prod:v4:dc1:api"]["server_address"] == "149.154.175.50"
+    assert cache["endpoints"]["prod:v4:dc5:api"]["server_address"] == DC5_FALLBACK
+
+
+def test_endpoint_cache_serializes_same_user_process_updates(tmp_path: Path):
+    cache_file = tmp_path / "private" / "dc_endpoints.json"
+    repo_root = Path(__file__).parents[3]
+    update_script = """
+import sys
+from pathlib import Path
+
+import pyrogram.dc_options as dc_options
+
+cache_path = Path(sys.argv[1])
+dc_options.endpoint_cache_path = lambda: cache_path
+dc_options.update_endpoint_cache(sys.argv[2], (sys.argv[3], 443))
+"""
+    processes = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                update_script,
+                str(cache_file),
+                cache_key,
+                endpoint,
+            ],
+            cwd=repo_root,
+            env={**os.environ, "PYTHONPATH": str(repo_root)},
+        )
+        for cache_key, endpoint in (
+            ("prod:v4:dc1:api", "149.154.175.50"),
+            ("prod:v4:dc5:api", DC5_FALLBACK),
+        )
+    ]
+
+    assert [process.wait() for process in processes] == [0, 0]
+
+    cache = dc_options.load_endpoint_cache(cache_file)
+
+    assert set(cache["endpoints"]) == {"prod:v4:dc1:api", "prod:v4:dc5:api"}
 
 
 @pytest.mark.asyncio
