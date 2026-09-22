@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 import time
 
@@ -30,7 +32,7 @@ class MsgId:
         base_msg_id = int(now * (2**32)) & ~0b11
 
         if base_msg_id <= cls._last_msg_id:
-           base_msg_id = cls._last_msg_id + 4
+            base_msg_id = cls._last_msg_id + 4
 
         cls._last_msg_id = base_msg_id
 

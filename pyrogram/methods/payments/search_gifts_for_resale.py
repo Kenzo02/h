@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Optional, AsyncIterator
+from __future__ import annotations as _annotations
+
+from collections.abc import AsyncGenerator
 
 import pyrogram
 from pyrogram import enums, raw, types
@@ -24,15 +26,15 @@ from pyrogram import enums, raw, types
 
 class SearchGiftsForResale:
     async def search_gifts_for_resale(
-        self: "pyrogram.Client",
+        self: pyrogram.Client,
         gift_id: int,
-        order: "enums.GiftForResaleOrder" = enums.GiftForResaleOrder.CHANGE_DATE,
-        for_crafting: Optional[bool] = None,
-        for_stars: Optional[bool] = None,
-        attributes: Optional[List["types.UpgradedGiftAttributeId"]] = None,
+        order: enums.GiftForResaleOrder = enums.GiftForResaleOrder.CHANGE_DATE,
+        for_crafting: bool | None = None,
+        for_stars: bool | None = None,
+        attributes: list[types.UpgradedGiftAttributeId] | None = None,
         limit: int = 0,
-        offset: str = ""
-    ) -> AsyncIterator["types.Gift"]:
+        offset: str = "",
+    ) -> AsyncGenerator[types.Gift, None]:
         """Get upgraded gifts that can be bought from other owners.
 
         .. include:: /_includes/usable-by/users.rst
@@ -89,17 +91,15 @@ class SearchGiftsForResale:
                     for_craft=for_crafting,
                     stars_only=for_stars,
                     attributes=[attr.write() for attr in attributes] if attributes else None,
-
                 ),
-                sleep_threshold=60
+                sleep_threshold=60,
             )
 
             users = {i.id: i for i in r.users}
             chats = {i.id: i for i in r.chats}
 
             gifts = [
-                await types.Gift._parse(self, gift, users=users, chats=chats)
-                for gift in r.gifts
+                await types.Gift._parse(self, gift, users=users, chats=chats) for gift in r.gifts
             ]
 
             if not gifts:

@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, types, utils
@@ -24,9 +24,9 @@ from pyrogram import raw, types, utils
 
 class SetGiftResalePrice:
     async def set_gift_resale_price(
-        self: "pyrogram.Client",
+        self: pyrogram.Client,
         owned_gift_id: str,
-        price: Optional["types.GiftResalePrice"] = None,
+        price: types.GiftResalePrice | None = None,
     ) -> bool:
         """Change resale price of a unique gift owned by the current user.
 
@@ -67,7 +67,9 @@ class SetGiftResalePrice:
         await self.invoke(
             raw.functions.payments.UpdateStarGiftPrice(
                 stargift=await utils.get_input_stargift(self, owned_gift_id),
-                resell_amount=raw.types.StarsAmount(amount=0, nanos=0) if price is None else price.write()
+                resell_amount=raw.types.StarsAmount(amount=0, nanos=0)
+                if price is None
+                else price.write(),
             )
         )
 

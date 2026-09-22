@@ -16,8 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Iterable, List, Union, overload
+from typing import overload
+from collections.abc import Iterable
 
 import pyrogram
 from pyrogram import raw, types
@@ -28,23 +31,17 @@ log = logging.getLogger(__name__)
 class GetForumTopicsByID:
     @overload
     async def get_forum_topics_by_id(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_ids: int
-    ) -> "types.ForumTopic": ...
+        self: pyrogram.Client, chat_id: int | str, topic_ids: int
+    ) -> types.ForumTopic: ...
 
     @overload
     async def get_forum_topics_by_id(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_ids: Iterable[int]
-    ) -> List["types.ForumTopic"]: ...
+        self: pyrogram.Client, chat_id: int | str, topic_ids: Iterable[int]
+    ) -> list[types.ForumTopic]: ...
 
     async def get_forum_topics_by_id(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_ids: Union[int, Iterable[int]]
-    ) -> Union["types.ForumTopic", List["types.ForumTopic"]]:
+        self: pyrogram.Client, chat_id: int | str, topic_ids: int | Iterable[int]
+    ) -> types.ForumTopic | list[types.ForumTopic]:
         """Get one or more topic from a chat by using topic identifiers.
 
         .. include:: /_includes/usable-by/users.rst
@@ -78,8 +75,7 @@ class GetForumTopicsByID:
 
         r = await self.invoke(
             raw.functions.messages.GetForumTopicsByID(
-                peer=await self.resolve_peer(chat_id),
-                topics=ids
+                peer=await self.resolve_peer(chat_id), topics=ids
             )
         )
 

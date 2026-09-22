@@ -16,12 +16,15 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import base64
 import struct
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, cast
+from collections.abc import Iterable
 
 if TYPE_CHECKING:
     from pyrogram import raw
@@ -30,13 +33,14 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class UpdateState:
     id: int
-    pts: Optional[int]
-    qts: Optional[int]
-    date: Optional[int]
-    seq: Optional[int]
+    pts: int | None
+    qts: int | None
+    date: int | None
+    seq: int | None
 
 
 _UPDATE_STATE_BRIDGE_STACK = ContextVar("storage_update_state_bridge_stack", default=())
+_LegacyUpdateState = tuple[int, int | None, int | None, int | None, int | None]
 
 
 class Storage(ABC):
@@ -56,9 +60,9 @@ class Storage(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        has_legacy_api = getattr(cls, "update_state") is not Storage.update_state
+        has_legacy_api = cls.update_state is not Storage.update_state
         has_split_api = all(
-            getattr(cls, method_name) is not getattr(Storage, method_name)
+            getattr(cls, method_name) is not Storage.__dict__[method_name]
             for method_name in Storage._UPDATE_STATE_SPLIT_METHODS
         )
 
@@ -95,12 +99,12 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update_peers(self, peers: Iterable[Tuple[int, int, str, Optional[str]]]):
+    async def update_peers(self, peers: Iterable[tuple[int, int, str, str | None]]):
         """
         Update the peers table with the provided information.
 
         Parameters:
-            peers (List of ``Tuple[int, int, str, str]``):
+            peers (List of ``tuple[int, int, str, str | None]``):
                 A list of tuples containing the
                 information of the peers to be updated.
                 Each tuple must contain the following information:
@@ -112,12 +116,12 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update_usernames(self, usernames: Iterable[Tuple[int, List[Optional[str]]]]):
+    async def update_usernames(self, usernames: Iterable[tuple[int, list[str | None]]]):
         """
         Update the usernames table with the provided information.
 
         Parameters:
-            usernames (List of ``Tuple[int, List[Optional[str]]]``):
+            usernames (List of ``tuple[int, list[str | None]]``):
                 A list of tuples containing the
                 information of the usernames to be updated. Each tuple must contain the following
                 information:
@@ -126,9 +130,7 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
-    async def get_update_states(
-        self, ids: Optional[Union[int, Iterable[int]]] = None
-    ) -> List[UpdateState]:
+    async def get_update_states(self, ids: int | Iterable[int] | None = None) -> list[UpdateState]:
         """Get the update state of the current session.
 
         Parameters:
@@ -148,8 +150,7 @@ class Storage(ABC):
                 return []
 
         states = [
-            self._coerce_update_state(state)
-            for state in await self._call_legacy_update_state()
+            self._coerce_update_state(state) for state in await self._call_legacy_update_state()
         ]
 
         if state_ids is None:
@@ -157,7 +158,7 @@ class Storage(ABC):
 
         return [state for state in states if state.id in state_ids]
 
-    async def set_update_state(self, update_state: Union[UpdateState, Iterable[UpdateState]]):
+    async def set_update_state(self, update_state: UpdateState | Iterable[UpdateState]):
         """Set the update state of the current session.
 
         Parameters:
@@ -166,17 +167,24 @@ class Storage(ABC):
         """
         states = [update_state] if isinstance(update_state, UpdateState) else update_state
 
-        for state in states:
-            current = await self.get_update_states(state.id)
+        for update in states:
+            current = await self.get_update_states(update.id)
+            state_to_store = update
 
             if current:
-                state = self._merge_update_state(current[0], state)
+                state_to_store = self._merge_update_state(current[0], update)
 
             await self._call_legacy_update_state(
-                (state.id, state.pts, state.qts, state.date, state.seq)
+                (
+                    state_to_store.id,
+                    state_to_store.pts,
+                    state_to_store.qts,
+                    state_to_store.date,
+                    state_to_store.seq,
+                )
             )
 
-    async def delete_update_state(self, state_id: Union[int, Iterable[int]]):
+    async def delete_update_state(self, state_id: int | Iterable[int]):
         """Delete the update state of the current session.
 
         Parameters:
@@ -203,9 +211,9 @@ class Storage(ABC):
         )
 
     async def _call_legacy_update_state(
-        self, update_state: Union[int, Tuple[int, int, int, int, int]] = object
+        self, update_state: int | _LegacyUpdateState | type[object] = object
     ):
-        update_state_method = getattr(type(self), "update_state")
+        update_state_method = type(self).update_state
 
         if update_state_method is Storage.update_state:
             raise NotImplementedError("No legacy update_state implementation found")
@@ -219,7 +227,7 @@ class Storage(ABC):
         token = _UPDATE_STATE_BRIDGE_STACK.set(bridge_stack + (storage_id,))
 
         try:
-            update_state_method = getattr(self, "update_state")
+            update_state_method = self.update_state
 
             if update_state is object:
                 return await update_state_method()
@@ -228,9 +236,7 @@ class Storage(ABC):
         finally:
             _UPDATE_STATE_BRIDGE_STACK.reset(token)
 
-    async def update_state(
-        self, update_state: Union[int, Tuple[int, int, int, int, int]] = object
-    ):
+    async def update_state(self, update_state: int | _LegacyUpdateState | type[object] = object):
         """Compatibility adapter for the pre-split update-state API."""
         if update_state is object:
             return [
@@ -241,10 +247,10 @@ class Storage(ABC):
         if isinstance(update_state, int):
             return await self.delete_update_state(update_state)
 
-        return await self.set_update_state(UpdateState(*update_state))
+        return await self.set_update_state(UpdateState(*cast(_LegacyUpdateState, update_state)))
 
     @abstractmethod
-    async def get_peer_by_id(self, peer_id: int) -> Optional["raw.base.InputPeer"]:
+    async def get_peer_by_id(self, peer_id: int) -> raw.base.InputPeer | None:
         """Retrieve a peer by its ID.
 
         Parameters:
@@ -257,7 +263,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_peer_by_username(self, username: str) -> Optional["raw.base.InputPeer"]:
+    async def get_peer_by_username(self, username: str) -> raw.base.InputPeer | None:
         """Retrieve a peer by its username.
 
         Parameters:
@@ -270,7 +276,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_peer_by_phone_number(self, phone_number: str) -> Optional["raw.base.InputPeer"]:
+    async def get_peer_by_phone_number(self, phone_number: str) -> raw.base.InputPeer | None:
         """Retrieve a peer by its phone number.
 
         Parameters:
@@ -283,7 +289,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def dc_id(self, value: Optional[int] = None) -> int:
+    async def dc_id(self, value: int | None = None) -> int:
         """Get or set the DC ID of the current session.
 
         Parameters:
@@ -293,7 +299,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def api_id(self, value: Optional[int] = None) -> int:
+    async def api_id(self, value: int | None = None) -> int:
         """Get or set the API ID of the current session.
 
         Parameters:
@@ -303,7 +309,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def server_address(self, value: Optional[str] = None) -> str:
+    async def server_address(self, value: str | None = None) -> str:
         """Get or set the server address of the current session.
 
         Parameters:
@@ -313,7 +319,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def port(self, value: Optional[int] = None) -> int:
+    async def port(self, value: int | None = None) -> int:
         """Get or set the server port of the current session.
 
         Parameters:
@@ -323,7 +329,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def test_mode(self, value: Optional[bool] = None) -> bool:
+    async def test_mode(self, value: bool | None = None) -> bool:
         """Get or set the test mode of the current session.
 
         Parameters:
@@ -333,7 +339,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def auth_key(self, value: Optional[bytes] = None) -> bytes:
+    async def auth_key(self, value: bytes | None = None) -> bytes:
         """Get or set the authorization key of the current session.
 
         Parameters:
@@ -343,7 +349,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def date(self, value: Optional[int] = None) -> int:
+    async def date(self, value: int | None = None) -> int:
         """Get or set the date of the current session.
 
         Parameters:
@@ -353,7 +359,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def user_id(self, value: Optional[int] = None) -> int:
+    async def user_id(self, value: int | None = None) -> int:
         """Get or set the user ID of the current session.
 
         Parameters:
@@ -363,7 +369,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def is_bot(self, value: Optional[bool] = None) -> bool:
+    async def is_bot(self, value: bool | None = None) -> bool:
         """Get or set the bot flag of the current session.
 
         Parameters:

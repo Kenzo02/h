@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union, Optional, AsyncIterator
+from __future__ import annotations as _annotations
+
+from collections.abc import AsyncGenerator
 
 import pyrogram
 from pyrogram import raw
@@ -25,12 +27,12 @@ from pyrogram import types
 
 class GetChatAdminInviteLinks:
     async def get_chat_admin_invite_links(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        admin_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
+        admin_id: int | str,
         revoked: bool = False,
         limit: int = 0,
-    ) -> AsyncIterator["types.ChatInviteLink"]:
+    ) -> AsyncGenerator[types.ChatInviteLink, None]:
         """Get the invite links created by an administrator in a chat.
 
         .. note::
@@ -79,7 +81,7 @@ class GetChatAdminInviteLinks:
                     limit=limit,
                     revoked=revoked,
                     offset_date=offset_date,
-                    offset_link=offset_link
+                    offset_link=offset_link,
                 )
             )
 
@@ -92,7 +94,12 @@ class GetChatAdminInviteLinks:
             offset_link = r.invites[-1].link
 
             for i in r.invites:
-                yield await types.ChatInviteLink._parse(self, i, users)
+                invite_link = await types.ChatInviteLink._parse(self, i, users)
+
+                if invite_link is None:
+                    continue
+
+                yield invite_link
 
                 current += 1
 

@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw
@@ -24,9 +24,7 @@ from pyrogram import raw
 
 class UnpinForumTopic:
     async def unpin_forum_topic(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_id: int
+        self: pyrogram.Client, chat_id: int | str, message_thread_id: int
     ) -> bool:
         """Unpin a forum topic.
 
@@ -36,7 +34,7 @@ class UnpinForumTopic:
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
 
-            topic_id (``int``):
+            message_thread_id (``int``):
                 Unique identifier (int) of the target forum topic.
 
         Returns:
@@ -45,13 +43,11 @@ class UnpinForumTopic:
         Example:
             .. code-block:: python
 
-                await app.unpin_forum_topic(chat_id, topic_id)
+                await app.unpin_forum_topic(chat_id, topimessage_thread_idc_id)
         """
         await self.invoke(
             raw.functions.messages.UpdatePinnedForumTopic(
-                peer=await self.resolve_peer(chat_id),
-                topic_id=topic_id,
-                pinned=False
+                peer=await self.resolve_peer(chat_id), topic_id=message_thread_id, pinned=False
             )
         )
 

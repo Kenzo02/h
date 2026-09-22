@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+ChatMemberUpdatedCallbackType = Callable[["pyrogram.Client", types.ChatMemberUpdated], Any]
 
 
-class ChatMemberUpdatedHandler(Handler):
+class ChatMemberUpdatedHandler(Handler[ChatMemberUpdatedCallbackType]):
     """The ChatMemberUpdated handler class. Used to handle changes in the status of a chat member.
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`.
 
@@ -38,7 +45,7 @@ class ChatMemberUpdatedHandler(Handler):
             *(client, chat_member_updated)* as positional arguments (look at the section below for a detailed
             description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of updates to be passed in your callback function.
 
     Other parameters:
@@ -50,6 +57,8 @@ class ChatMemberUpdatedHandler(Handler):
     """
 
     def __init__(
-        self, callback: Callable[["pyrogram.Client", "types.ChatMemberUpdated"], Any], filters=None
-    ):
+        self,
+        callback: ChatMemberUpdatedCallbackType,
+        filters: Filter | None = None,
+    ) -> None:
         super().__init__(callback, filters)

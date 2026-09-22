@@ -1,3 +1,5 @@
+from __future__ import annotations as _annotations
+
 import asyncio
 from types import SimpleNamespace
 
@@ -200,3 +202,148 @@ async def test_recover_gaps_orders_channel_difference_empty_before_live_cursor_a
         UpdateState(channel_id, 99, 88, 30, 40),
         UpdateState(0, None, None, 77, 66),
     ]
+
+
+class HydratingLiveClient(LiveClient):
+    def __init__(self, *, min_channel: bool, fail_hydration: bool = False):
+        super().__init__()
+        self.min_channel = min_channel
+        self.fail_hydration = fail_hydration
+        self.hydration_started = asyncio.Event()
+        self.release_hydration = asyncio.Event()
+
+        if min_channel:
+            self.storage.states.append(UpdateState(-1000000000123, 10, 20, 30, 40))
+
+    async def fetch_peers(self, peers):
+        return self.min_channel
+
+    async def resolve_peer(self, chat_id):
+        assert chat_id == -1000000000123
+        return raw.types.InputChannel(channel_id=123, access_hash=456)
+
+    async def invoke(self, query):
+        self.queries.append(query)
+        self.hydration_started.set()
+
+        if self.fail_hydration:
+            raise OSError("offline hydration failure")
+
+        await self.release_hydration.wait()
+
+        if isinstance(query, raw.functions.updates.GetChannelDifference):
+            return raw.types.updates.ChannelDifferenceEmpty(pts=42, final=True)
+
+        return raw.types.updates.Difference(
+            new_messages=[
+                raw.types.Message(
+                    id=9,
+                    peer_id=raw.types.PeerUser(user_id=1),
+                    date=43,
+                    message="hydrated",
+                )
+            ],
+            new_encrypted_messages=[],
+            other_updates=[],
+            chats=[],
+            users=[],
+            state=raw.types.updates.State(pts=42, qts=20, date=43, seq=44, unread_count=0),
+        )
+
+
+def short_update():
+    return raw.types.UpdateShortMessage(
+        id=8,
+        user_id=1,
+        message="short",
+        pts=42,
+        pts_count=1,
+        date=43,
+    )
+
+
+def min_channel_update():
+    update = raw.types.UpdateNewChannelMessage(
+        message=raw.types.Message(
+            id=8,
+            peer_id=raw.types.PeerChannel(channel_id=123),
+            date=43,
+            message="minimal",
+        ),
+        pts=42,
+        pts_count=1,
+    )
+
+    return raw.types.Updates(updates=[update], users=[], chats=[], date=43, seq=44)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("min_channel", "updates"),
+    [(False, short_update), (True, min_channel_update)],
+    ids=["short", "minimal-channel"],
+)
+async def test_cancelled_hydration_keeps_the_previous_update_cursor(min_channel, updates):
+    client = HydratingLiveClient(min_channel=min_channel)
+    handling = asyncio.create_task(client.handle_updates(updates()))
+
+    await asyncio.wait_for(client.hydration_started.wait(), timeout=1)
+    handling.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await handling
+
+    assert client.storage.set_calls == []
+    assert client.dispatcher.updates_queue.empty()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("min_channel", "updates"),
+    [(False, short_update), (True, min_channel_update)],
+    ids=["short", "minimal-channel"],
+)
+async def test_failed_hydration_keeps_the_previous_update_cursor(min_channel, updates):
+    client = HydratingLiveClient(min_channel=min_channel, fail_hydration=True)
+
+    with pytest.raises(OSError, match="offline hydration failure"):
+        await client.handle_updates(updates())
+
+    assert client.storage.set_calls == []
+    assert client.dispatcher.updates_queue.empty()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("min_channel", "updates", "expected_states"),
+    [
+        (False, short_update, [UpdateState(0, 42, None, 43, None)]),
+        (
+            True,
+            min_channel_update,
+            [
+                UpdateState(-1000000000123, 42, None, None, None),
+                UpdateState(0, None, None, 43, 44),
+            ],
+        ),
+    ],
+    ids=["short", "minimal-channel"],
+)
+async def test_hydrated_update_is_enqueued_before_its_cursor_is_committed(
+    min_channel, updates, expected_states
+):
+    client = HydratingLiveClient(min_channel=min_channel)
+    handling = asyncio.create_task(client.handle_updates(updates()))
+
+    await asyncio.wait_for(client.hydration_started.wait(), timeout=1)
+    client.release_hydration.set()
+    await handling
+
+    queued_update, _, _ = client.dispatcher.updates_queue.get_nowait()
+
+    if min_channel:
+        assert isinstance(queued_update, raw.types.UpdateNewChannelMessage)
+    else:
+        assert isinstance(queued_update, raw.types.UpdateNewMessage)
+
+    assert client.storage.set_calls == expected_states

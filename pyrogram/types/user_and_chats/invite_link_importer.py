@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from datetime import datetime
 
 from pyrogram import types
@@ -42,6 +44,6 @@ class InviteLinkImporter(ChatJoiner):
         self,
         *,
         date: datetime,
-        user: "types.User",
+        user: types.User,
     ):
         super().__init__(client=None, date=date, user=user)

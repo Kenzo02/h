@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+BusinessMessageCallbackType = Callable[["pyrogram.Client", types.Message], Any]
 
 
-class BusinessMessageHandler(Handler):
+class BusinessMessageHandler(Handler[BusinessMessageCallbackType]):
     """The BusinessMessage handler class. Used to handle new business messages.
 
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`
@@ -38,7 +45,7 @@ class BusinessMessageHandler(Handler):
             Pass a function that will be called when a new Message arrives. It takes *(client, message)*
             as positional arguments (look at the section below for a detailed description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of messages to be passed
             in your callback function.
 
@@ -51,6 +58,8 @@ class BusinessMessageHandler(Handler):
     """
 
     def __init__(
-        self, callback: Callable[["pyrogram.Client", "types.Message"], Any], filters=None
-    ):
+        self,
+        callback: BusinessMessageCallbackType,
+        filters: Filter | None = None,
+    ) -> None:
         super().__init__(callback, filters)

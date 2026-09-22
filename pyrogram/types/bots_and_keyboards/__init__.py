@@ -48,6 +48,7 @@ from .menu_button import MenuButton
 from .menu_button_commands import MenuButtonCommands
 from .menu_button_default import MenuButtonDefault
 from .menu_button_web_app import MenuButtonWebApp
+from .message_generation_stopped import MessageGenerationStopped
 from .message_reaction_count_updated import MessageReactionCountUpdated
 from .message_reaction_updated import MessageReactionUpdated
 from .order_info import OrderInfo
@@ -55,6 +56,7 @@ from .pre_checkout_query import PreCheckoutQuery
 from .purchased_paid_media import PurchasedPaidMedia
 from .reply_keyboard_markup import ReplyKeyboardMarkup
 from .reply_keyboard_remove import ReplyKeyboardRemove
+from .rich_message_button import RichMessageButton
 from .sent_guest_message import SentGuestMessage
 from .sent_web_app_message import SentWebAppMessage
 from .shipping_address import ShippingAddress
@@ -97,6 +99,7 @@ __all__ = [
     "MenuButtonCommands",
     "MenuButtonDefault",
     "MenuButtonWebApp",
+    "MessageGenerationStopped",
     "MessageReactionCountUpdated",
     "MessageReactionUpdated",
     "OrderInfo",
@@ -104,6 +107,7 @@ __all__ = [
     "PurchasedPaidMedia",
     "ReplyKeyboardMarkup",
     "ReplyKeyboardRemove",
+    "RichMessageButton",
     "SentGuestMessage",
     "SentWebAppMessage",
     "ShippingAddress",
@@ -111,5 +115,5 @@ __all__ = [
     "ShippingQuery",
     "SwitchInlineQueryChosenChat",
     "UsersShared",
-    "WebAppInfo"
+    "WebAppInfo",
 ]

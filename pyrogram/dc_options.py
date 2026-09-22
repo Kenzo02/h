@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import asyncio
 from contextlib import contextmanager
 import errno
@@ -26,7 +28,6 @@ import secrets
 import stat
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 
 log = logging.getLogger(__name__)
@@ -38,11 +39,7 @@ except ImportError:  # pragma: no cover - Windows fallback
     fcntl = None
 
 
-TEST = {
-    1: "149.154.175.10",
-    2: "149.154.167.40",
-    3: "149.154.175.117"
-}
+TEST = {1: "149.154.175.10", 2: "149.154.167.40", 3: "149.154.175.117"}
 
 PROD = {
     1: "149.154.175.53",
@@ -50,14 +47,10 @@ PROD = {
     3: "149.154.175.100",
     4: "149.154.167.91",
     5: "91.108.56.130",
-    203: "91.105.192.100"
+    203: "91.105.192.100",
 }
 
-PROD_FALLBACKS = {
-    1: ("149.154.175.50",),
-    2: ("95.161.76.100",),
-    5: ("149.154.171.5",)
-}
+PROD_FALLBACKS = {1: ("149.154.175.50",), 2: ("95.161.76.100",), 5: ("149.154.171.5",)}
 
 DC_ENDPOINT_PROBE_TIMEOUT = 1.0
 ENDPOINT_CACHE_VERSION = 1
@@ -68,22 +61,21 @@ ENDPOINT_CACHE_OPERATION_ERRORS = (OSError, NotImplementedError, TypeError)
 _OS_SUPPORTS_DIR_FD = getattr(os, "supports_dir_fd", ())
 _OS_SUPPORTS_FOLLOW_SYMLINKS = getattr(os, "supports_follow_symlinks", ())
 _ENDPOINT_CACHE_DIR_FD_SUPPORTED = all(
-    getattr(os, name, None) in _OS_SUPPORTS_DIR_FD
-    for name in ("open", "mkdir", "stat", "unlink")
+    getattr(os, name, None) in _OS_SUPPORTS_DIR_FD for name in ("open", "mkdir", "stat", "unlink")
 )
 _ENDPOINT_CACHE_FOLLOW_SYMLINKS_SUPPORTED = os.stat in _OS_SUPPORTS_FOLLOW_SYMLINKS
 _ENDPOINT_CACHE_REPLACE_DIR_FD_SUPPORTED = os.replace in _OS_SUPPORTS_DIR_FD
 _ENDPOINT_CACHE_RENAME_DIR_FD_SUPPORTED = os.rename in _OS_SUPPORTS_DIR_FD
 
 
-def get_dc_endpoint(dc_id: int, test_mode: bool) -> Tuple[str, int]:
+def get_dc_endpoint(dc_id: int, test_mode: bool) -> tuple[str, int]:
     if test_mode:
         return TEST[dc_id], 80
 
     return PROD[dc_id], 443
 
 
-def get_dc_endpoints(dc_id: int, test_mode: bool) -> Tuple[Tuple[str, int], ...]:
+def get_dc_endpoints(dc_id: int, test_mode: bool) -> tuple[tuple[str, int], ...]:
     endpoint = get_dc_endpoint(dc_id, test_mode)
     endpoints = [endpoint]
 
@@ -125,7 +117,6 @@ def endpoint_cache_path() -> Path:
     return path
 
 
-
 def ensure_endpoint_cache_dir(path: Path) -> bool:
     directory_fd = _open_endpoint_cache_dir(path)
 
@@ -142,7 +133,7 @@ def _empty_endpoint_cache() -> dict:
     return {"version": ENDPOINT_CACHE_VERSION, "endpoints": {}}
 
 
-def _current_user_id() -> Optional[int]:
+def _current_user_id() -> int | None:
     getuid = getattr(os, "getuid", None)
 
     if getuid is None:
@@ -182,7 +173,7 @@ def _endpoint_cache_capabilities_available(*, write: bool = False) -> bool:
     return True
 
 
-def _endpoint_cache_open_flags() -> Optional[int]:
+def _endpoint_cache_open_flags() -> int | None:
     nofollow = getattr(os, "O_NOFOLLOW", None)
 
     if nofollow is None or not callable(getattr(os, "fchmod", None)):
@@ -199,7 +190,7 @@ def _is_safe_endpoint_cache_file(file_stat: os.stat_result) -> bool:
     )
 
 
-def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
+def _open_endpoint_cache_dir(path: Path) -> int | None:
     if not _endpoint_cache_capabilities_available():
         return None
 
@@ -254,7 +245,9 @@ def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
 
             if index < len(path_parts) - 1:
                 mode = stat.S_IMODE(file_stat.st_mode)
-                owned_by_current_or_root = _is_owned_by_current_user(file_stat) or file_stat.st_uid == 0
+                owned_by_current_or_root = (
+                    _is_owned_by_current_user(file_stat) or file_stat.st_uid == 0
+                )
 
                 if shared_sticky_ancestor and not owned_by_current_or_root:
                     raise OSError(f"Unsafe endpoint cache parent owner: {path}")
@@ -281,7 +274,7 @@ def _open_endpoint_cache_dir(path: Path) -> Optional[int]:
         return None
 
 
-def _cache_file_name(path: Path) -> Optional[str]:
+def _cache_file_name(path: Path) -> str | None:
     name = Path(path).name
 
     if not name or name in (".", ".."):
@@ -297,7 +290,7 @@ def _open_endpoint_cache_file(
     write: bool = False,
     create: bool = False,
     non_blocking: bool = False,
-) -> Optional[int]:
+) -> int | None:
     if not _endpoint_cache_capabilities_available(write=write or create):
         return None
 
@@ -362,7 +355,7 @@ def _cache_file_is_safe_or_missing(directory_fd: int, name: str) -> bool:
     return _is_safe_endpoint_cache_file(file_stat)
 
 
-def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
+def _read_endpoint_cache(path: Path, directory_fd: int) -> tuple[dict, bool]:
     name = _cache_file_name(path)
 
     if name is None:
@@ -400,7 +393,7 @@ def _read_endpoint_cache(path: Path, directory_fd: int) -> Tuple[dict, bool]:
     return data, True
 
 
-def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> Tuple[int, str]:
+def _create_endpoint_cache_temp(directory_fd: int, path: Path) -> tuple[int, str]:
     if not _endpoint_cache_capabilities_available(write=True):
         raise OSError("Secure endpoint cache file creation is unavailable")
 
@@ -470,7 +463,7 @@ def _replace_endpoint_cache(temp_name: str, path: Path, directory_fd: int) -> No
         raise OSError("Secure endpoint cache replacement is unavailable")
 
 
-def load_endpoint_cache(path: Optional[Path] = None) -> dict:
+def load_endpoint_cache(path: Path | None = None) -> dict:
     if not _endpoint_cache_capabilities_available():
         return _empty_endpoint_cache()
 
@@ -537,7 +530,9 @@ def endpoint_cache_write_lock(path: Path):
         os.close(directory_fd)
 
 
-def cached_dc_endpoint(cache_key: Optional[str], endpoints: Tuple[Tuple[str, int], ...]) -> Optional[Tuple[str, int]]:
+def cached_dc_endpoint(
+    cache_key: str | None, endpoints: tuple[tuple[str, int], ...]
+) -> tuple[str, int] | None:
     if not cache_key:
         return None
 
@@ -561,9 +556,9 @@ def cached_dc_endpoint(cache_key: Optional[str], endpoints: Tuple[Tuple[str, int
 
 
 def reorder_with_cached_endpoint(
-    cache_key: Optional[str],
-    endpoints: Tuple[Tuple[str, int], ...],
-) -> Tuple[Tuple[str, int], ...]:
+    cache_key: str | None,
+    endpoints: tuple[tuple[str, int], ...],
+) -> tuple[tuple[str, int], ...]:
     endpoints = tuple(dict.fromkeys(endpoints))
     cached_endpoint = cached_dc_endpoint(cache_key, endpoints)
 
@@ -573,7 +568,7 @@ def reorder_with_cached_endpoint(
     return tuple(dict.fromkeys((cached_endpoint,) + endpoints))
 
 
-def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -> None:
+def update_endpoint_cache(cache_key: str | None, endpoint: tuple[str, int]) -> None:
     if not cache_key or not _endpoint_cache_capabilities_available(write=True):
         return
 
@@ -633,14 +628,15 @@ def update_endpoint_cache(cache_key: Optional[str], endpoint: Tuple[str, int]) -
                     pass
 
 
-async def probe_tcp_endpoint(server_address: str, port: int, timeout: float) -> Tuple[bool, float, Optional[Exception]]:
+async def probe_tcp_endpoint(
+    server_address: str, port: int, timeout: float
+) -> tuple[bool, float, Exception | None]:
     writer = None
     started_at = time.monotonic()
 
     try:
         _, writer = await asyncio.wait_for(
-            asyncio.open_connection(server_address, port),
-            timeout=timeout
+            asyncio.open_connection(server_address, port), timeout=timeout
         )
     except Exception as e:
         return False, time.monotonic() - started_at, e
@@ -656,11 +652,11 @@ async def probe_tcp_endpoint(server_address: str, port: int, timeout: float) -> 
                 pass
 
 
-def dc_option_endpoint(dc_option) -> Tuple[str, int]:
+def dc_option_endpoint(dc_option) -> tuple[str, int]:
     return dc_option.ip_address, dc_option.port
 
 
-def dedupe_dc_options(options: List) -> List:
+def dedupe_dc_options(options: list) -> list:
     seen = set()
     deduped = []
 
@@ -676,13 +672,14 @@ def dedupe_dc_options(options: List) -> List:
     return deduped
 
 
-def static_dc_options(dc_id: int) -> List:
+def static_dc_options(dc_id: int) -> list:
     try:
         endpoints = get_dc_endpoints(dc_id, False)
     except KeyError:
         return []
 
-    from pyrogram import raw
+    # `pyrogram.__init__` imports Client, which imports this module.
+    from pyrogram import raw  # noqa: PLC0415
 
     return [
         raw.types.DcOption(
@@ -702,16 +699,15 @@ def static_dc_options(dc_id: int) -> List:
 
 async def select_dc_option(
     dc_id: int,
-    options: List,
-    proxy: Optional[dict] = None,
-    preferred_endpoint: Optional[Tuple[str, int]] = None,
+    options: list,
+    proxy: dict | None = None,
+    preferred_endpoint: tuple[str, int] | None = None,
 ):
     if not options:
         raise ValueError(f"DC{dc_id} not found")
 
     preferred_option = next(
-        (option for option in options if dc_option_endpoint(option) == preferred_endpoint),
-        None
+        (option for option in options if dc_option_endpoint(option) == preferred_endpoint), None
     )
 
     if proxy:
@@ -725,28 +721,29 @@ async def select_dc_option(
 
     async def run_probe(index, option):
         try:
-            return index, option, await probe_tcp_endpoint(
-                option.ip_address,
-                option.port,
-                DC_ENDPOINT_PROBE_TIMEOUT
+            return (
+                index,
+                option,
+                await probe_tcp_endpoint(option.ip_address, option.port, DC_ENDPOINT_PROBE_TIMEOUT),
             )
         except Exception as e:
             return index, option, (False, 0.0, e)
 
-    probe_results = await asyncio.gather(*(
-        run_probe(index, option)
-        for index, option in enumerate(options)
-    ))
+    probe_results = await asyncio.gather(
+        *(run_probe(index, option) for index, option in enumerate(options))
+    )
     reachable = []
 
     for index, option, (ok, elapsed, error) in probe_results:
         if ok:
-            reachable.append((
-                elapsed,
-                0 if dc_option_endpoint(option) == preferred_endpoint else 1,
-                index,
-                option
-            ))
+            reachable.append(
+                (
+                    elapsed,
+                    0 if dc_option_endpoint(option) == preferred_endpoint else 1,
+                    index,
+                    option,
+                )
+            )
             continue
 
         log.warning(
@@ -814,11 +811,11 @@ async def select_dc_option(
 
 async def order_dc_endpoints(
     dc_id: int,
-    endpoints: Tuple[Tuple[str, int], ...],
-    proxy: Optional[dict] = None,
-    preferred_endpoint: Optional[Tuple[str, int]] = None,
-    cache_key: Optional[str] = None,
-) -> Tuple[Tuple[str, int], ...]:
+    endpoints: tuple[tuple[str, int], ...],
+    proxy: dict | None = None,
+    preferred_endpoint: tuple[str, int] | None = None,
+    cache_key: str | None = None,
+) -> tuple[tuple[str, int], ...]:
     endpoints = tuple(dict.fromkeys(endpoints))
 
     if proxy or len(endpoints) <= 1:
@@ -843,29 +840,23 @@ async def order_dc_endpoints(
         server_address, port = endpoint
 
         try:
-            return index, endpoint, await probe_tcp_endpoint(
-                server_address,
-                port,
-                DC_ENDPOINT_PROBE_TIMEOUT
+            return (
+                index,
+                endpoint,
+                await probe_tcp_endpoint(server_address, port, DC_ENDPOINT_PROBE_TIMEOUT),
             )
         except Exception as e:
             return index, endpoint, (False, 0.0, e)
 
-    probe_results = await asyncio.gather(*(
-        run_probe(index, endpoint)
-        for index, endpoint in enumerate(endpoints)
-    ))
+    probe_results = await asyncio.gather(
+        *(run_probe(index, endpoint) for index, endpoint in enumerate(endpoints))
+    )
     reachable = []
     failed = []
 
     for index, endpoint, (ok, elapsed, error) in probe_results:
         if ok:
-            reachable.append((
-                elapsed,
-                0 if endpoint == preferred_endpoint else 1,
-                index,
-                endpoint
-            ))
+            reachable.append((elapsed, 0 if endpoint == preferred_endpoint else 1, index, endpoint))
             continue
 
         failed.append(endpoint)

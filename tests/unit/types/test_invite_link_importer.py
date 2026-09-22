@@ -22,7 +22,8 @@ def test_invite_link_importer_preserves_legacy_constructor():
     assert importer._client is None
 
     with pytest.raises(TypeError):
-        InviteLinkImporter(date, user)
+        # Intentionally invalid positional call verifies the legacy keyword-only contract.
+        InviteLinkImporter(date, user)  # ty: ignore[missing-argument, too-many-positional-arguments]
 
 
 def test_invite_link_importer_does_not_define_a_second_parser():

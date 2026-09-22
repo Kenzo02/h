@@ -47,7 +47,8 @@ def test_inline_keyboard_button_preserves_legacy_positional_order():
     assert button.callback_game is callback_game
     assert button.requires_password is True
     assert button.pay is True
-    assert button.copy_text == "copy"
+    assert isinstance(button.copy_text, types.CopyTextButton)
+    assert button.copy_text.text == "copy"
     assert button.icon_custom_emoji_id == "456"
     assert button.style is enums.ButtonStyle.PRIMARY
 
@@ -93,6 +94,7 @@ async def test_inline_keyboard_button_uses_chosen_chat_query():
 
     assert isinstance(written.type, raw.types.InlineButtonTypeSwitchInline)
     assert written.type.query == "nested"
+    assert written.type.peer_types is not None
     assert isinstance(written.type.peer_types[0], raw.types.InlineQueryPeerTypePM)
 
 
@@ -134,7 +136,10 @@ async def test_inline_keyboard_button_accepts_string_and_object_copy_text(copy_t
     [
         ({"callback_data": "callback"}, raw.types.InlineButtonTypeCallback),
         ({"url": "https://example.test"}, raw.types.InlineButtonTypeUrl),
-        ({"login_url": types.LoginUrl(url="https://example.test")}, raw.types.InputInlineButtonTypeUrlAuth),
+        (
+            {"login_url": types.LoginUrl(url="https://example.test")},
+            raw.types.InputInlineButtonTypeUrlAuth,
+        ),
         ({"user_id": 123}, raw.types.InputInlineButtonTypeUserProfile),
         ({"switch_inline_query": "query"}, raw.types.InlineButtonTypeSwitchInline),
         ({"switch_inline_query_current_chat": "current"}, raw.types.InlineButtonTypeSwitchInline),
@@ -151,7 +156,10 @@ async def test_inline_keyboard_button_accepts_string_and_object_copy_text(copy_t
         ({"pay": True}, raw.types.InlineButtonTypeBuy),
         ({"copy_text": "copy"}, raw.types.InlineButtonTypeCopy),
         ({"disabled": True}, raw.types.InlineButtonTypeDisabled),
-        ({"web_app": types.WebAppInfo(url="https://example.test")}, raw.types.InlineButtonTypeWebView),
+        (
+            {"web_app": types.WebAppInfo(url="https://example.test")},
+            raw.types.InlineButtonTypeWebView,
+        ),
     ],
 )
 async def test_inline_keyboard_button_preserves_exclusive_mode_raw_types(kwargs, expected_type):

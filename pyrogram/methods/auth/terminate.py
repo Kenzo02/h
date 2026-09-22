@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 
 import pyrogram
@@ -25,10 +27,7 @@ log = logging.getLogger(__name__)
 
 
 class Terminate:
-    async def terminate(
-        self: "pyrogram.Client",
-        clear_handlers: bool = True
-    ):
+    async def terminate(self: pyrogram.Client, clear_handlers: bool = True):
         """Terminate the client by shutting down workers.
 
         This method does the opposite of :meth:`~pyrogram.Client.initialize`.
@@ -56,6 +55,11 @@ class Terminate:
             await media_session.stop()
 
         self.media_sessions.clear()
+
+        for session in self.sessions.values():
+            await session.stop()
+
+        self.sessions.clear()
 
         self.updates_watchdog_event.set()
 

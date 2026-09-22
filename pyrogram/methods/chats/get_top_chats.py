@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import AsyncIterator
+from __future__ import annotations as _annotations
+
+from collections.abc import AsyncGenerator
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
@@ -24,10 +26,10 @@ from pyrogram import enums, raw, types, utils
 
 class GetTopChats:
     async def get_top_chats(
-        self: "pyrogram.Client",
-        category: "enums.TopChatCategory",
+        self: pyrogram.Client,
+        category: enums.TopChatCategory,
         limit: int = 0,
-    ) -> AsyncIterator["types.Chat"]:
+    ) -> AsyncGenerator[types.Chat, None]:
         """Returns a list of frequently used chats.
 
         .. include:: /_includes/usable-by/users.rst
@@ -73,30 +75,33 @@ class GetTopChats:
                     bots_app=category == enums.TopChatCategory.WEB_APP_BOTS,
                     bots_guestchat=category == enums.TopChatCategory.GUEST_BOTS,
                 ),
-                sleep_threshold=60
+                sleep_threshold=60,
             )
 
             if not isinstance(r, raw.types.contacts.TopPeers):
                 return
 
             users = {i.id: i for i in r.users}
-            raw_chats = {i.id: i for i in r.chats}
-            parsed_chats = []
+            chats = {i.id: i for i in r.chats}
+            result_chats = []
 
             for cat in r.categories:
                 for top_peer in cat.peers:
                     peer_id = utils.get_raw_peer_id(top_peer.peer)
 
-                    parsed_chats.append(
-                        await types.Chat._parse_chat(self, users.get(peer_id) or raw_chats.get(peer_id))
+                    chat = await types.Chat._parse_chat(
+                        self, users.get(peer_id) or chats.get(peer_id)
                     )
 
-            if not parsed_chats:
+                    if chat is not None:
+                        result_chats.append(chat)
+
+            if not result_chats:
                 return
 
-            offset += len(parsed_chats)
+            offset += len(result_chats)
 
-            for chat in parsed_chats:
+            for chat in result_chats:
                 yield chat
 
                 current += 1

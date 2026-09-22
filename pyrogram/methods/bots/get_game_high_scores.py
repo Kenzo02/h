@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union, List
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw
@@ -25,11 +25,8 @@ from pyrogram import types
 
 class GetGameHighScores:
     async def get_game_high_scores(
-        self: "pyrogram.Client",
-        user_id: Union[int, str],
-        chat_id: Union[int, str],
-        message_id: int
-    ) -> List["types.GameHighScore"]:
+        self: pyrogram.Client, user_id: int | str, chat_id: int | str, message_id: int
+    ) -> list[types.GameHighScore]:
         """Get data for high score tables.
 
         .. include:: /_includes/usable-by/bots.rst
@@ -63,8 +60,10 @@ class GetGameHighScores:
             raw.functions.messages.GetGameHighScores(
                 peer=await self.resolve_peer(chat_id),
                 id=message_id,
-                user_id=await self.resolve_peer(user_id)
+                user_id=await self.resolve_peer(user_id),
             )
         )
 
-        return types.List([await types.GameHighScore._parse(self, score, r.users) for score in r.scores])
+        return types.List(
+            [await types.GameHighScore._parse(self, score, r.users) for score in r.scores]
+        )

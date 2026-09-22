@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from io import BytesIO
 from typing import Any
 
@@ -29,7 +31,7 @@ class Int(bytes, TLObject):
     def read(cls, data: BytesIO, signed: bool = True, *args: Any) -> int:
         return int.from_bytes(data.read(cls.SIZE), "little", signed=signed)
 
-    def __new__(cls, value: int, signed: bool = True) -> bytes:  # type: ignore
+    def __new__(cls, value: int, signed: bool = True) -> bytes:
         return value.to_bytes(cls.SIZE, "little", signed=signed)
 
 

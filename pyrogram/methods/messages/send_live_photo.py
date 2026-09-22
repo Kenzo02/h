@@ -16,12 +16,16 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 from datetime import datetime
-from typing import BinaryIO, Callable, List, Optional, Union
+from typing import BinaryIO
+from collections.abc import Callable
 
 import pyrogram
 from pyrogram import StopTransmission, enums, raw, types, utils
+from pyrogram._typing import PathType
 from pyrogram.errors import FilePartMissing
 
 log = logging.getLogger(__name__)
@@ -29,40 +33,40 @@ log = logging.getLogger(__name__)
 
 class SendLivePhoto:
     async def send_live_photo(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        live_photo: Union[str, BinaryIO],
-        photo: Union[str, BinaryIO],
+        self: pyrogram.Client,
+        chat_id: int | str,
+        live_photo: PathType | BinaryIO,
+        photo: PathType | BinaryIO,
         caption: str = "",
-        parse_mode: Optional["enums.ParseMode"] = None,
-        caption_entities: Optional[List["types.MessageEntity"]] = None,
-        has_spoiler: Optional[bool] = None,
+        parse_mode: enums.ParseMode | None = None,
+        caption_entities: list[types.MessageEntity] | None = None,
+        has_spoiler: bool | None = None,
         width: int = 0,
         height: int = 0,
-        disable_notification: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
-        direct_messages_topic_id: Optional[int] = None,
-        receiver_user_id: Optional[Union[int, str]] = None,
-        callback_query_id: Optional[str] = None,
-        effect_id: Optional[int] = None,
-        show_caption_above_media: Optional[bool] = None,
-        reply_parameters: Optional["types.ReplyParameters"] = None,
-        schedule_date: Optional[datetime] = None,
-        repeat_period: Optional[int] = None,
-        protect_content: Optional[bool] = None,
-        business_connection_id: Optional[str] = None,
-        allow_paid_broadcast: Optional[bool] = None,
-        paid_message_star_count: Optional[int] = None,
-        suggested_post_parameters: Optional["types.SuggestedPostParameters"] = None,
-        reply_markup: Optional[Union[
-            "types.InlineKeyboardMarkup",
-            "types.ReplyKeyboardMarkup",
-            "types.ReplyKeyboardRemove",
-            "types.ForceReply",
-        ]] = None,
-        progress: Optional[Callable] = None,
+        disable_notification: bool | None = None,
+        message_thread_id: int | None = None,
+        direct_messages_topic_id: int | None = None,
+        ephemeral_message_parameters: types.EphemeralMessageParameters | None = None,
+        effect_id: int | None = None,
+        show_caption_above_media: bool | None = None,
+        reply_parameters: types.ReplyParameters | None = None,
+        schedule_date: datetime | None = None,
+        repeat_period: int | None = None,
+        protect_content: bool | None = None,
+        business_connection_id: str | None = None,
+        allow_paid_broadcast: bool | None = None,
+        paid_message_star_count: int | None = None,
+        suggested_post_parameters: types.SuggestedPostParameters | None = None,
+        reply_markup: (
+            types.InlineKeyboardMarkup
+            | types.ReplyKeyboardMarkup
+            | types.ReplyKeyboardRemove
+            | types.ForceReply
+            | None
+        ) = None,
+        progress: Callable | None = None,
         progress_args: tuple = (),
-    ) -> Optional["types.Message"]:
+    ) -> types.Message | None:
         """Send video files.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -73,7 +77,7 @@ class SendLivePhoto:
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
 
-            live_photo (``str`` | ``BinaryIO``):
+            live_photo (``str`` | ``os.PathLike`` | ``BinaryIO``):
                 Live photo video to send.
                 The video must be no longer than 10 seconds and must not exceed 10 MB in size.
                 Pass a file_id as string to send a video that exists on the Telegram servers,
@@ -81,7 +85,7 @@ class SendLivePhoto:
                 pass a file path as string to upload a new video that exists on your local machine, or
                 pass a binary file-like object with its attribute ".name" set for in-memory uploads.
 
-            photo (``str`` | ``BinaryIO``):
+            photo (``str`` | ``os.PathLike`` | ``BinaryIO``):
                 The static photo to send.
                 The video must be no longer than 10 seconds and must not exceed 10 MB in size.
                 Pass a file_id as string to send a video that exists on the Telegram servers,
@@ -120,14 +124,8 @@ class SendLivePhoto:
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For direct chats only.only.
 
-            receiver_user_id (``int`` | ``str``, *optional*):
-                For outgoing ephemeral messages, unique identifier (int) or username (str) of the user who will receive the message.
-                For group and supergroup chats only.
-                It is not guaranteed that the user will receive the message, especially if they are offline.
-                See `ephemeral message sending <https://core.telegram.org/bots/api#ephemeral-messages-and-commands>`__ for more details.
-
-            callback_query_id (``str``, *optional*):
-                For outgoing ephemeral messages, identifier of the callback query which triggered the message if any.
+            ephemeral_message_parameters (:obj:`~pyrogram.types.EphemeralMessageParameters`, *optional*):
+                Parameters of the ephemeral message to send.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -203,11 +201,15 @@ class SendLivePhoto:
         try:
             while True:
                 try:
-                    if receiver_user_id:
+                    if ephemeral_message_parameters:
                         rpc = raw.functions.ephemeral.SendMessage(
                             peer=peer,
-                            receiver_id=await self.resolve_peer(receiver_user_id),
-                            query_id=int(callback_query_id) if callback_query_id is not None else None,
+                            receiver_id=await self.resolve_peer(
+                                ephemeral_message_parameters.receiver_user_id
+                            ),
+                            query_id=int(ephemeral_message_parameters.callback_query_id)
+                            if ephemeral_message_parameters.callback_query_id is not None
+                            else None,
                             media=await types.InputMediaLivePhoto(
                                 media=live_photo,
                                 photo=photo,
@@ -223,14 +225,15 @@ class SendLivePhoto:
                                 progress_args=progress_args,
                             ),
                             reply_to=await utils.get_reply_to(
-                                self,
-                                reply_parameters,
-                                message_thread_id,
-                                direct_messages_topic_id
+                                self, reply_parameters, message_thread_id, direct_messages_topic_id
                             ),
                             random_id=self.rnd_id(),
+                            invert_media=show_caption_above_media,
+                            anchor=ephemeral_message_parameters.replace_callback_query_message,
                             reply_markup=await reply_markup.write(self) if reply_markup else None,
-                            **await utils.parse_text_entities(self, caption, parse_mode, caption_entities)
+                            **await utils.parse_text_entities(
+                                self, caption, parse_mode, caption_entities
+                            ),
                         )
                     else:
                         rpc = raw.functions.messages.SendMedia(
@@ -249,7 +252,7 @@ class SendLivePhoto:
                                 progress=progress,
                                 progress_args=progress_args,
                             ),
-                            silent=disable_notification or None,
+                            silent=disable_notification,
                             invert_media=show_caption_above_media,
                             reply_to=await utils.get_reply_to(
                                 self, reply_parameters, message_thread_id, direct_messages_topic_id

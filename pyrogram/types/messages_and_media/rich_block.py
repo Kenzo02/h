@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Dict, List, Literal, Optional, Union
+from __future__ import annotations as _annotations
+
+from typing import Literal
 
 import pyrogram
 from pyrogram import raw, types
@@ -85,14 +87,17 @@ class RichBlock(Object):
     - :obj:`~pyrogram.types.RichBlockAnchor`
     - :obj:`~pyrogram.types.RichBlockList`
     - :obj:`~pyrogram.types.RichBlockBlockQuotation`
+    - :obj:`~pyrogram.types.RichBlockExpandableBlockQuotation`
     - :obj:`~pyrogram.types.RichBlockPullQuotation`
     - :obj:`~pyrogram.types.RichBlockCollage`
     - :obj:`~pyrogram.types.RichBlockSlideshow`
     - :obj:`~pyrogram.types.RichBlockTable`
     - :obj:`~pyrogram.types.RichBlockDetails`
     - :obj:`~pyrogram.types.RichBlockMap`
+    - :obj:`~pyrogram.types.RichBlockButtons`
     - :obj:`~pyrogram.types.RichBlockAnimation`
     - :obj:`~pyrogram.types.RichBlockAudio`
+    - :obj:`~pyrogram.types.RichBlockDocument`
     - :obj:`~pyrogram.types.RichBlockPhoto`
     - :obj:`~pyrogram.types.RichBlockVideo`
     - :obj:`~pyrogram.types.RichBlockVoiceNote`
@@ -105,14 +110,19 @@ class RichBlock(Object):
 
     @staticmethod
     async def _parse(
-        client: "pyrogram.Client",
-        rich_block: "raw.base.PageBlock",
-        photos: Dict[int, "raw.base.Photo"] = {},
-        documents: Dict[int, "raw.base.Document"] = {},
-        part: Optional[bool] = None,
-        users: Dict[int, "raw.base.User"] = {},
-        chats: Dict[int, "raw.base.Chat"] = {},
-    ) -> "RichBlock":
+        client: pyrogram.Client,
+        rich_block: raw.base.PageBlock,
+        photos: dict[int, raw.base.Photo] | None = None,
+        documents: dict[int, raw.base.Document] | None = None,
+        part: bool | None = None,
+        users: dict[int, raw.base.User] | None = None,
+        chats: dict[int, raw.base.Chat] | None = None,
+    ) -> RichBlock:
+        photos = photos or {}
+        documents = documents or {}
+        users = users or {}
+        chats = chats or {}
+
         if isinstance(rich_block, raw.types.PageBlockParagraph):
             return RichBlockParagraph(
                 text=await types.RichText._parse(client, rich_block.text),
@@ -159,13 +169,23 @@ class RichBlock(Object):
         if isinstance(rich_block, raw.types.PageBlockList):
             return RichBlockList(
                 items=types.List(
-                    [await types.RichBlockListItem._parse(client, i) for i in rich_block.items]
+                    [
+                        await types.RichBlockListItem._parse(
+                            client, i, photos, documents, part, users, chats
+                        )
+                        for i in rich_block.items
+                    ]
                 )
             )
         if isinstance(rich_block, raw.types.PageBlockOrderedList):
             return RichBlockList(
                 items=types.List(
-                    [await types.RichBlockListItem._parse(client, i) for i in rich_block.items]
+                    [
+                        await types.RichBlockListItem._parse(
+                            client, i, photos, documents, part, users, chats
+                        )
+                        for i in rich_block.items
+                    ]
                 )
             )
         if isinstance(rich_block, raw.types.PageBlockBlockquoteBlocks):
@@ -181,6 +201,12 @@ class RichBlock(Object):
                 credit=await types.RichText._parse(client, rich_block.caption),
             )
         if isinstance(rich_block, raw.types.PageBlockBlockquote):
+            if rich_block.collapsed:
+                return RichBlockExpandableBlockQuotation(
+                    text=await types.RichText._parse(client, rich_block.text),
+                    credit=await types.RichText._parse(client, rich_block.caption),
+                )
+
             return RichBlockBlockQuotation(
                 blocks=types.List(
                     [RichBlockParagraph(text=await types.RichText._parse(client, rich_block.text))]
@@ -239,8 +265,31 @@ class RichBlock(Object):
                 height=rich_block.h,
                 caption=await types.RichBlockCaption._parse(client, rich_block.caption),
             )
+        if isinstance(rich_block, raw.types.PageBlockButtonRow):
+            align = None
+
+            if rich_block.align_left:
+                align = "left"
+            elif rich_block.align_center:
+                align = "center"
+            elif rich_block.align_right:
+                align = "right"
+
+            return RichBlockButtons(
+                buttons=types.List(
+                    [
+                        await types.RichMessageButton._parse(client, button)
+                        for button in rich_block.buttons
+                    ]
+                ),
+                align=align,
+            )
         if isinstance(rich_block, raw.types.PageBlockVideo):
             doc = documents.get(rich_block.video_id)
+
+            if not isinstance(doc, raw.types.Document):
+                return RichBlockUnsupported()
+
             attributes = {type(i): i for i in doc.attributes}
 
             file_name = getattr(
@@ -276,8 +325,28 @@ class RichBlock(Object):
                         audio=types.Audio._parse(client, doc, audio_attributes, file_name),
                         caption=await types.RichBlockCaption._parse(client, rich_block.caption),
                     )
+        if isinstance(rich_block, raw.types.PageBlockDocument):
+            doc = documents.get(rich_block.document_id)
+
+            if not isinstance(doc, raw.types.Document):
+                return RichBlockUnsupported()
+
+            attributes = {type(i): i for i in doc.attributes}
+
+            file_name = getattr(
+                attributes.get(raw.types.DocumentAttributeFilename, None), "file_name", None
+            )
+
+            return RichBlockDocument(
+                document=types.Document._parse(client, doc, file_name),
+                caption=await types.RichBlockCaption._parse(client, rich_block.caption),
+            )
         if isinstance(rich_block, raw.types.PageBlockAudio):
             doc = documents.get(rich_block.audio_id)
+
+            if not isinstance(doc, raw.types.Document):
+                return RichBlockUnsupported()
+
             attributes = {type(i): i for i in doc.attributes}
 
             file_name = getattr(
@@ -337,8 +406,8 @@ class RichBlockCaption(RichBlock):
 
     def __init__(
         self,
-        text: "types.RichText",
-        credit: Optional["types.RichText"] = None,
+        text: types.RichText,
+        credit: types.RichText | None = None,
     ):
         super().__init__()
 
@@ -346,12 +415,18 @@ class RichBlockCaption(RichBlock):
         self.credit = credit
 
     @staticmethod
-    async def _parse(client, caption: "raw.base.PageCaption") -> Optional["RichBlockCaption"]:
+    async def _parse(client, caption: raw.base.PageCaption) -> RichBlockCaption | None:
         if caption is not None:
             return RichBlockCaption(
                 text=await types.RichText._parse(client, caption.text),
                 credit=await types.RichText._parse(client, caption.credit),
             )
+
+    async def write(self, client: pyrogram.Client) -> raw.types.PageCaption:
+        return raw.types.PageCaption(
+            text=await types.RichText._write(client, self.text),
+            credit=await types.RichText._write(client, self.credit),
+        )
 
 
 class RichBlockTableCell(RichBlock):
@@ -382,12 +457,12 @@ class RichBlockTableCell(RichBlock):
 
     def __init__(
         self,
-        text: Optional["types.RichText"] = None,
-        is_header: Optional[bool] = None,
-        colspan: Optional[int] = None,
-        rowspan: Optional[int] = None,
-        align: Optional[str] = None,
-        valign: Optional[str] = None,
+        text: types.RichText | None = None,
+        is_header: bool | None = None,
+        colspan: int | None = None,
+        rowspan: int | None = None,
+        align: str | None = None,
+        valign: str | None = None,
     ):
         super().__init__()
 
@@ -399,7 +474,7 @@ class RichBlockTableCell(RichBlock):
         self.valign = valign
 
     @staticmethod
-    async def _parse(client, table_cell: "raw.base.PageTableCell"):
+    async def _parse(client, table_cell: raw.base.PageTableCell):
         align = "left"
         if table_cell.align_center:
             align = "center"
@@ -419,6 +494,20 @@ class RichBlockTableCell(RichBlock):
             rowspan=max(table_cell.rowspan or 1, 1),
             align=align,
             valign=valign,
+        )
+
+    async def write(self, client: pyrogram.Client) -> raw.types.PageTableCell:
+        text = await types.RichText._write(client, self.text) if self.text is not None else None
+
+        return raw.types.PageTableCell(
+            header=self.is_header,
+            align_center=self.align == "center",
+            align_right=self.align == "right",
+            valign_middle=self.valign == "middle",
+            valign_bottom=self.valign == "bottom",
+            text=text,
+            colspan=self.colspan,
+            rowspan=self.rowspan,
         )
 
 
@@ -451,11 +540,11 @@ class RichBlockListItem(RichBlock):
     def __init__(
         self,
         label: str,
-        blocks: List["types.RichBlock"],
-        has_checkbox: Optional[bool] = None,
-        is_checked: Optional[bool] = None,
-        value: Optional[int] = None,
-        type: Optional[str] = None,
+        blocks: list[types.RichBlock],
+        has_checkbox: bool | None = None,
+        is_checked: bool | None = None,
+        value: int | None = None,
+        type: str | None = None,
     ):
         super().__init__()
 
@@ -468,11 +557,22 @@ class RichBlockListItem(RichBlock):
 
     @staticmethod
     async def _parse(
-        client, list_item: Union["raw.base.PageListItem", "raw.base.PageListOrderedItem"]
-    ):
+        client: pyrogram.Client,
+        list_item: raw.base.PageListItem | raw.base.PageListOrderedItem,
+        photos: dict[int, raw.base.Photo] | None = None,
+        documents: dict[int, raw.base.Document] | None = None,
+        part: bool | None = None,
+        users: dict[int, raw.base.User] | None = None,
+        chats: dict[int, raw.base.Chat] | None = None,
+    ) -> RichBlockListItem | None:
         if isinstance(list_item, raw.types.PageListItemBlocks):
             blocks = types.List(
-                [await types.RichBlock._parse(client, block) for block in list_item.blocks]
+                [
+                    await types.RichBlock._parse(
+                        client, block, photos, documents, part, users, chats
+                    )
+                    for block in list_item.blocks
+                ]
             )
             label = "•"
             has_checkbox = list_item.checkbox
@@ -482,11 +582,7 @@ class RichBlockListItem(RichBlock):
 
         elif isinstance(list_item, raw.types.PageListItemText):
             blocks = types.List(
-                [
-                    types.RichBlockParagraph(
-                        text=await types.RichText._parse(client, list_item.text)
-                    )
-                ]
+                [types.RichBlockParagraph(text=await types.RichText._parse(client, list_item.text))]
             )
             label = "•"
             has_checkbox = list_item.checkbox
@@ -496,7 +592,12 @@ class RichBlockListItem(RichBlock):
 
         elif isinstance(list_item, raw.types.PageListOrderedItemBlocks):
             blocks = types.List(
-                [await types.RichBlock._parse(client, block) for block in list_item.blocks]
+                [
+                    await types.RichBlock._parse(
+                        client, block, photos, documents, part, users, chats
+                    )
+                    for block in list_item.blocks
+                ]
             )
             has_checkbox = list_item.checkbox
             is_checked = list_item.checked
@@ -510,11 +611,7 @@ class RichBlockListItem(RichBlock):
 
         elif isinstance(list_item, raw.types.PageListOrderedItemText):
             blocks = types.List(
-                [
-                    types.RichBlockParagraph(
-                        text=await types.RichText._parse(client, list_item.text)
-                    )
-                ]
+                [types.RichBlockParagraph(text=await types.RichText._parse(client, list_item.text))]
             )
             has_checkbox = list_item.checkbox
             is_checked = list_item.checked
@@ -548,7 +645,7 @@ class RichBlockParagraph(RichBlock):
 
     def __init__(
         self,
-        text: "types.RichText",
+        text: types.RichText,
     ):
         super().__init__()
 
@@ -569,7 +666,7 @@ class RichBlockSectionHeading(RichBlock):
 
     def __init__(
         self,
-        text: "types.RichText",
+        text: types.RichText,
         size: int,
     ):
         super().__init__()
@@ -591,8 +688,8 @@ class RichBlockPreformatted(RichBlock):
 
     def __init__(
         self,
-        text: "types.RichText",
-        language: Optional[str] = None,
+        text: types.RichText,
+        language: str | None = None,
     ):
         super().__init__()
 
@@ -608,7 +705,7 @@ class RichBlockFooter(RichBlock):
             Text of the block.
     """
 
-    def __init__(self, text: "types.RichText"):
+    def __init__(self, text: types.RichText):
         super().__init__()
 
         self.text = text
@@ -657,7 +754,7 @@ class RichBlockList(RichBlock):
             Items of the list.
     """
 
-    def __init__(self, items: List["types.RichBlockListItem"]):
+    def __init__(self, items: list[types.RichBlockListItem]):
         super().__init__()
 
         self.items = items
@@ -674,10 +771,28 @@ class RichBlockBlockQuotation(RichBlock):
             Credit of the block.
     """
 
-    def __init__(self, blocks: List["types.RichBlock"], credit: Optional["types.RichText"] = None):
+    def __init__(self, blocks: list[types.RichBlock], credit: types.RichText | None = None):
         super().__init__()
 
         self.blocks = blocks
+        self.credit = credit
+
+
+class RichBlockExpandableBlockQuotation(RichBlock):
+    """A block quotation, corresponding to the HTML tag ``<blockquote>`` with custom attribute ``"expandable"``.
+
+    Parameters:
+        text (:obj:`~pyrogram.types.RichText`):
+            Content of the block.
+
+        credit (:obj:`~pyrogram.types.RichText`, *optional*):
+            Credit of the block.
+    """
+
+    def __init__(self, text: types.RichText, credit: types.RichText | None = None):
+        super().__init__()
+
+        self.text = text
         self.credit = credit
 
 
@@ -692,7 +807,7 @@ class RichBlockPullQuotation(RichBlock):
             Credit of the block.
     """
 
-    def __init__(self, text: "types.RichText", credit: Optional["types.RichText"] = None):
+    def __init__(self, text: types.RichText, credit: types.RichText | None = None):
         super().__init__()
 
         self.text = text
@@ -711,7 +826,7 @@ class RichBlockCollage(RichBlock):
     """
 
     def __init__(
-        self, blocks: List["types.RichBlock"], caption: Optional["types.RichBlockCaption"] = None
+        self, blocks: list[types.RichBlock], caption: types.RichBlockCaption | None = None
     ):
         super().__init__()
 
@@ -731,7 +846,7 @@ class RichBlockSlideshow(RichBlock):
     """
 
     def __init__(
-        self, blocks: List["types.RichBlock"], caption: Optional["types.RichBlockCaption"] = None
+        self, blocks: list[types.RichBlock], caption: types.RichBlockCaption | None = None
     ):
         super().__init__()
 
@@ -752,26 +867,31 @@ class RichBlockTable(RichBlock):
         is_striped (``bool``, *optional*):
             True, if the table is striped.
 
-        caption (:obj:`~pyrogram.types.RichBlockCaption`, *optional*):
-            Caption of the block.
+        is_compact (``bool``, *optional*):
+            True, if the table is compact.
+
+        caption (:obj:`~pyrogram.types.RichText`, *optional*):
+            Caption of the table.
     """
 
     def __init__(
         self,
-        cells: List[List["types.RichBlockTableCell"]],
-        is_bordered: Optional[bool] = None,
-        is_striped: Optional[bool] = None,
-        caption: Optional["types.RichBlockCaption"] = None,
+        cells: list[list[types.RichBlockTableCell]],
+        is_bordered: bool | None = None,
+        is_striped: bool | None = None,
+        is_compact: bool | None = None,
+        caption: types.RichText | None = None,
     ):
         super().__init__()
 
         self.cells = cells
         self.is_bordered = is_bordered
         self.is_striped = is_striped
+        self.is_compact = is_compact
         self.caption = caption
 
     @staticmethod
-    async def _parse(client, page_block: "raw.types.PageBlockTable"):
+    async def _parse(client, page_block: raw.types.PageBlockTable):
         cells = []
 
         if page_block.rows:
@@ -789,6 +909,7 @@ class RichBlockTable(RichBlock):
             cells=cells,
             is_bordered=page_block.bordered,
             is_striped=page_block.striped,
+            is_compact=page_block.compact,
             caption=await types.RichText._parse(client, page_block.title),
         )
 
@@ -809,9 +930,9 @@ class RichBlockDetails(RichBlock):
 
     def __init__(
         self,
-        summary: "types.RichText",
-        blocks: List["types.RichBlock"],
-        is_open: Optional[bool] = None,
+        summary: types.RichText,
+        blocks: list[types.RichBlock],
+        is_open: bool | None = None,
     ):
         super().__init__()
 
@@ -828,7 +949,7 @@ class RichBlockMap(RichBlock):
             Location of the center of the map.
 
         zoom (``int``):
-            Map zoom level, 13-20.
+            Map zoom level.
 
         width (``int``):
             Expected width of the map.
@@ -842,11 +963,11 @@ class RichBlockMap(RichBlock):
 
     def __init__(
         self,
-        location: "types.Location",
+        location: types.Location,
         zoom: int,
         width: int,
         height: int,
-        caption: Optional["types.RichBlockCaption"] = None,
+        caption: types.RichBlockCaption | None = None,
     ):
         super().__init__()
 
@@ -855,6 +976,29 @@ class RichBlockMap(RichBlock):
         self.width = width
         self.height = height
         self.caption = caption
+
+
+class RichBlockButtons(RichBlock):
+    """A block containing a list of buttons that are shown in one row, corresponding to the custom HTML tag ``<tg-button-row>``.
+
+    Parameters:
+        buttons (List of :obj:`~pyrogram.types.RichMessageButton`):
+            The buttons.
+
+        align (``str``, *optional*):
+            Horizontal alignment of the buttons.
+            Currently, must be one of "left", "center", or "right".
+    """
+
+    def __init__(
+        self,
+        buttons: list[types.RichMessageButton],
+        align: str | None = None,
+    ):
+        super().__init__()
+
+        self.buttons = buttons
+        self.align = align
 
 
 class RichBlockAnimation(RichBlock):
@@ -873,9 +1017,9 @@ class RichBlockAnimation(RichBlock):
 
     def __init__(
         self,
-        animation: "types.Animation",
-        has_spoiler: Optional[bool] = None,
-        caption: Optional["types.RichBlockCaption"] = None,
+        animation: types.Animation,
+        has_spoiler: bool | None = None,
+        caption: types.RichBlockCaption | None = None,
     ):
         super().__init__()
 
@@ -895,10 +1039,32 @@ class RichBlockAudio(RichBlock):
             Caption of the block.
     """
 
-    def __init__(self, audio: "types.Audio", caption: Optional["types.RichBlockCaption"] = None):
+    def __init__(self, audio: types.Audio, caption: types.RichBlockCaption | None = None):
         super().__init__()
 
         self.audio = audio
+        self.caption = caption
+
+
+class RichBlockDocument(RichBlock):
+    """A block with a general file, corresponding to the custom HTML tag ``<tg-document>``.
+
+    Parameters:
+        document (:obj:`~pyrogram.types.Document`):
+            The document.
+
+        caption (:obj:`~pyrogram.types.RichBlockCaption`, *optional*):
+            Caption of the block.
+    """
+
+    def __init__(
+        self,
+        document: types.Document,
+        caption: types.RichBlockCaption | None = None,
+    ):
+        super().__init__()
+
+        self.document = document
         self.caption = caption
 
 
@@ -918,9 +1084,9 @@ class RichBlockPhoto(RichBlock):
 
     def __init__(
         self,
-        photo: "types.Photo",
-        has_spoiler: Optional[bool] = None,
-        caption: Optional["types.RichBlockCaption"] = None,
+        photo: types.Photo,
+        has_spoiler: bool | None = None,
+        caption: types.RichBlockCaption | None = None,
     ):
         super().__init__()
 
@@ -945,9 +1111,9 @@ class RichBlockVideo(RichBlock):
 
     def __init__(
         self,
-        video: "types.Video",
-        has_spoiler: Optional[bool] = None,
-        caption: Optional["types.RichBlockCaption"] = None,
+        video: types.Video,
+        has_spoiler: bool | None = None,
+        caption: types.RichBlockCaption | None = None,
     ):
         super().__init__()
 
@@ -963,16 +1129,11 @@ class RichBlockVoiceNote(RichBlock):
         voice_note (:obj:`~pyrogram.types.Voice`):
             The voice note.
 
-        has_spoiler (``bool``, *optional*):
-            True, if the media preview is covered by a spoiler animation.
-
         caption (:obj:`~pyrogram.types.RichBlockCaption`, *optional*):
             Caption of the block.
     """
 
-    def __init__(
-        self, voice_note: "types.Voice", caption: Optional["types.RichBlockCaption"] = None
-    ):
+    def __init__(self, voice_note: types.Voice, caption: types.RichBlockCaption | None = None):
         super().__init__()
 
         self.voice_note = voice_note
@@ -992,7 +1153,7 @@ class RichBlockThinking(RichBlock):
 
     def __init__(
         self,
-        text: "types.RichText",
+        text: types.RichText,
     ):
         super().__init__()
 

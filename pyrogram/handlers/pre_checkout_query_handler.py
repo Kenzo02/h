@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+PreCheckoutQueryCallbackType = Callable[["pyrogram.Client", types.PreCheckoutQuery], Any]
 
 
-class PreCheckoutQueryHandler(Handler):
+class PreCheckoutQueryHandler(Handler[PreCheckoutQueryCallbackType]):
     """The PreCheckoutQueryHandler handler class. Used to handle pre-checkout queries coming from buy buttons.
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`
 
@@ -37,7 +44,7 @@ class PreCheckoutQueryHandler(Handler):
             Pass a function that will be called when a new PreCheckoutQuery arrives. It takes *(client, pre_checkout_query)*
             as positional arguments (look at the section below for a detailed description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of callback queries to be passed
             in your callback function.
 
@@ -50,6 +57,8 @@ class PreCheckoutQueryHandler(Handler):
     """
 
     def __init__(
-        self, callback: Callable[["pyrogram.Client", "types.PreCheckoutQuery"], Any], filters=None
-    ):
+        self,
+        callback: PreCheckoutQueryCallbackType,
+        filters: Filter | None = None,
+    ) -> None:
         super().__init__(callback, filters)

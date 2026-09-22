@@ -16,9 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import hashlib
 import hmac
-from typing import Dict, Final, FrozenSet, List, NamedTuple
+from typing import Final, NamedTuple
 
 from pyrogram.crypto import faketls
 
@@ -45,7 +47,7 @@ _CURVE25519_ORDER: Final[int] = 2**252 + 27742317777372353535851937790883648493
 # The extension types the ClientHello carries, whatever order the permutation
 #  puts them in. Read off TDLib's op list, so a dropped extension shows up here.
 #  https://github.com/tdlib/td/blob/d1085f9cebc5a62379991ae1652673954f229c1f/td/mtproto/TlsInit.cpp#L211-L230
-_EXPECTED_EXTENSIONS: Final[FrozenSet[int]] = frozenset(
+_EXPECTED_EXTENSIONS: Final[frozenset[int]] = frozenset(
     {
         0x0000,
         0x0005,
@@ -73,7 +75,7 @@ def _is_grease(extension_type: int) -> bool:
     return high == low and low & 0x0F == 0x0A
 
 
-def _parse_extensions(record: bytes) -> Dict[int, bytes]:
+def _parse_extensions(record: bytes) -> dict[int, bytes]:
     """Every length field in the greeting, checked on the way to the extensions."""
     assert record[:3] == b"\x16\x03\x01"
 
@@ -95,7 +97,7 @@ def _parse_extensions(record: bytes) -> Dict[int, bytes]:
     cursor += 2
     assert cursor + extensions_length == len(record)
 
-    extensions: Dict[int, bytes] = {}
+    extensions: dict[int, bytes] = {}
 
     while cursor < len(record):
         extension_type = int.from_bytes(record[cursor : cursor + 2], "big")
@@ -174,7 +176,11 @@ def test_client_hello_length_is_the_same_for_every_greeting() -> None:
 def test_client_hello_random_is_the_secret_hmac_with_the_clock_folded_in() -> None:
     hello = _build_client_hello()
 
-    zeroed = hello.record[:_RANDOM_OFFSET] + bytes(_RANDOM_SIZE) + hello.record[_RANDOM_OFFSET + _RANDOM_SIZE :]
+    zeroed = (
+        hello.record[:_RANDOM_OFFSET]
+        + bytes(_RANDOM_SIZE)
+        + hello.record[_RANDOM_OFFSET + _RANDOM_SIZE :]
+    )
     digest = bytearray(hmac.new(_SECRET, zeroed, hashlib.sha256).digest())
     timestamp = _UNIX_TIME.to_bytes(_TIMESTAMP_SIZE, "little")
 
@@ -204,7 +210,9 @@ def test_server_hello_is_authentic_rejects_a_reply_built_with_another_secret() -
     hello = _build_client_hello()
     response = _server_hello_for(hello.random, secret=bytes(16))
 
-    assert not faketls.server_hello_is_authentic(response, secret=_SECRET, client_random=hello.random)
+    assert not faketls.server_hello_is_authentic(
+        response, secret=_SECRET, client_random=hello.random
+    )
 
 
 def test_server_hello_is_authentic_rejects_a_tampered_reply() -> None:
@@ -212,7 +220,9 @@ def test_server_hello_is_authentic_rejects_a_tampered_reply() -> None:
     response = bytearray(_server_hello_for(hello.random, secret=_SECRET))
     response[-1] ^= 0xFF
 
-    assert not faketls.server_hello_is_authentic(bytes(response), secret=_SECRET, client_random=hello.random)
+    assert not faketls.server_hello_is_authentic(
+        bytes(response), secret=_SECRET, client_random=hello.random
+    )
 
 
 class _KeyShareEntry(NamedTuple):
@@ -220,11 +230,11 @@ class _KeyShareEntry(NamedTuple):
     key: bytes
 
 
-def _key_share_entries(record: bytes) -> List[_KeyShareEntry]:
+def _key_share_entries(record: bytes) -> list[_KeyShareEntry]:
     body = _parse_extensions(record)[0x0033]  # the key_share extension
     assert int.from_bytes(body[:2], "big") == len(body) - 2
 
-    entries: List[_KeyShareEntry] = []
+    entries: list[_KeyShareEntry] = []
     cursor = 2
 
     while cursor < len(body):
@@ -302,7 +312,9 @@ def test_key_share_keys_look_like_real_x25519_public_keys() -> None:
     #  point on the twist, or one of full order, is exactly what a fingerprinter
     #  looks for. Both properties are per-key random, so this repeats.
     for _ in range(4):
-        by_group = {entry.group: entry.key for entry in _key_share_entries(_build_client_hello().record)}
+        by_group = {
+            entry.group: entry.key for entry in _key_share_entries(_build_client_hello().record)
+        }
         keys = (by_group[_X25519_GROUP], by_group[_ML_KEM_768_X25519_GROUP][_ML_KEM_768_KEY_SIZE:])
 
         for key in keys:

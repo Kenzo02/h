@@ -16,8 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Iterable, List, Optional, Union, overload
+from typing import overload
+from collections.abc import Iterable
 
 import pyrogram
 from pyrogram import raw, types
@@ -28,23 +31,17 @@ log = logging.getLogger(__name__)
 class GetDirectMessagesTopicsByID:
     @overload
     async def get_direct_messages_topics_by_id(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_ids: int
-    ) -> Optional["types.DirectMessagesTopic"]: ...
+        self: pyrogram.Client, chat_id: int | str, topic_ids: int
+    ) -> types.DirectMessagesTopic | None: ...
 
     @overload
     async def get_direct_messages_topics_by_id(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_ids: Iterable[int]
-    ) -> List["types.DirectMessagesTopic"]: ...
+        self: pyrogram.Client, chat_id: int | str, topic_ids: Iterable[int]
+    ) -> list[types.DirectMessagesTopic]: ...
 
     async def get_direct_messages_topics_by_id(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        topic_ids: Union[int, Iterable[int]]
-    ) -> Optional[Union["types.DirectMessagesTopic", List["types.DirectMessagesTopic"]]]:
+        self: pyrogram.Client, chat_id: int | str, topic_ids: int | Iterable[int]
+    ) -> types.DirectMessagesTopic | list[types.DirectMessagesTopic] | None:
         """Get one or more direct message topic from a chat by using topic identifiers.
 
         .. include:: /_includes/usable-by/users.rst
@@ -77,7 +74,7 @@ class GetDirectMessagesTopicsByID:
         r = await self.invoke(
             raw.functions.messages.GetSavedDialogsByID(
                 ids=[await self.resolve_peer(i) for i in ids],
-                parent_peer=await self.resolve_peer(chat_id)
+                parent_peer=await self.resolve_peer(chat_id),
             )
         )
 
@@ -87,10 +84,14 @@ class GetDirectMessagesTopicsByID:
         topics = types.List()
 
         for i in r.dialogs:
-            topics.append(await types.DirectMessagesTopic._parse(client=self, topic=i, users=users, chats=chats))
+            topics.append(
+                await types.DirectMessagesTopic._parse(
+                    client=self, topic=i, users=users, chats=chats
+                )
+            )
 
-        # NOTE: A topic exists only once its peer has written to the chat, and asking for a peer
-        #       without one answers with an empty `dialogs` vector rather than an error:
+        # A topic exists only once its peer has written to the chat, and asking for a peer
+        #  without one answers with an empty `dialogs` vector rather than an error:
         #
-        #       await app.get_direct_messages_topics_by_id(chat_id, user_id)  # -> None
+        #  await app.get_direct_messages_topics_by_id(chat_id, user_id)  # -> None
         return topics if is_iterable else topics[0] if topics else None

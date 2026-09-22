@@ -16,33 +16,38 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import os
-from typing import BinaryIO, Callable, Optional, Union
+from pathlib import Path
+from typing import BinaryIO
+from collections.abc import Callable
 
 import pyrogram
 from pyrogram import StopTransmission, raw, utils
+from pyrogram._typing import PathType
 from pyrogram.errors import FilePartMissing
 from pyrogram.file_id import FileType
 
 
 class AddProfileAudio:
     async def add_profile_audio(
-        self: "pyrogram.Client",
-        audio: Union[str, BinaryIO],
-        duration: Optional[int] = 0,
-        performer: Optional[str] = None,
-        title: Optional[str] = None,
-        thumb: Optional[Union[str, BinaryIO]] = None,
-        file_name: Optional[str] = None,
-        progress: Optional[Callable] = None,
-        progress_args: Optional[tuple] = (),
-    ) -> Optional[bool]:
+        self: pyrogram.Client,
+        audio: PathType | BinaryIO,
+        duration: int = 0,
+        performer: str | None = None,
+        title: str | None = None,
+        thumb: PathType | BinaryIO | None = None,
+        file_name: str | None = None,
+        progress: Callable | None = None,
+        progress_args: tuple = (),
+    ) -> bool | None:
         """Adds an audio file to the beginning of the profile audio files of the current user.
 
         .. include:: /_includes/usable-by/users.rst
 
         Parameters:
-            audio (``str`` | ``BinaryIO``):
+            audio (``str`` | ``os.PathLike`` | ``BinaryIO``):
                 Audio file to add.
                 Pass a file_id as string to add an audio file that exists on the Telegram servers,
                 pass a file path as string to upload a new audio file that exists on your local machine, or
@@ -51,6 +56,9 @@ class AddProfileAudio:
         Returns:
             ``bool`` | ``None``: On success, True is returned, otherwise, in
             case the upload is deliberately stopped with :meth:`~pyrogram.Client.stop_transmission`, None is returned.
+
+        Raises:
+            FileNotFoundError: In case a local ``os.PathLike`` doesn't point to an existing file.
 
         Example:
             .. code-block:: python
@@ -72,7 +80,7 @@ class AddProfileAudio:
         file = None
 
         try:
-            if isinstance(audio, str):
+            if isinstance(audio, (str, os.PathLike)):
                 if os.path.isfile(audio):
                     mime_type = self.guess_mime_type(audio) or "audio/mpeg"
                     if mime_type == "audio/ogg":
@@ -94,7 +102,7 @@ class AddProfileAudio:
                                         duration=duration, performer=performer, title=title
                                     ),
                                     raw.types.DocumentAttributeFilename(
-                                        file_name=file_name or os.path.basename(audio)
+                                        file_name=file_name or Path(audio).name
                                     ),
                                 ],
                             ),
@@ -106,8 +114,10 @@ class AddProfileAudio:
                         access_hash=uploaded_media.document.access_hash,
                         file_reference=uploaded_media.document.file_reference,
                     )
-                else:
+                elif isinstance(audio, str):
                     media = (utils.get_input_media_from_file_id(audio, FileType.AUDIO)).id
+                else:
+                    raise FileNotFoundError(f"No such file or directory: {audio}")
             else:
                 mime_type = self.guess_mime_type(file_name or audio.name) or "audio/mpeg"
                 if mime_type == "audio/ogg":

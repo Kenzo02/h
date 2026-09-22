@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from pyrogram import raw
 from ..object import Object
 
@@ -28,14 +30,11 @@ class VideoChatEnded(Object):
             Voice chat duration; in seconds.
     """
 
-    def __init__(
-        self, *,
-        duration: int
-    ):
+    def __init__(self, *, duration: int):
         super().__init__()
 
         self.duration = duration
 
     @staticmethod
-    def _parse(action: "raw.types.MessageActionGroupCall") -> "VideoChatEnded":
+    def _parse(action: raw.types.MessageActionGroupCall) -> VideoChatEnded:
         return VideoChatEnded(duration=action.duration)

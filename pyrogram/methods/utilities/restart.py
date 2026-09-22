@@ -16,8 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-import pyrogram
+from __future__ import annotations as _annotations
+
 import asyncio
+
+import pyrogram
 import logging
 from ...helpers import log_task_exception
 
@@ -27,10 +30,8 @@ log = logging.getLogger(__name__)
 
 class Restart:
     async def restart(
-        self: "pyrogram.Client",
-        block: bool = True,
-        clear_handlers: bool = False
-    ):
+        self: pyrogram.Client, block: bool = True, clear_handlers: bool = False
+    ) -> pyrogram.Client:
         """Restart the Client.
 
         This method will first call :meth:`~pyrogram.Client.stop` and then :meth:`~pyrogram.Client.start` in a row in
@@ -79,7 +80,7 @@ class Restart:
         if block:
             await do_it()
         else:
-            task = self.loop.create_task(do_it())
+            task = asyncio.create_task(do_it())
             task.add_done_callback(log_task_exception)
 
         return self

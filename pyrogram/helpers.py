@@ -1,3 +1,5 @@
+from __future__ import annotations as _annotations
+
 import asyncio
 import logging
 
@@ -18,4 +20,4 @@ def log_task_exception(task: asyncio.Task) -> None:
         return
 
     if exc:
-        log.exception("Unhandled exception in background task", exc_info=exc) 
+        log.error("Unhandled exception in background task", exc_info=exc)

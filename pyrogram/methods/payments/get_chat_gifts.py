@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union, AsyncIterator
+from __future__ import annotations as _annotations
+
+from collections.abc import AsyncGenerator
 
 import pyrogram
 from pyrogram import raw, types, utils
@@ -24,21 +26,21 @@ from pyrogram import raw, types, utils
 
 class GetChatGifts:
     async def get_chat_gifts(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        collection_id: Optional[int] = None,
-        exclude_unsaved: Optional[bool] = None,
-        exclude_saved: Optional[bool] = None,
-        exclude_unlimited: Optional[bool] = None,
-        exclude_upgradable: Optional[bool] = None,
-        exclude_non_upgradable: Optional[bool] = None,
-        exclude_upgraded: Optional[bool] = None,
-        exclude_without_colors: Optional[bool] = None,
-        exclude_hosted: Optional[bool] = None,
-        sort_by_price: Optional[bool] = None,
+        self: pyrogram.Client,
+        chat_id: int | str,
+        collection_id: int | None = None,
+        exclude_unsaved: bool | None = None,
+        exclude_saved: bool | None = None,
+        exclude_unlimited: bool | None = None,
+        exclude_upgradable: bool | None = None,
+        exclude_non_upgradable: bool | None = None,
+        exclude_upgraded: bool | None = None,
+        exclude_without_colors: bool | None = None,
+        exclude_hosted: bool | None = None,
+        sort_by_price: bool | None = None,
         limit: int = 0,
-        offset: str = ""
-    ) -> AsyncIterator["types.Gift"]:
+        offset: str = "",
+    ) -> AsyncGenerator[types.Gift, None]:
         """Get all gifts owned by specified chat.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -113,12 +115,14 @@ class GetChatGifts:
                     exclude_unique=exclude_upgraded,
                     exclude_upgradable=exclude_upgradable,
                     exclude_unupgradable=exclude_non_upgradable,
-                    peer_color_available=not exclude_without_colors if exclude_without_colors is not None else None,
+                    peer_color_available=not exclude_without_colors
+                    if exclude_without_colors is not None
+                    else None,
                     exclude_hosted=exclude_hosted,
                     sort_by_value=sort_by_price,
-                    collection_id=collection_id
+                    collection_id=collection_id,
                 ),
-                sleep_threshold=60
+                sleep_threshold=60,
             )
 
             users = {i.id: i for i in r.users}

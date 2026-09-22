@@ -16,19 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable, Optional, Sequence, Union
+from __future__ import annotations as _annotations
+
+from collections.abc import Callable, Sequence
 
 import pyrogram
 from pyrogram.filters import Filter
+from .handler_type import HandlerType
+from .unbound_arguments import unbound_error_arguments
 
 
 class OnError:
     def on_error(
-        self: Optional[Union["OnError", Filter]] = None,
-        exceptions: Optional[Union[Exception, Sequence[Exception]]] = None,
-        filters: Optional[Filter] = None,
+        self: OnError | Exception | Sequence[Exception] | None = None,
+        exceptions: Exception | Sequence[Exception] | None = None,
+        filters: Filter | None = None,
         group: int = 0,
-    ) -> Callable:
+    ) -> Callable[[HandlerType], HandlerType]:
         """Decorator for handling unexpected errors.
 
         This does the same thing as :meth:`~pyrogram.Client.add_handler` using the
@@ -49,15 +53,27 @@ class OnError:
                 The group identifier, defaults to 0.
         """
 
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: HandlerType) -> HandlerType:
             if isinstance(self, pyrogram.Client):
                 self.add_handler(pyrogram.handlers.ErrorHandler(func, exceptions, filters), group)
             else:
                 if not hasattr(func, "handlers"):
                     func.handlers = []
 
+                arguments = unbound_error_arguments(
+                    self,
+                    exceptions=exceptions,
+                    filters=filters,
+                    group=group,
+                )
+
                 func.handlers.append(
-                    (pyrogram.handlers.ErrorHandler(func, exceptions, filters), group)
+                    (
+                        pyrogram.handlers.ErrorHandler(
+                            func, arguments.exceptions, arguments.filters
+                        ),
+                        arguments.group,
+                    )
                 )
 
             return func

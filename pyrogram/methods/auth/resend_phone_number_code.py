@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 import re
 
@@ -27,12 +29,12 @@ log = logging.getLogger(__name__)
 
 class ResendPhoneNumberCode:
     async def resend_phone_number_code(
-        self: "pyrogram.Client", phone_number: str, phone_code_hash: str
-    ) -> "types.SentCode":
+        self: pyrogram.Client, phone_number: str, phone_code_hash: str
+    ) -> types.SentCode:
         """Re-send the confirmation code using a different type.
 
         The type of the code to be re-sent is specified in the *next_type* attribute of the
-        :obj:`~pyrogram.types.SentCode` object returned by :meth:`send_phone_number_code`.
+        :obj:`~pyrogram.types.SentCode` object returned by :meth:`~pyrogram.Client.send_phone_number_code`.
 
         .. include:: /_includes/usable-by/users.rst
 

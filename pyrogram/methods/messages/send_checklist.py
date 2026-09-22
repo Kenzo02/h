@@ -16,38 +16,39 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 from datetime import datetime
-from typing import Optional, Union
 
 import pyrogram
 from pyrogram import raw, types, utils
 
 log = logging.getLogger(__name__)
 
+
 class SendChecklist:
     async def send_checklist(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        checklist: "types.InputChecklist",
-        disable_notification: Optional[bool] = None,
-        protect_content: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
-        effect_id: Optional[int] = None,
-        reply_parameters: Optional["types.ReplyParameters"] = None,
-        schedule_date: Optional[datetime] = None,
-        repeat_period: Optional[int] = None,
-        business_connection_id: Optional[str] = None,
-        paid_message_star_count: Optional[int] = None,
-        reply_markup: Optional[
-            Union[
-                "types.InlineKeyboardMarkup",
-                "types.ReplyKeyboardMarkup",
-                "types.ReplyKeyboardRemove",
-                "types.ForceReply"
-            ]
-        ] = None,
-    ) -> Optional["types.Message"]:
+        self: pyrogram.Client,
+        chat_id: int | str,
+        checklist: types.InputChecklist,
+        disable_notification: bool | None = None,
+        protect_content: bool | None = None,
+        message_thread_id: int | None = None,
+        effect_id: int | None = None,
+        reply_parameters: types.ReplyParameters | None = None,
+        schedule_date: datetime | None = None,
+        repeat_period: int | None = None,
+        business_connection_id: str | None = None,
+        paid_message_star_count: int | None = None,
+        reply_markup: (
+            types.InlineKeyboardMarkup
+            | types.ReplyKeyboardMarkup
+            | types.ReplyKeyboardRemove
+            | types.ForceReply
+            | None
+        ) = None,
+    ) -> types.Message | None:
         """Send a new checklist.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -113,40 +114,35 @@ class SendChecklist:
                     )
                 )
         """
-        title, entities = (await utils.parse_text_entities(
-            self, checklist.title, checklist.parse_mode, checklist.entities
-        )).values()
+        title, entities = (
+            await utils.parse_text_entities(
+                self, checklist.title, checklist.parse_mode, checklist.entities
+            )
+        ).values()
 
         r = await self.invoke(
             raw.functions.messages.SendMedia(
                 peer=await self.resolve_peer(chat_id),
                 media=raw.types.InputMediaTodo(
                     todo=raw.types.TodoList(
-                        title=raw.types.TextWithEntities(
-                            text=title,
-                            entities=entities or []
-                        ),
+                        title=raw.types.TextWithEntities(text=title, entities=entities or []),
                         list=[await task.write(self) for task in checklist.tasks],
                         others_can_append=checklist.others_can_add_tasks,
-                        others_can_complete=checklist.others_can_mark_tasks_as_done
+                        others_can_complete=checklist.others_can_mark_tasks_as_done,
                     )
                 ),
                 message="",
                 silent=disable_notification,
-                reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id
-                ),
+                reply_to=await utils.get_reply_to(self, reply_parameters, message_thread_id),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 schedule_repeat_period=repeat_period,
                 noforwards=protect_content,
                 allow_paid_stars=paid_message_star_count,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
-                effect=effect_id
+                effect=effect_id,
             ),
-            business_connection_id=business_connection_id
+            business_connection_id=business_connection_id,
         )
 
         messages = await utils.parse_messages(client=self, messages=r)

@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, types, errors
@@ -24,10 +24,10 @@ from pyrogram import raw, types, errors
 
 class PromoteChatMember:
     async def promote_chat_member(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        user_id: Union[int, str],
-        privileges: Optional["types.ChatAdministratorRights"] = None,
+        self: pyrogram.Client,
+        chat_id: int | str,
+        user_id: int | str,
+        privileges: types.ChatAdministratorRights | None = None,
     ) -> bool:
         """Promote or demote a user in a supergroup or a channel.
 
@@ -64,12 +64,11 @@ class PromoteChatMember:
             privileges = types.ChatAdministratorRights()
 
         try:
-            raw_chat_member = (await self.invoke(
-                raw.functions.channels.GetParticipant(
-                    channel=chat_id,
-                    participant=user_id
+            raw_chat_member = (
+                await self.invoke(
+                    raw.functions.channels.GetParticipant(channel=chat_id, participant=user_id)
                 )
-            )).participant
+            ).participant
         except errors.RPCError:
             raw_chat_member = None
 
@@ -97,9 +96,10 @@ class PromoteChatMember:
                     manage_call=privileges.can_manage_video_chats,
                     manage_topics=privileges.can_manage_topics,
                     manage_ranks=privileges.can_manage_tags,
-                    other=privileges.can_manage_chat
+                    manage_welcome_messages=privileges.can_send_welcome_messages,
+                    other=privileges.can_manage_chat,
                 ),
-                rank=rank or ""
+                rank=rank or "",
             )
         )
 

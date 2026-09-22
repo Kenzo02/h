@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from datetime import datetime
-from typing import Optional, Union
 
 import pyrogram
 from pyrogram import raw
@@ -27,12 +28,12 @@ from pyrogram import utils
 
 class EditMessageReplyMarkup:
     async def edit_message_reply_markup(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         message_id: int,
-        schedule_date: Optional[datetime] = None,
-        reply_markup: Optional["types.InlineKeyboardMarkup"] = None,
-    ) -> "types.Message":
+        schedule_date: datetime | None = None,
+        reply_markup: types.InlineKeyboardMarkup | None = None,
+    ) -> types.Message:
         """Edit only the reply markup of messages sent by the bot.
 
         .. include:: /_includes/usable-by/bots.rst
@@ -78,7 +79,5 @@ class EditMessageReplyMarkup:
         for i in r.updates:
             if isinstance(i, (raw.types.UpdateEditMessage, raw.types.UpdateEditChannelMessage)):
                 return await types.Message._parse(
-                    self, i.message,
-                    {i.id: i for i in r.users},
-                    {i.id: i for i in r.chats}
+                    self, i.message, {i.id: i for i in r.users}, {i.id: i for i in r.chats}
                 )

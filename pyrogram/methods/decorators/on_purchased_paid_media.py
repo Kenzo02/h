@@ -16,18 +16,22 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable, Optional, Union
+from __future__ import annotations as _annotations
+
+from collections.abc import Callable
 
 import pyrogram
 from pyrogram.filters import Filter
+from .handler_type import HandlerType
+from .unbound_arguments import unbound_arguments
 
 
 class OnPurchasedPaidMedia:
     def on_purchased_paid_media(
-        self: Union["OnPurchasedPaidMedia", Filter, None] = None,
-        filters: Optional[Filter] = None,
-        group: int = 0
-    ) -> Callable:
+        self: OnPurchasedPaidMedia | Filter | None = None,
+        filters: Filter | None = None,
+        group: int = 0,
+    ) -> Callable[[HandlerType], HandlerType]:
         """Decorator for handling purchased paid media.
 
         This does the same thing as :meth:`~pyrogram.Client.add_handler` using the
@@ -43,17 +47,19 @@ class OnPurchasedPaidMedia:
                 The group identifier, defaults to 0.
         """
 
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: HandlerType) -> HandlerType:
             if isinstance(self, pyrogram.Client):
                 self.add_handler(pyrogram.handlers.PurchasedPaidMediaHandler(func, filters), group)
             elif isinstance(self, Filter) or self is None:
                 if not hasattr(func, "handlers"):
                     func.handlers = []
 
+                arguments = unbound_arguments(self, filters=filters, group=group)
+
                 func.handlers.append(
                     (
-                        pyrogram.handlers.PurchasedPaidMediaHandler(func, self),
-                        group if filters is None else filters
+                        pyrogram.handlers.PurchasedPaidMediaHandler(func, arguments.filters),
+                        arguments.group,
                     )
                 )
 

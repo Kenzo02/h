@@ -16,8 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-
-from typing import Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, types
@@ -25,9 +24,7 @@ from pyrogram import raw, types
 
 class SuggestBirthday:
     async def suggest_birthday(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        birthday: "types.Birthday"
+        self: pyrogram.Client, chat_id: int | str, birthday: types.Birthday
     ) -> bool:
         """Suggests a birthdate to another regular user with common messages and allowing non-paid messages.
 
@@ -38,7 +35,7 @@ class SuggestBirthday:
                 Unique identifier (int) or username (str) of the target chat.
                 For a contact that exists in your Telegram address book you can use his phone number (str).
 
-            birthday (:obj:`types.Birthday`):
+            birthday (:obj:`~pyrogram.types.Birthday`):
                 Birthdate to suggest.
 
         Returns:
@@ -51,8 +48,7 @@ class SuggestBirthday:
         """
         await self.invoke(
             raw.functions.users.SuggestBirthday(
-                id=await self.resolve_peer(chat_id),
-                birthday=birthday.write()
+                id=await self.resolve_peer(chat_id), birthday=birthday.write()
             )
         )
 

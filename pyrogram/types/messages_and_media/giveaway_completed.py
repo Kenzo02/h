@@ -16,13 +16,12 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional
+from __future__ import annotations as _annotations
 
 import pyrogram
 
 from pyrogram import raw, types, errors
 from ..object import Object
-
 
 
 class GiveawayCompleted(Object):
@@ -49,12 +48,12 @@ class GiveawayCompleted(Object):
     def __init__(
         self,
         *,
-        client: Optional["pyrogram.Client"] = None,
+        client: pyrogram.Client | None = None,
         winner_count: int,
-        unclaimed_prize_count: Optional[int] = None,
-        giveaway_message_id: Optional[int] = None,
-        giveaway_message: Optional["types.Message"] = None,
-        is_star_giveaway: Optional[bool] = None
+        unclaimed_prize_count: int | None = None,
+        giveaway_message_id: int | None = None,
+        giveaway_message: types.Message | None = None,
+        is_star_giveaway: bool | None = None,
     ):
         super().__init__(client)
 
@@ -64,14 +63,13 @@ class GiveawayCompleted(Object):
         self.giveaway_message = giveaway_message
         self.is_star_giveaway = is_star_giveaway
 
-
     @staticmethod
     async def _parse(
         client,
-        giveaway_results: "raw.types.MessageActionGiveawayResults",
-        chat: Optional["types.Chat"] = None,
-        message_id: Optional[int] = None
-    ) -> "GiveawayCompleted":
+        giveaway_results: raw.types.MessageActionGiveawayResults,
+        chat: types.Chat | None = None,
+        message_id: int | None = None,
+    ) -> GiveawayCompleted:
         if not isinstance(giveaway_results, raw.types.MessageActionGiveawayResults):
             return
 
@@ -80,9 +78,7 @@ class GiveawayCompleted(Object):
         if chat and message_id:
             try:
                 giveaway_message = await client.get_messages(
-                    chat_id=chat.id,
-                    message_ids=message_id,
-                    replies=0
+                    chat_id=chat.id, message_ids=message_id, replies=0
                 )
             except (errors.ChannelPrivate, errors.ChannelInvalid):
                 pass

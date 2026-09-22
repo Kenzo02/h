@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
@@ -27,28 +28,26 @@ log = logging.getLogger(__name__)
 
 class SendRichMessage:
     async def send_rich_message(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        rich_message: "types.InputRichMessage",
-        disable_notification: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
-        direct_messages_topic_id: Optional[int] = None,
-        receiver_user_id: Optional[Union[int, str]] = None,
-        callback_query_id: Optional[str] = None,
-        effect_id: Optional[int] = None,
-        reply_parameters: Optional["types.ReplyParameters"] = None,
-        protect_content: Optional[bool] = None,
-        allow_paid_broadcast: Optional[bool] = None,
-        suggested_post_parameters: Optional["types.SuggestedPostParameters"] = None,
-        reply_markup: Optional[
-            Union[
-                "types.InlineKeyboardMarkup",
-                "types.ReplyKeyboardMarkup",
-                "types.ReplyKeyboardRemove",
-                "types.ForceReply",
-            ]
-        ] = None,
-    ) -> Optional["types.Message"]:
+        self: pyrogram.Client,
+        chat_id: int | str,
+        rich_message: types.InputRichMessage,
+        disable_notification: bool | None = None,
+        message_thread_id: int | None = None,
+        direct_messages_topic_id: int | None = None,
+        ephemeral_message_parameters: types.EphemeralMessageParameters | None = None,
+        effect_id: int | None = None,
+        reply_parameters: types.ReplyParameters | None = None,
+        protect_content: bool | None = None,
+        allow_paid_broadcast: bool | None = None,
+        suggested_post_parameters: types.SuggestedPostParameters | None = None,
+        reply_markup: (
+            types.InlineKeyboardMarkup
+            | types.ReplyKeyboardMarkup
+            | types.ReplyKeyboardRemove
+            | types.ForceReply
+            | None
+        ) = None,
+    ) -> types.Message | None:
         """Send text messages.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -74,14 +73,8 @@ class SendRichMessage:
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For direct chats only.only.
 
-            receiver_user_id (``int`` | ``str``, *optional*):
-                For outgoing ephemeral messages, unique identifier (int) or username (str) of the user who will receive the message.
-                For group and supergroup chats only.
-                It is not guaranteed that the user will receive the message, especially if they are offline.
-                See `ephemeral message sending <https://core.telegram.org/bots/api#ephemeral-messages-and-commands>`__ for more details.
-
-            callback_query_id (``str``, *optional*):
-                For outgoing ephemeral messages, identifier of the callback query which triggered the message if any.
+            ephemeral_message_parameters (:obj:`~pyrogram.types.EphemeralMessageParameters`, *optional*):
+                Parameters of the ephemeral message to send.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -126,26 +119,29 @@ class SendRichMessage:
                     ),
                 )
         """
-        if receiver_user_id:
+        if ephemeral_message_parameters:
             rpc = raw.functions.ephemeral.SendMessage(
                 peer=await self.resolve_peer(chat_id),
-                receiver_id=await self.resolve_peer(receiver_user_id),
-                query_id=int(callback_query_id) if callback_query_id is not None else None,
+                receiver_id=await self.resolve_peer(ephemeral_message_parameters.receiver_user_id),
+                query_id=int(ephemeral_message_parameters.callback_query_id)
+                if ephemeral_message_parameters.callback_query_id is not None
+                else None,
                 reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id,
-                    direct_messages_topic_id
+                    self, reply_parameters, message_thread_id, direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
+                anchor=ephemeral_message_parameters.replace_callback_query_message,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 message="",
-                rich_message=rich_message.write(),
+                rich_message=await rich_message.write(
+                    client=self,
+                    chat_id=chat_id,
+                ),
             )
         else:
             rpc = raw.functions.messages.SendMessage(
                 peer=await self.resolve_peer(chat_id),
-                silent=disable_notification or None,
+                silent=disable_notification,
                 reply_to=await utils.get_reply_to(
                     self, reply_parameters, message_thread_id, direct_messages_topic_id
                 ),
@@ -157,7 +153,10 @@ class SendRichMessage:
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 message="",
                 noforwards=protect_content,
-                rich_message=rich_message.write(),
+                rich_message=await rich_message.write(
+                    client=self,
+                    chat_id=chat_id,
+                ),
                 effect=effect_id,
             )
 

@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Union
 
 import pyrogram
 from pyrogram import raw
@@ -26,10 +27,7 @@ log = logging.getLogger(__name__)
 
 
 class GetChatGiftsCount:
-    async def get_chat_gifts_count(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str]
-    ) -> int:
+    async def get_chat_gifts_count(self: pyrogram.Client, chat_id: int | str) -> int:
         """Get the total count of owned gifts of specified chat.
 
         .. include:: /_includes/usable-by/users.rst
@@ -51,11 +49,7 @@ class GetChatGiftsCount:
         peer = await self.resolve_peer(chat_id)
 
         r = await self.invoke(
-            raw.functions.payments.GetSavedStarGifts(
-                peer=peer,
-                offset="",
-                limit=1
-            )
+            raw.functions.payments.GetSavedStarGifts(peer=peer, offset="", limit=1)
         )
 
         return r.count

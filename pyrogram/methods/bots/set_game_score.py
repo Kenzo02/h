@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw
@@ -25,14 +25,14 @@ from pyrogram import types
 
 class SetGameScore:
     async def set_game_score(
-        self: "pyrogram.Client",
-        user_id: Union[int, str],
+        self: pyrogram.Client,
+        user_id: int | str,
         score: int,
-        force: Optional[bool] = None,
-        disable_edit_message: Optional[bool] = None,
-        chat_id: Optional[Union[int, str]] = None,
-        message_id: Optional[int] = None,
-    ) -> Union["types.Message", bool]:
+        force: bool | None = None,
+        disable_edit_message: bool | None = None,
+        chat_id: int | str | None = None,
+        message_id: int | None = None,
+    ) -> types.Message | bool:
         # inline_message_id: str = None):  TODO Add inline_message_id
         """Set the score of the specified user in a game.
 
@@ -83,18 +83,15 @@ class SetGameScore:
                 score=score,
                 id=message_id,
                 user_id=await self.resolve_peer(user_id),
-                force=force or None,
-                edit_message=not disable_edit_message or None
+                force=force,
+                edit_message=not disable_edit_message,
             )
         )
 
         for i in r.updates:
-            if isinstance(i, (raw.types.UpdateEditMessage,
-                              raw.types.UpdateEditChannelMessage)):
+            if isinstance(i, (raw.types.UpdateEditMessage, raw.types.UpdateEditChannelMessage)):
                 return await types.Message._parse(
-                    self, i.message,
-                    {i.id: i for i in r.users},
-                    {i.id: i for i in r.chats}
+                    self, i.message, {i.id: i for i in r.users}, {i.id: i for i in r.chats}
                 )
 
         return True

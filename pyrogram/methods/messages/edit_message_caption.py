@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from datetime import datetime
-from typing import Union, List, Optional
 
 import pyrogram
 from pyrogram import types, enums
@@ -25,17 +26,17 @@ from pyrogram import types, enums
 
 class EditMessageCaption:
     async def edit_message_caption(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         message_id: int,
         caption: str,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        caption_entities: Optional[List["types.MessageEntity"]] = None,
-        schedule_date: Optional[datetime] = None,
-        business_connection_id: Optional[str] = None,
-        show_caption_above_media: Optional[bool] = None,
-        reply_markup: Optional["types.InlineKeyboardMarkup"] = None,
-    ) -> "types.Message":
+        parse_mode: enums.ParseMode | None = None,
+        caption_entities: list[types.MessageEntity] | None = None,
+        schedule_date: datetime | None = None,
+        business_connection_id: str | None = None,
+        show_caption_above_media: bool | None = None,
+        reply_markup: types.InlineKeyboardMarkup | None = None,
+    ) -> types.Message:
         """Edit the caption of media messages.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -83,7 +84,9 @@ class EditMessageCaption:
         link_preview_options = self.link_preview_options
 
         if show_caption_above_media is not None:
-            link_preview_options = types.LinkPreviewOptions(show_above_text=show_caption_above_media)
+            link_preview_options = types.LinkPreviewOptions(
+                show_above_text=show_caption_above_media
+            )
 
         return await self.edit_message_text(
             chat_id=chat_id,
@@ -94,5 +97,5 @@ class EditMessageCaption:
             schedule_date=schedule_date,
             business_connection_id=business_connection_id,
             link_preview_options=link_preview_options,
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
         )

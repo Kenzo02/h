@@ -16,9 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from datetime import datetime
-from typing import Dict, Optional
-from typing import Optional
 
 import pyrogram
 from pyrogram import raw, utils
@@ -70,19 +70,20 @@ class ChatInviteLink(Object):
     """
 
     def __init__(
-        self, *,
+        self,
+        *,
         invite_link: str,
         date: datetime,
-        is_primary: Optional[bool] = None,
-        is_revoked: Optional[bool] = None,
-        creator: Optional["types.User"] = None,
-        name: Optional[str] = None,
-        creates_join_request: Optional[bool] = None,
-        start_date: Optional[datetime] = None,
-        expire_date: Optional[datetime] = None,
-        member_limit: Optional[int] = None,
-        member_count: Optional[int] = None,
-        pending_join_request_count: Optional[int] = None
+        is_primary: bool | None = None,
+        is_revoked: bool | None = None,
+        creator: types.User | None = None,
+        name: str | None = None,
+        creates_join_request: bool | None = None,
+        start_date: datetime | None = None,
+        expire_date: datetime | None = None,
+        member_limit: int | None = None,
+        member_count: int | None = None,
+        pending_join_request_count: int | None = None,
     ):
         super().__init__()
 
@@ -101,17 +102,15 @@ class ChatInviteLink(Object):
 
     @staticmethod
     async def _parse(
-        client: "pyrogram.Client",
-        invite: "raw.base.ExportedChatInvite",
-        users: Optional[Dict[int, "raw.types.User"]] = None
-    ) -> Optional["ChatInviteLink"]:
+        client: pyrogram.Client,
+        invite: raw.base.ExportedChatInvite,
+        users: dict[int, raw.types.User] | None = None,
+    ) -> ChatInviteLink | None:
         if not isinstance(invite, raw.types.ChatInviteExported):
             return None
 
         creator = (
-            await types.User._parse(client, users[invite.admin_id])
-            if users is not None
-            else None
+            await types.User._parse(client, users[invite.admin_id]) if users is not None else None
         )
 
         return ChatInviteLink(
@@ -126,5 +125,5 @@ class ChatInviteLink(Object):
             expire_date=utils.timestamp_to_datetime(invite.expire_date),
             member_limit=invite.usage_limit,
             member_count=invite.usage,
-            pending_join_request_count=invite.requested
+            pending_join_request_count=invite.requested,
         )

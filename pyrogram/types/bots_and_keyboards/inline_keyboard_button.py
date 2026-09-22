@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import enums, raw, types
@@ -80,9 +80,9 @@ class InlineKeyboardButton(Object):
             the bot's username and the specified inline query in the input field.
             Not supported for messages sent in channel direct messages chats and on behalf of a business account.
 
-        copy_text (``str`` | :obj:`~pyrogram.types.CopyTextButton`, *optional*):
+        copy_text (:obj:`~pyrogram.types.CopyTextButton` | ``str``, *optional*):
             A button that copies specified text to clipboard.
-            Limited to 256 character.
+            Limited to 256 characters.
 
         callback_game (:obj:`~pyrogram.types.CallbackGame`, *optional*):
             Description of the game that will be launched when the user presses the button.
@@ -102,21 +102,21 @@ class InlineKeyboardButton(Object):
     def __init__(
         self,
         text: str,
-        callback_data: Optional[Union[str, bytes]] = None,
-        url: Optional[str] = None,
-        web_app: Optional["types.WebAppInfo"] = None,
-        login_url: Optional["types.LoginUrl"] = None,
-        user_id: Optional[int] = None,
-        switch_inline_query: Optional[str] = None,
-        switch_inline_query_current_chat: Optional[str] = None,
-        callback_game: Optional["types.CallbackGame"] = None,
-        requires_password: Optional[bool] = None,
-        pay: Optional[bool] = None,
-        copy_text: Optional[Union[str, "types.CopyTextButton"]] = None,
-        icon_custom_emoji_id: Optional[str] = None,
-        style: "enums.ButtonStyle" = enums.ButtonStyle.DEFAULT,
-        switch_inline_query_chosen_chat: Optional["types.SwitchInlineQueryChosenChat"] = None,
-        disabled: Optional[bool] = None,
+        callback_data: str | bytes | None = None,
+        url: str | None = None,
+        web_app: types.WebAppInfo | None = None,
+        login_url: types.LoginUrl | None = None,
+        user_id: int | None = None,
+        switch_inline_query: str | None = None,
+        switch_inline_query_current_chat: str | None = None,
+        callback_game: types.CallbackGame | None = None,
+        requires_password: bool | None = None,
+        pay: bool | None = None,
+        copy_text: types.CopyTextButton | str | None = None,
+        icon_custom_emoji_id: str | None = None,
+        style: enums.ButtonStyle = enums.ButtonStyle.DEFAULT,
+        switch_inline_query_chosen_chat: types.SwitchInlineQueryChosenChat | None = None,
+        disabled: types.DisabledButton | None = None,
     ):
         super().__init__()
 
@@ -132,13 +132,17 @@ class InlineKeyboardButton(Object):
         self.switch_inline_query = switch_inline_query
         self.switch_inline_query_current_chat = switch_inline_query_current_chat
         self.switch_inline_query_chosen_chat = switch_inline_query_chosen_chat
+
+        if isinstance(copy_text, str):
+            copy_text = types.CopyTextButton(text=copy_text)
+
         self.copy_text = copy_text
         self.callback_game = callback_game
         self.pay = pay
         self.disabled = disabled
 
     @staticmethod
-    def read(button: "raw.base.KeyboardInlineButton"):
+    def read(button: raw.base.KeyboardInlineButton):
         button_text = button.text
         button_type = button.type
         button_style = enums.ButtonStyle.DEFAULT
@@ -208,7 +212,9 @@ class InlineKeyboardButton(Object):
             if button_type.peer_types:
                 return InlineKeyboardButton(
                     text=button_text,
-                    switch_inline_query_chosen_chat=types.SwitchInlineQueryChosenChat._parse(button_type),
+                    switch_inline_query_chosen_chat=types.SwitchInlineQueryChosenChat._parse(
+                        button_type
+                    ),
                     style=button_style,
                     icon_custom_emoji_id=icon_custom_emoji_id,
                 )
@@ -260,7 +266,12 @@ class InlineKeyboardButton(Object):
                 icon_custom_emoji_id=icon_custom_emoji_id,
             )
 
-    async def write(self, client: "pyrogram.Client") -> "raw.types.KeyboardInlineButton":
+    async def write(self, client: pyrogram.Client) -> raw.types.KeyboardInlineButton:
+        if self.style is enums.ButtonStyle.LINK:
+            # `keyboardButtonStyle` carries no `link` flag, so the style would go out empty.
+            #  `compiler/api/source/main_api.tl:2188`
+            raise ValueError("`ButtonStyle.LINK` is only available on `RichMessageButton`")
+
         style = (
             raw.types.KeyboardButtonStyle(
                 bg_primary=self.style == enums.ButtonStyle.PRIMARY,
@@ -316,9 +327,13 @@ class InlineKeyboardButton(Object):
             if self.switch_inline_query_chosen_chat.allow_user_chats:
                 peer_types.append(raw.types.InlineQueryPeerTypePM())
             if self.switch_inline_query_chosen_chat.allow_bot_chats:
-                peer_types.extend((raw.types.InlineQueryPeerTypeBotPM(), raw.types.InlineQueryPeerTypeSameBotPM()))
+                peer_types.extend(
+                    (raw.types.InlineQueryPeerTypeBotPM(), raw.types.InlineQueryPeerTypeSameBotPM())
+                )
             if self.switch_inline_query_chosen_chat.allow_group_chats:
-                peer_types.extend((raw.types.InlineQueryPeerTypeChat(), raw.types.InlineQueryPeerTypeMegagroup()))
+                peer_types.extend(
+                    (raw.types.InlineQueryPeerTypeChat(), raw.types.InlineQueryPeerTypeMegagroup())
+                )
             if self.switch_inline_query_chosen_chat.allow_channel_chats:
                 peer_types.append(raw.types.InlineQueryPeerTypeBroadcast())
 

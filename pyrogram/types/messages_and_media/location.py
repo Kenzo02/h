@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
+from __future__ import annotations as _annotations
 
 from pyrogram import raw
 
@@ -52,13 +52,13 @@ class Location(Object):
     def __init__(
         self,
         *,
-        longitude: Optional[float] = None,
-        latitude: Optional[float] = None,
-        accuracy_radius: Optional[int] = None,
-        address: Optional[str] = None,
-        live_period: Optional[int] = None,
-        heading: Optional[int] = None,
-        proximity_alert_radius: Optional[int] = None
+        longitude: float | None = None,
+        latitude: float | None = None,
+        accuracy_radius: int | None = None,
+        address: str | None = None,
+        live_period: int | None = None,
+        heading: int | None = None,
+        proximity_alert_radius: int | None = None,
     ):
         super().__init__()
 
@@ -71,7 +71,20 @@ class Location(Object):
         self.proximity_alert_radius = proximity_alert_radius
 
     @staticmethod
-    def _parse(geo_point: "raw.types.GeoPoint") -> Optional["Location"]:
+    def _parse(
+        geo_point: raw.base.GeoPoint | raw.base.BusinessLocation | raw.base.MessageMedia,
+    ) -> Location | None:
+        if isinstance(geo_point, raw.types.GeoPoint):
+            return Location._parse_geo_point(geo_point)
+
+        if isinstance(geo_point, raw.types.BusinessLocation):
+            return Location._parse_business(geo_point)
+
+        if isinstance(geo_point, raw.types.MessageMediaGeoLive):
+            return Location._parse_media(geo_point)
+
+    @staticmethod
+    def _parse_geo_point(geo_point: raw.types.GeoPoint) -> Location | None:
         if isinstance(geo_point, raw.types.GeoPoint):
             return Location(
                 longitude=geo_point.long,
@@ -80,7 +93,7 @@ class Location(Object):
             )
 
     @staticmethod
-    def _parse_business(location: "raw.types.BusinessLocation") -> "Location":
+    def _parse_business(location: raw.types.BusinessLocation) -> Location | None:
         if isinstance(location, raw.types.BusinessLocation):
             longitude = None
             latitude = None
@@ -95,21 +108,31 @@ class Location(Object):
                 longitude=longitude,
                 latitude=latitude,
                 accuracy_radius=accuracy_radius,
-                address=location.address
+                address=location.address,
             )
 
     @staticmethod
-    def _parse_media(media: "raw.types.MessageMediaGeoLive") -> Optional["Location"]:
+    def _parse_media(media: raw.types.MessageMediaGeoLive) -> Location | None:
         if isinstance(media, raw.types.MessageMediaGeoLive):
-            parsed_location = Location._parse(media.geo)
+            longitude = None
+            latitude = None
+            accuracy_radius = None
 
-            parsed_location.live_period = media.period
-            parsed_location.heading = media.heading
-            parsed_location.proximity_alert_radius = media.proximity_notification_radius
+            if isinstance(media.geo, raw.types.GeoPoint):
+                longitude = media.geo.long
+                latitude = media.geo.lat
+                accuracy_radius = media.geo.accuracy_radius
 
-            return parsed_location
+            return Location(
+                longitude=longitude,
+                latitude=latitude,
+                accuracy_radius=accuracy_radius,
+                live_period=media.period,
+                heading=media.heading,
+                proximity_alert_radius=media.proximity_notification_radius,
+            )
 
-    async def write(self, **kwargs) -> Union["raw.types.InputMediaGeoPoint", "raw.types.InputMediaGeoLive"]:
+    async def write(self, **kwargs) -> raw.types.InputMediaGeoPoint | raw.types.InputMediaGeoLive:
         if self.live_period is not None:
             return raw.types.InputMediaGeoLive(
                 geo_point=raw.types.InputGeoPoint(

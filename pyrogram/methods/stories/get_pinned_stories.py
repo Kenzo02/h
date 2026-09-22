@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import AsyncIterator, Union
+from __future__ import annotations as _annotations
+
+from collections.abc import AsyncGenerator
 
 import pyrogram
 from pyrogram import raw
@@ -26,11 +28,11 @@ from pyrogram import utils
 
 class GetPinnedStories:
     async def get_pinned_stories(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         offset_id: int = 0,
         limit: int = 0,
-    ) -> AsyncIterator["types.Story"]:
+    ) -> AsyncGenerator[types.Story, None]:
         """Get all pinned stories from a chat by using chat identifier.
 
         .. include:: /_includes/usable-by/users.rst
@@ -65,11 +67,7 @@ class GetPinnedStories:
 
         while True:
             r = await self.invoke(
-                raw.functions.stories.GetPinnedStories(
-                    peer=peer,
-                    offset_id=offset_id,
-                    limit=limit
-                )
+                raw.functions.stories.GetPinnedStories(peer=peer, offset_id=offset_id, limit=limit)
             )
 
             if not r.stories:
@@ -88,13 +86,7 @@ class GetPinnedStories:
             offset_id = last.id
 
             for story in r.stories:
-                yield await types.Story._parse(
-                    self,
-                    story,
-                    peer,
-                    users,
-                    chats
-                )
+                yield await types.Story._parse(self, story, peer, users, chats)
 
                 current += 1
 

@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import List
 
 import pyrogram
 from pyrogram import raw
@@ -28,10 +29,11 @@ log = logging.getLogger(__name__)
 
 class Start:
     async def start(
-        self: "pyrogram.Client", *,
+        self: pyrogram.Client,
+        *,
         use_qr: bool = False,
-        except_ids: List[int] = [],
-    ):
+        except_ids: list[int] | None = None,
+    ) -> pyrogram.Client:
         """Start the client.
 
         This method connects the client to Telegram and, in case of new sessions, automatically manages the
@@ -39,7 +41,7 @@ class Start:
 
         .. note::
 
-            You should install ``qrcode`` package if you want to use QR code authorization.
+            QR code authorization needs the ``qrcode`` extra: ``pip install "kurigram[qrcode]"``.
 
         Parameters:
             use_qr (``bool``, *optional*):
@@ -55,6 +57,7 @@ class Start:
 
         Raises:
             ConnectionError: In case you try to start an already started client.
+            ImportError: In case ``use_qr`` is True and the ``qrcode`` extra is not installed.
 
         Example:
             .. code-block:: python
@@ -80,12 +83,7 @@ class Start:
         try:
             if not is_authorized:
                 if use_qr:
-                    try:
-                        import qrcode
-                        await self.authorize_qr(except_ids=except_ids)
-                    except ImportError:
-                        log.warning("qrcode package not found, falling back to authorization prompt")
-                        await self.authorize()
+                    await self.authorize_qr(except_ids=except_ids)
                 else:
                     await self.authorize()
 

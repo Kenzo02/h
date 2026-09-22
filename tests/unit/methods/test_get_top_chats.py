@@ -36,9 +36,7 @@ async def test_get_top_chats_uses_chat_lookup(monkeypatch):
 
     monkeypatch.setattr(types.Chat, "_parse_chat", staticmethod(parse_chat))
 
-    result = [
-        chat async for chat in Client().get_top_chats(enums.TopChatCategory.GROUPS, limit=1)
-    ]
+    result = [chat async for chat in Client().get_top_chats(enums.TopChatCategory.GROUPS, limit=1)]
 
     assert len(result) == 1
     assert result[0].id == 123

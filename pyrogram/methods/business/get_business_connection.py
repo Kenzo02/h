@@ -16,15 +16,16 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import pyrogram
 from pyrogram import raw, types
 
 
 class GetBusinessConnection:
     async def get_business_connection(
-        self: "pyrogram.Client",
-        business_connection_id: str
-    ):
+        self: pyrogram.Client, business_connection_id: str
+    ) -> types.BusinessConnection:
         """Use this method to get information about the connection of the bot with a business account.
 
         .. include:: /_includes/usable-by/bots.rst
@@ -43,9 +44,7 @@ class GetBusinessConnection:
                 await app.get_business_connection(connection_id)
         """
         r = await self.invoke(
-            raw.functions.account.GetBotBusinessConnection(
-                connection_id=business_connection_id
-            )
+            raw.functions.account.GetBotBusinessConnection(connection_id=business_connection_id)
         )
 
         users = {i.id: i for i in r.users}

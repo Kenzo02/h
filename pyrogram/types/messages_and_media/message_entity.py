@@ -16,27 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import re
-from typing import Optional
 
 import pyrogram
-from pyrogram import raw, enums
-from pyrogram import types
+from pyrogram import raw, enums, types, utils
 from ..object import Object
-
-
-def _normalize_int64(value: int) -> int:
-    """Convert unsigned 64-bit integer to signed for MTProto serialization."""
-    try:
-        if value is None:
-            return value
-        if not isinstance(value, int):
-            return int(value)
-        if value >= (1 << 63):
-            return value - (1 << 64)
-        return value
-    except Exception:
-        return value
 
 
 class MessageEntity(Object):
@@ -80,17 +66,17 @@ class MessageEntity(Object):
     def __init__(
         self,
         *,
-        client: Optional["pyrogram.Client"] = None,
-        type: "enums.MessageEntityType",
+        client: pyrogram.Client | None = None,
+        type: enums.MessageEntityType,
         offset: int,
         length: int,
-        url: Optional[str] = None,
-        user: Optional["types.User"] = None,
-        language: Optional[str] = None,
-        custom_emoji_id: Optional[str] = None,
-        expandable: Optional[bool] = None,
-        unix_time: Optional[int] = None,
-        date_time_format: Optional[str] = None
+        url: str | None = None,
+        user: types.User | None = None,
+        language: str | None = None,
+        custom_emoji_id: str | None = None,
+        expandable: bool | None = None,
+        unix_time: int | None = None,
+        date_time_format: str | None = None,
     ):
         super().__init__(client)
 
@@ -106,7 +92,7 @@ class MessageEntity(Object):
         self.date_time_format = date_time_format
 
     @staticmethod
-    async def _parse(client, entity: "raw.base.MessageEntity", users: dict) -> "MessageEntity":
+    async def _parse(client, entity: raw.base.MessageEntity, users: dict) -> MessageEntity:
         user_id = None
         unix_time = None
         date_time_format = None
@@ -154,7 +140,7 @@ class MessageEntity(Object):
             expandable=getattr(entity, "collapsed", None),
             unix_time=unix_time,
             date_time_format=date_time_format or None,
-            client=client
+            client=client,
         )
 
     async def write(self):
@@ -177,9 +163,7 @@ class MessageEntity(Object):
 
         if is_custom_emoji_type:
             if current_custom_emoji_id is None:
-                raise ValueError(
-                    "MessageEntityType.CUSTOM_EMOJI requires a 'custom_emoji_id'."
-                )
+                raise ValueError("MessageEntityType.CUSTOM_EMOJI requires a 'custom_emoji_id'.")
 
             try:
                 current_custom_emoji_id = int(current_custom_emoji_id)
@@ -196,7 +180,7 @@ class MessageEntity(Object):
                     f"custom_emoji_id {current_custom_emoji_id} is out of 64-bit integer range for MessageEntityType.CUSTOM_EMOJI."
                 )
             # Normalize unsigned to signed for MTProto serialization
-            args["document_id"] = _normalize_int64(current_custom_emoji_id)
+            args["document_id"] = utils.normalize_int64(current_custom_emoji_id)
 
         args.pop("expandable", None)
         if self.expandable is not None:

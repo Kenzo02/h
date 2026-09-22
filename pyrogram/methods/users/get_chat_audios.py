@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import AsyncIterator, Union
+from __future__ import annotations as _annotations
+
+from collections.abc import AsyncGenerator
 
 import pyrogram
 from pyrogram import raw, types
@@ -24,10 +26,10 @@ from pyrogram import raw, types
 
 class GetChatAudios:
     async def get_chat_audios(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         limit: int = 0,
-    ) -> AsyncIterator["types.Audio"]:
+    ) -> AsyncGenerator[types.Audio, None]:
         """Get a user profile audios sequentially.
 
         .. include:: /_includes/usable-by/users.rst
@@ -60,12 +62,7 @@ class GetChatAudios:
 
         while True:
             r = await self.invoke(
-                raw.functions.users.GetSavedMusic(
-                    id=peer_id,
-                    offset=offset,
-                    limit=limit,
-                    hash=0
-                )
+                raw.functions.users.GetSavedMusic(id=peer_id, offset=offset, limit=limit, hash=0)
             )
 
             audios = []

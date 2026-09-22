@@ -16,9 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from io import BytesIO
 from json import dumps
-from typing import cast, List, Any, Union, Dict, TypeVar, Generic
+from typing import cast, Any, TypeVar, Generic
 
 from ..all import objects
 
@@ -26,7 +28,7 @@ ReturnType = TypeVar("ReturnType")
 
 
 class TLObject(Generic[ReturnType]):
-    __slots__: List[str] = []
+    __slots__: list[str] = []
 
     QUALNAME = "Base"
 
@@ -35,20 +37,14 @@ class TLObject(Generic[ReturnType]):
         return cast(TLObject, objects[int.from_bytes(b.read(4), "little")]).read(b, *args)
 
     def write(self, *args: Any) -> bytes:
-        pass
+        raise NotImplementedError
 
     @staticmethod
-    def default(obj: "TLObject") -> Union[str, Dict[str, str]]:
+    def default(obj: TLObject) -> str | dict[str, str]:
         if isinstance(obj, bytes):
             return repr(obj)
 
-        attributes_to_mask = {
-            "code",
-            "phone",
-            "token",
-            "autologin_token",
-            "logout_tokens"
-        }
+        attributes_to_mask = {"code", "phone", "token", "autologin_token", "logout_tokens"}
 
         filtered_attributes = {}
 
@@ -63,10 +59,7 @@ class TLObject(Generic[ReturnType]):
             else:
                 filtered_attributes[attr] = value
 
-        return {
-            "_": obj.QUALNAME,
-            **filtered_attributes
-        }
+        return {"_": obj.QUALNAME, **filtered_attributes}
 
     def __str__(self) -> str:
         return dumps(self, indent=4, default=TLObject.default, ensure_ascii=False)
@@ -81,10 +74,10 @@ class TLObject(Generic[ReturnType]):
                 f"{attr}={repr(getattr(self, attr))}"
                 for attr in self.__slots__
                 if getattr(self, attr) is not None
-            )
+            ),
         )
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         for attr in self.__slots__:
             try:
                 if getattr(self, attr) != getattr(other, attr):
@@ -94,8 +87,13 @@ class TLObject(Generic[ReturnType]):
 
         return True
 
+    # Equality is by mutable attribute value (see `__eq__` above), so a stable hash across
+    #  the object's lifetime cannot be guaranteed. Declared explicitly rather than relying on
+    #  the implicit `__hash__ = None` Python already applies when `__eq__` is defined alone.
+    __hash__ = None
+
     def __len__(self) -> int:
         return len(self.write())
 
     def __call__(self, *args: Any, **kwargs: Any) -> ReturnType:
-        pass
+        raise NotImplementedError

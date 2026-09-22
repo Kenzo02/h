@@ -16,52 +16,53 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 from datetime import datetime
-from typing import List, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
 
 log = logging.getLogger(__name__)
 
+
 class SendVenue:
     async def send_venue(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         latitude: float,
         longitude: float,
         title: str,
         address: str,
         foursquare_id: str = "",
         foursquare_type: str = "",
-        disable_notification: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
-        direct_messages_topic_id: Optional[int] = None,
-        receiver_user_id: Optional[Union[int, str]] = None,
-        callback_query_id: Optional[str] = None,
-        effect_id: Optional[int] = None,
-        reply_parameters: Optional["types.ReplyParameters"] = None,
-        suggested_post_parameters: Optional["types.SuggestedPostParameters"] = None,
-        schedule_date: Optional[datetime] = None,
-        protect_content: Optional[bool] = None,
-        business_connection_id: Optional[str] = None,
-        allow_paid_broadcast: Optional[bool] = None,
-        paid_message_star_count: Optional[int] = None,
-        reply_markup: Optional[Union[
-            "types.InlineKeyboardMarkup",
-            "types.ReplyKeyboardMarkup",
-            "types.ReplyKeyboardRemove",
-            "types.ForceReply"
-        ]] = None,
-
-        reply_to_message_id: Optional[int] = None,
-        reply_to_chat_id: Optional[Union[int, str]] = None,
-        quote_text: Optional[str] = None,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        quote_entities: Optional[List["types.MessageEntity"]] = None,
-        quote_offset: Optional[int] = None,
-    ) -> Optional["types.Message"]:
+        disable_notification: bool | None = None,
+        message_thread_id: int | None = None,
+        direct_messages_topic_id: int | None = None,
+        ephemeral_message_parameters: types.EphemeralMessageParameters | None = None,
+        effect_id: int | None = None,
+        reply_parameters: types.ReplyParameters | None = None,
+        suggested_post_parameters: types.SuggestedPostParameters | None = None,
+        schedule_date: datetime | None = None,
+        protect_content: bool | None = None,
+        business_connection_id: str | None = None,
+        allow_paid_broadcast: bool | None = None,
+        paid_message_star_count: int | None = None,
+        reply_markup: (
+            types.InlineKeyboardMarkup
+            | types.ReplyKeyboardMarkup
+            | types.ReplyKeyboardRemove
+            | types.ForceReply
+            | None
+        ) = None,
+        reply_to_message_id: int | None = None,
+        reply_to_chat_id: int | str | None = None,
+        quote_text: str | None = None,
+        parse_mode: enums.ParseMode | None = None,
+        quote_entities: list[types.MessageEntity] | None = None,
+        quote_offset: int | None = None,
+    ) -> types.Message | None:
         """Send information about a venue.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -103,14 +104,8 @@ class SendVenue:
                 Unique identifier of the topic in a channel direct messages chat administered by the current user.
                 For direct chats only.only.
 
-            receiver_user_id (``int`` | ``str``, *optional*):
-                For outgoing ephemeral messages, unique identifier (int) or username (str) of the user who will receive the message.
-                For group and supergroup chats only.
-                It is not guaranteed that the user will receive the message, especially if they are offline.
-                See `ephemeral message sending <https://core.telegram.org/bots/api#ephemeral-messages-and-commands>`__ for more details.
-
-            callback_query_id (``str``, *optional*):
-                For outgoing ephemeral messages, identifier of the callback query which triggered the message if any.
+            ephemeral_message_parameters (:obj:`~pyrogram.types.EphemeralMessageParameters`, *optional*):
+                Parameters of the ephemeral message to send.
 
             effect_id (``int``, *optional*):
                 Unique identifier of the message effect.
@@ -201,56 +196,47 @@ class SendVenue:
                 quote=quote_text,
                 quote_parse_mode=parse_mode,
                 quote_entities=quote_entities,
-                quote_position=quote_offset
+                quote_position=quote_offset,
             )
 
-        if receiver_user_id:
+        if ephemeral_message_parameters:
             rpc = raw.functions.ephemeral.SendMessage(
                 peer=await self.resolve_peer(chat_id),
-                receiver_id=await self.resolve_peer(receiver_user_id),
-                query_id=int(callback_query_id) if callback_query_id is not None else None,
+                receiver_id=await self.resolve_peer(ephemeral_message_parameters.receiver_user_id),
+                query_id=int(ephemeral_message_parameters.callback_query_id)
+                if ephemeral_message_parameters.callback_query_id is not None
+                else None,
                 media=raw.types.InputMediaVenue(
-                    geo_point=raw.types.InputGeoPoint(
-                        lat=latitude,
-                        long=longitude
-                    ),
+                    geo_point=raw.types.InputGeoPoint(lat=latitude, long=longitude),
                     title=title,
                     address=address,
                     provider="",
                     venue_id=foursquare_id or "",
-                    venue_type=foursquare_type or ""
+                    venue_type=foursquare_type or "",
                 ),
                 reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id,
-                    direct_messages_topic_id
+                    self, reply_parameters, message_thread_id, direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
+                anchor=ephemeral_message_parameters.replace_callback_query_message,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
-                message=""
+                message="",
             )
         else:
             rpc = raw.functions.messages.SendMedia(
                 peer=await self.resolve_peer(chat_id),
                 media=raw.types.InputMediaVenue(
-                    geo_point=raw.types.InputGeoPoint(
-                        lat=latitude,
-                        long=longitude
-                    ),
+                    geo_point=raw.types.InputGeoPoint(lat=latitude, long=longitude),
                     title=title,
                     address=address,
                     provider="",
                     venue_id=foursquare_id or "",
-                    venue_type=foursquare_type or ""
+                    venue_type=foursquare_type or "",
                 ),
                 message="",
-                silent=disable_notification or None,
+                silent=disable_notification,
                 reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id,
-                    direct_messages_topic_id
+                    self, reply_parameters, message_thread_id, direct_messages_topic_id
                 ),
                 random_id=self.rnd_id(),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
@@ -259,7 +245,9 @@ class SendVenue:
                 allow_paid_stars=paid_message_star_count,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 effect=effect_id,
-                suggested_post=suggested_post_parameters.write() if suggested_post_parameters else None
+                suggested_post=suggested_post_parameters.write()
+                if suggested_post_parameters
+                else None,
             )
 
         r = await self.invoke(rpc, business_connection_id=business_connection_id)

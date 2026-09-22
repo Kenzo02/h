@@ -16,16 +16,14 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, types, errors
 
 
 class JoinChat:
-    async def join_chat(
-        self: "pyrogram.Client", chat_id: Union[int, str]
-    ) -> "types.ChatJoinResult":
+    async def join_chat(self: pyrogram.Client, chat_id: int | str) -> types.ChatJoinResult:
         """Adds the current user as a new member to a chat. Private and secret chats can't be joined using this method.
 
         .. include:: /_includes/usable-by/users.rst

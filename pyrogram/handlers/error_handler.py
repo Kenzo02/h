@@ -16,18 +16,34 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, Union
+from __future__ import annotations as _annotations
 
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Sequence
+
+from pyrogram import raw
 from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import raw
 
 
-class ErrorHandler(Handler):
+ErrorCallbackType = Callable[
+    [
+        "pyrogram.Client",
+        Exception,
+        Handler[Any],
+        raw.base.Update,
+        dict[int, raw.base.User],
+        dict[int, raw.base.Chat],
+    ],
+    Any,
+]
+
+
+class ErrorHandler(Handler[ErrorCallbackType]):
     """The Error handler class. Used to handle unexpected errors.
 
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`.
@@ -38,13 +54,14 @@ class ErrorHandler(Handler):
     Parameters:
         callback (``Callable``):
             A function that will be called whenever an unexpected error is raised.
-            It takes the following positional arguments: *(exception, handler, client, *args)*.
+            It takes *(client, exception, handler, update, users, chats)* as positional arguments
+            (look at the section below for a detailed description).
 
         exceptions (``Exception`` | List of ``Exception``, *optional*):
             An exception type or a sequence of exception types that this handler should handle.
             If None, the handler will catch any exception that is a subclass of ``Exception``.
 
-        filters (:obj:`Filter`, *optional*):
+        filters (:obj:`~pyrogram.filters.Filter`, *optional*):
             Pass one or more filters to allow only a subset of updates to be passed
             in your callback function.
 
@@ -76,18 +93,10 @@ class ErrorHandler(Handler):
 
     def __init__(
         self,
-        callback: Callable[
-            [
-                "pyrogram.Client",
-                "raw.base.Update",
-                Dict[int, "raw.base.User"],
-                Dict[int, "raw.base.Chat"],
-            ],
-            Any,
-        ],
-        exceptions: Optional[Union[Exception, Sequence[Exception]]] = None,
-        filters: Optional[Filter] = None,
-    ):
+        callback: ErrorCallbackType,
+        exceptions: Exception | Sequence[Exception] | None = None,
+        filters: Filter | None = None,
+    ) -> None:
         super().__init__(callback, filters)
 
         if exceptions is None:

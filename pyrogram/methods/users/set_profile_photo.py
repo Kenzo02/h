@@ -16,21 +16,25 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import BinaryIO, Optional, Union
+from typing import BinaryIO
 
 import pyrogram
 from pyrogram import raw, types
+from pyrogram._typing import PathType
 
 log = logging.getLogger(__name__)
 
+
 class SetProfilePhoto:
     async def set_profile_photo(
-        self: "pyrogram.Client",
-        photo: Optional["types.InputChatPhoto"] = None,
-        is_public: Optional[bool] = None,
+        self: pyrogram.Client,
+        photo: types.InputChatPhoto | None = None,
+        is_public: bool | None = None,
         *,
-        video: Optional[Union[str, BinaryIO]] = None
+        video: PathType | BinaryIO | None = None,
     ) -> bool:
         """Changes a profile photo for the current user.
 
@@ -90,8 +94,12 @@ class SetProfilePhoto:
                 await self.invoke(
                     raw.functions.photos.UploadProfilePhoto(
                         fallback=is_public,
-                        file=await photo.write(self) if isinstance(photo, types.InputChatPhotoStatic) else None,
-                        video=await photo.write(self) if isinstance(photo, types.InputChatPhotoAnimation) else None,
+                        file=await photo.write(self)
+                        if isinstance(photo, types.InputChatPhotoStatic)
+                        else None,
+                        video=await photo.write(self)
+                        if isinstance(photo, types.InputChatPhotoAnimation)
+                        else None,
                         video_start_ts=getattr(photo, "main_frame_timestamp", None),
                     )
                 )
@@ -100,9 +108,9 @@ class SetProfilePhoto:
 
 class SetBotProfilePhoto:
     async def set_bot_profile_photo(
-        self: "pyrogram.Client",
-        bot_user_id: Union[int, str],
-        photo: Optional["types.InputChatPhoto"] = None,
+        self: pyrogram.Client,
+        bot_user_id: int | str,
+        photo: types.InputChatPhoto | None = None,
     ) -> bool:
         """Changes a profile photo for a bot.
 
@@ -145,8 +153,12 @@ class SetBotProfilePhoto:
                 await self.invoke(
                     raw.functions.photos.UploadProfilePhoto(
                         bot=await self.resolve_peer(bot_user_id),
-                        file=await photo.write(self) if isinstance(photo, types.InputChatPhotoStatic) else None,
-                        video=await photo.write(self) if isinstance(photo, types.InputChatPhotoAnimation) else None,
+                        file=await photo.write(self)
+                        if isinstance(photo, types.InputChatPhotoStatic)
+                        else None,
+                        video=await photo.write(self)
+                        if isinstance(photo, types.InputChatPhotoAnimation)
+                        else None,
                         video_start_ts=getattr(photo, "main_frame_timestamp", None),
                     )
                 )

@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Dict, Optional
+from __future__ import annotations as _annotations
 
 from pyrogram import enums, raw, types
 
@@ -100,28 +100,28 @@ class MessageContent(Object):
     def __init__(
         self,
         *,
-        type: "enums.MessageMediaType",
-        audio: Optional["types.Audio"] = None,
-        document: Optional["types.Document"] = None,
-        photo: Optional["types.Photo"] = None,
-        sticker: Optional["types.Sticker"] = None,
-        animation: Optional["types.Animation"] = None,
-        game: Optional["types.Game"] = None,
-        giveaway: Optional["types.Giveaway"] = None,
-        giveaway_winners: Optional["types.GiveawayWinners"] = None,
-        invoice: Optional["types.Invoice"] = None,
-        story: Optional["types.Story"] = None,
-        video: Optional["types.Video"] = None,
-        voice: Optional["types.Voice"] = None,
-        video_note: Optional["types.VideoNote"] = None,
-        contact: Optional["types.Contact"] = None,
-        location: Optional["types.Location"] = None,
-        venue: Optional["types.Venue"] = None,
-        web_page: Optional["types.WebPage"] = None,
-        poll: Optional["types.Poll"] = None,
-        dice: Optional["types.Dice"] = None,
-        paid_media: Optional["types.PaidMediaInfo"] = None,
-        checklist: Optional["types.Checklist"] = None,
+        type: enums.MessageMediaType,
+        audio: types.Audio | None = None,
+        document: types.Document | None = None,
+        photo: types.Photo | None = None,
+        sticker: types.Sticker | None = None,
+        animation: types.Animation | None = None,
+        game: types.Game | None = None,
+        giveaway: types.Giveaway | None = None,
+        giveaway_winners: types.GiveawayWinners | None = None,
+        invoice: types.Invoice | None = None,
+        story: types.Story | None = None,
+        video: types.Video | None = None,
+        voice: types.Voice | None = None,
+        video_note: types.VideoNote | None = None,
+        contact: types.Contact | None = None,
+        location: types.Location | None = None,
+        venue: types.Venue | None = None,
+        web_page: types.WebPage | None = None,
+        poll: types.Poll | None = None,
+        dice: types.Dice | None = None,
+        paid_media: types.PaidMediaInfo | None = None,
+        checklist: types.Checklist | None = None,
     ):
         super().__init__()
 
@@ -151,11 +151,14 @@ class MessageContent(Object):
     @staticmethod
     async def _parse(
         client,
-        media: "raw.base.MessageMedia",
-        message: Optional["raw.base.TextWithEntities"] = None,
-        users: Dict[int, "raw.types.User"] = {},
-        chats: Dict[int, "raw.types.Chat"] = {},
-    ) -> "MessageContent":
+        media: raw.base.MessageMedia,
+        message: raw.base.TextWithEntities | None = None,
+        users: dict[int, raw.types.User] | None = None,
+        chats: dict[int, raw.types.Chat] | None = None,
+    ) -> MessageContent:
+        users = users or {}
+        chats = chats or {}
+
         photo = None
         location = None
         contact = None
@@ -187,7 +190,7 @@ class MessageContent(Object):
             location = types.Location._parse(media.geo)
             media_type = enums.MessageMediaType.LOCATION
         elif isinstance(media, raw.types.MessageMediaGeoLive):
-            location = types.Location._parse_media(media)
+            location = types.Location._parse(media)
             media_type = enums.MessageMediaType.LOCATION
         elif isinstance(media, raw.types.MessageMediaContact):
             contact = types.Contact._parse(client, media)
@@ -217,16 +220,16 @@ class MessageContent(Object):
                 attributes = {type(i): i for i in doc.attributes}
 
                 file_name = getattr(
-                    attributes.get(
-                        raw.types.DocumentAttributeFilename, None
-                    ), "file_name", None
+                    attributes.get(raw.types.DocumentAttributeFilename, None), "file_name", None
                 )
 
                 if raw.types.DocumentAttributeAnimated in attributes:
                     video_attributes = attributes.get(raw.types.DocumentAttributeVideo, None)
 
                     if video_attributes and video_attributes.round_message:
-                        video_note = types.VideoNote._parse(client, doc, video_attributes, media.ttl_seconds)
+                        video_note = types.VideoNote._parse(
+                            client, doc, video_attributes, media.ttl_seconds
+                        )
                         media_type = enums.MessageMediaType.VIDEO_NOTE
                     else:
                         animation = types.Animation._parse(client, doc, video_attributes, file_name)
@@ -238,10 +241,21 @@ class MessageContent(Object):
                     video_attributes = attributes[raw.types.DocumentAttributeVideo]
 
                     if video_attributes.round_message:
-                        video_note = types.VideoNote._parse(client, doc, video_attributes, media.ttl_seconds)
+                        video_note = types.VideoNote._parse(
+                            client, doc, video_attributes, media.ttl_seconds
+                        )
                         media_type = enums.MessageMediaType.VIDEO_NOTE
                     else:
-                        video = types.Video._parse(client, doc, video_attributes, file_name, media.ttl_seconds, media.video_cover, media.video_timestamp, media.alt_documents)
+                        video = types.Video._parse(
+                            client,
+                            doc,
+                            video_attributes,
+                            file_name,
+                            media.ttl_seconds,
+                            media.video_cover,
+                            media.video_timestamp,
+                            media.alt_documents,
+                        )
                         media_type = enums.MessageMediaType.VIDEO
                 elif raw.types.DocumentAttributeAudio in attributes:
                     audio_attributes = attributes[raw.types.DocumentAttributeAudio]
@@ -262,12 +276,9 @@ class MessageContent(Object):
             poll = await types.Poll._parse(
                 client,
                 media,
-                description=await types.FormattedText._parse(
-                    client,
-                    message
-                ) if message else None,
+                description=await types.FormattedText._parse(client, message) if message else None,
                 users=users,
-                chats=chats
+                chats=chats,
             )
             media_type = enums.MessageMediaType.POLL
         elif isinstance(media, raw.types.MessageMediaDice):
@@ -302,5 +313,5 @@ class MessageContent(Object):
             poll=poll,
             dice=dice,
             paid_media=paid_media,
-            checklist=checklist
+            checklist=checklist,
         )

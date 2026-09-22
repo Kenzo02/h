@@ -16,18 +16,22 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable, Optional, Union
+from __future__ import annotations as _annotations
+
+from collections.abc import Callable
 
 import pyrogram
 from pyrogram.filters import Filter
+from .handler_type import HandlerType
+from .unbound_arguments import unbound_arguments
 
 
 class OnEditedMessage:
     def on_edited_message(
-        self: Union["OnEditedMessage", Filter, None] = None,
-        filters: Optional[Filter] = None,
+        self: OnEditedMessage | Filter | None = None,
+        filters: Filter | None = None,
         group: int = 0,
-    ) -> Callable:
+    ) -> Callable[[HandlerType], HandlerType]:
         """Decorator for handling edited messages.
 
         This does the same thing as :meth:`~pyrogram.Client.add_handler` using the
@@ -44,17 +48,19 @@ class OnEditedMessage:
                 The group identifier, defaults to 0.
         """
 
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: HandlerType) -> HandlerType:
             if isinstance(self, pyrogram.Client):
                 self.add_handler(pyrogram.handlers.EditedMessageHandler(func, filters), group)
             elif isinstance(self, Filter) or self is None:
                 if not hasattr(func, "handlers"):
                     func.handlers = []
 
+                arguments = unbound_arguments(self, filters=filters, group=group)
+
                 func.handlers.append(
                     (
-                        pyrogram.handlers.EditedMessageHandler(func, self),
-                        group if filters is None else filters
+                        pyrogram.handlers.EditedMessageHandler(func, arguments.filters),
+                        arguments.group,
                     )
                 )
 

@@ -16,12 +16,16 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
+import asyncio
+
 import pyrogram
 
 
 class Connect:
     async def connect(
-        self: "pyrogram.Client",
+        self: pyrogram.Client,
     ) -> bool:
         """
         Connect the client to Telegram servers.
@@ -36,6 +40,9 @@ class Connect:
         if self.is_connected:
             raise ConnectionError("Client is already connected")
 
+        self._loop = asyncio.get_running_loop()
+        self._rebuild_loop_bound_state()
+
         await self.load_session()
 
         self.session = await self.get_session(
@@ -43,15 +50,13 @@ class Connect:
             port=await self.storage.port(),
             export_authorization=False,
             temporary=True,
-            order_fallback_endpoints=True
+            order_fallback_endpoints=True,
         )
         self.is_connected = True
 
         is_ipv6_session = ":" in await self.storage.server_address()
 
-        if (self.ipv6 and not is_ipv6_session) or (
-            not self.ipv6 and is_ipv6_session
-        ):
+        if (self.ipv6 and not is_ipv6_session) or (not self.ipv6 and is_ipv6_session):
             await self.set_dc(dc_id=await self.storage.dc_id())
 
         return bool(await self.storage.user_id())

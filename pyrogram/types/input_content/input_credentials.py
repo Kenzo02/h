@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import pyrogram
 
 from ..object import Object
@@ -26,13 +28,14 @@ class InputCredentials(Object):
 
     It should be one of:
 
-    - :obj:`~pyrogram.types.InputInvoiceApplePay`
-    - :obj:`~pyrogram.types.InputInvoiceGooglePay`
-    - :obj:`~pyrogram.types.InputInvoiceNew`
+    - :obj:`~pyrogram.types.InputCredentialsApplePay`
+    - :obj:`~pyrogram.types.InputCredentialsGooglePay`
+    - :obj:`~pyrogram.types.InputCredentialsNew`
     - :obj:`~pyrogram.types.InputCredentialsSaved`
     """
+
     def __init__(self):
         super().__init__()
 
-    async def write(self, client: "pyrogram.Client"):
+    async def write(self, client: pyrogram.Client):
         raise NotImplementedError

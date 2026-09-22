@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from pyrogram import raw
 from ..object import Object
 
@@ -31,19 +33,12 @@ class PhoneCallStarted(Object):
             True, if call was a video call.
     """
 
-    def __init__(
-        self, *,
-        id: int,
-        is_video: bool
-    ):
+    def __init__(self, *, id: int, is_video: bool):
         super().__init__()
 
         self.id = id
         self.is_video = is_video
 
     @staticmethod
-    def _parse(action: "raw.types.MessageActionPhoneCall") -> "PhoneCallStarted":
-        return PhoneCallStarted(
-            id=action.call_id,
-            is_video=action.video
-        )
+    def _parse(action: raw.types.MessageActionPhoneCall) -> PhoneCallStarted:
+        return PhoneCallStarted(id=action.call_id, is_video=action.video)

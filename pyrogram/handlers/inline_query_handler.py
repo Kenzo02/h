@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+InlineQueryCallbackType = Callable[["pyrogram.Client", types.InlineQuery], Any]
 
 
-class InlineQueryHandler(Handler):
+class InlineQueryHandler(Handler[InlineQueryCallbackType]):
     """The InlineQuery handler class. Used to handle inline queries.
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`
 
@@ -37,7 +44,7 @@ class InlineQueryHandler(Handler):
             Pass a function that will be called when a new InlineQuery arrives. It takes *(client, inline_query)*
             as positional arguments (look at the section below for a detailed description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of inline queries to be passed
             in your callback function.
 
@@ -49,7 +56,5 @@ class InlineQueryHandler(Handler):
             The received inline query.
     """
 
-    def __init__(
-        self, callback: Callable[["pyrogram.Client", "types.InlineQuery"], Any], filters=None
-    ):
+    def __init__(self, callback: InlineQueryCallbackType, filters: Filter | None = None) -> None:
         super().__init__(callback, filters)

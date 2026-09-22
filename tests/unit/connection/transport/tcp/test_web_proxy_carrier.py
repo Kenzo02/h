@@ -16,10 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import asyncio
 import logging
 from http import HTTPStatus
-from typing import List
 
 import pytest
 
@@ -135,7 +136,9 @@ def test_large_legal_batch_is_not_rejected() -> None:
     # §7.1: the relay may legally batch up to 2 MiB of small frames into one
     #  response. A frame-count cap would make that batch a parse error even
     #  though every frame in it is well-formed.
-    wire = b"".join(serialize_frame(FrameType.PING, stream_id=0, payload=b"") for _ in range(20_000))
+    wire = b"".join(
+        serialize_frame(FrameType.PING, stream_id=0, payload=b"") for _ in range(20_000)
+    )
 
     parsed = parse_frames(wire)
 
@@ -200,7 +203,9 @@ async def test_read_body_chunked() -> None:
     #  them as an empty body silently dropped every response above a few KiB.
     connection = _connection_reading(b"5\r\nhello\r\n6\r\n mtprx\r\n0\r\n\r\n")
 
-    body = await connection._read_body(HTTPStatus.OK, response_headers={"transfer-encoding": "chunked"})
+    body = await connection._read_body(
+        HTTPStatus.OK, response_headers={"transfer-encoding": "chunked"}
+    )
 
     assert body == b"hello mtprx"
 
@@ -209,7 +214,9 @@ async def test_read_body_chunked_ignores_extensions_and_trailers() -> None:
     raw = b"5;name=value\r\nhello\r\n0\r\nx-checksum: 1\r\n\r\n"
     connection = _connection_reading(raw)
 
-    body = await connection._read_body(HTTPStatus.OK, response_headers={"transfer-encoding": "CHUNKED"})
+    body = await connection._read_body(
+        HTTPStatus.OK, response_headers={"transfer-encoding": "CHUNKED"}
+    )
 
     assert body == b"hello"
 
@@ -240,14 +247,18 @@ async def test_read_body_rejects_a_malformed_chunk_size() -> None:
     connection = _connection_reading(b"zz\r\n")
 
     with pytest.raises(ConnectionError, match="malformed chunk size"):
-        await connection._read_body(HTTPStatus.OK, response_headers={"transfer-encoding": "chunked"})
+        await connection._read_body(
+            HTTPStatus.OK, response_headers={"transfer-encoding": "chunked"}
+        )
 
 
 async def test_read_body_rejects_a_truncated_chunked_body() -> None:
     connection = _connection_reading(b"5\r\nhello\r\n")
 
     with pytest.raises(ConnectionError, match="closed inside a chunked body"):
-        await connection._read_body(HTTPStatus.OK, response_headers={"transfer-encoding": "chunked"})
+        await connection._read_body(
+            HTTPStatus.OK, response_headers={"transfer-encoding": "chunked"}
+        )
 
 
 class _UplinkRecorder:
@@ -255,14 +266,14 @@ class _UplinkRecorder:
     carrier puts on the wire instead of POSTing it."""
 
     def __init__(self, carrier: WebProxyCarrier) -> None:
-        self.frames: List[bytes] = []
+        self.frames: list[bytes] = []
         carrier._send_frames = self._record
 
-    async def _record(self, frames: List[bytes]) -> None:
+    async def _record(self, frames: list[bytes]) -> None:
         self.frames.extend(frames)
 
     @property
-    def payload_sizes(self) -> List[int]:
+    def payload_sizes(self) -> list[int]:
         return [len(one_frame) - FRAME_HEADER_SIZE for one_frame in self.frames]
 
     @property
@@ -278,18 +289,20 @@ def _carrier() -> WebProxyCarrier:
 
 
 def _window_grant(amount: int) -> Frame:
-    wire = serialize_frame(FrameType.WINDOW, stream_id=_STREAM_ID, payload=amount.to_bytes(4, "big"))
+    wire = serialize_frame(
+        FrameType.WINDOW, stream_id=_STREAM_ID, payload=amount.to_bytes(4, "big")
+    )
     parsed = parse_frames(wire)
 
     return parsed.frames[0]
 
 
-async def _run_until_blocked(sending: "asyncio.Task[None]") -> None:
+async def _run_until_blocked(sending: asyncio.Task[None]) -> None:
     # `send()` suspends once it runs out of credit, and waking it after a WINDOW
     #  grant costs three loop iterations below 3.12, where `asyncio.wait_for` ran the
     #  wait in a task of its own, against one on 3.12+, which awaits the coroutine
     #  directly. A single yield left the grant unspent and failed
-    #  `test_send_never_puts_more_on_the_wire_than_the_credit_granted` on 3.9-3.11.
+    #  `test_send_never_puts_more_on_the_wire_than_the_credit_granted` on 3.10-3.11.
     #  Ten is that measured three with room to spare.
     #  https://github.com/python/cpython/blob/0fb18b02c8ad56299d6a2910be0bab8ad601ef24/Lib/asyncio/tasks.py#L509
     for _ in range(10):
@@ -346,7 +359,9 @@ async def test_send_never_puts_more_on_the_wire_than_the_credit_granted() -> Non
     assert recorder.bytes_sent == len(payload)
 
 
-async def test_send_fails_the_carrier_when_credit_never_arrives(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_send_fails_the_carrier_when_credit_never_arrives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(web_proxy_carrier, "_CREDIT_WAIT_TIMEOUT", 0.05)
     carrier = _carrier()
     _UplinkRecorder(carrier)
@@ -438,11 +453,10 @@ async def _run_failing_tracked_task(carrier: WebProxyCarrier) -> None:
     assert carrier._background_tasks == set(), "a finished task must not stay in the tracking set"
 
 
-def _carrier_records(caplog: pytest.LogCaptureFixture) -> List[logging.LogRecord]:
-    # `caplog` collects at the root, so a report from another logger lands in it too.
-    #  On 3.8 the garbage collector reaches a task an earlier test left pending mid-run
-    #  and `asyncio` logs "Task was destroyed but it is pending!" at ERROR, which the
-    #  comparisons below then read as a line this module emitted.
+def _carrier_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    # `caplog` collects at the root, so `asyncio` logging "Task was destroyed but it is
+    #  pending!" over a task an earlier test left behind is otherwise read below as a
+    #  line this module emitted.
     return [record for record in caplog.records if record.name == web_proxy_carrier.log.name]
 
 
@@ -480,7 +494,9 @@ async def test_a_failed_background_task_nothing_recorded_is_reported_at_error(
     ]
 
 
-async def test_a_cancelled_background_task_is_not_reported(caplog: pytest.LogCaptureFixture) -> None:
+async def test_a_cancelled_background_task_is_not_reported(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     carrier = _carrier()
 
     async def _waits() -> None:

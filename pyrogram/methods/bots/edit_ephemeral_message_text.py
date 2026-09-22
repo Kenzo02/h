@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
@@ -24,16 +24,17 @@ from pyrogram import enums, raw, types, utils
 
 class EditEphemeralMessageText:
     async def edit_ephemeral_message_text(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        receiver_user_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
+        receiver_user_id: int | str,
         ephemeral_message_id: int,
-        text: str,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        entities: Optional[List["types.MessageEntity"]] = None,
-        link_preview_options: Optional["types.LinkPreviewOptions"] = None,
-        reply_markup: Optional["types.InlineKeyboardMarkup"] = None,
-    ) -> Optional["types.Message"]:
+        text: str | None = None,
+        parse_mode: enums.ParseMode | None = None,
+        entities: list[types.MessageEntity] | None = None,
+        rich_message: types.InputRichMessage | None = None,
+        link_preview_options: types.LinkPreviewOptions | None = None,
+        reply_markup: types.InlineKeyboardMarkup | None = None,
+    ) -> types.Message | None:
         """Use this method to edit an ephemeral text message.
         Note that it is not guaranteed that the user will receive the message edit event, especially if they are offline.
 
@@ -50,7 +51,7 @@ class EditEphemeralMessageText:
                 Identifier of the ephemeral message to edit.
 
             text (``str``):
-                New text of the message.
+                New text of the message, 1-4096 characters after entity parsing, required if *rich_message* isn't specified.
 
             parse_mode (:obj:`~pyrogram.enums.ParseMode`, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
@@ -58,6 +59,9 @@ class EditEphemeralMessageText:
 
             entities (List of :obj:`~pyrogram.types.MessageEntity`, *optional*):
                 List of special entities that appear in message text, which can be specified instead of *parse_mode*.
+
+            rich_message (:obj:`~pyrogram.types.InputRichMessage`, *optional*):
+                New rich content of the message, required if *text* isn't specified.
 
             link_preview_options (:obj:`~pyrogram.types.LinkPreviewOptions`, *optional*):
                 Options used for link preview generation for the message.
@@ -86,8 +90,15 @@ class EditEphemeralMessageText:
                 peer=await self.resolve_peer(chat_id),
                 receiver_id=await self.resolve_peer(receiver_user_id),
                 id=ephemeral_message_id,
+                invert_media=getattr(link_preview_options, "show_above_text", None),
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
                 message=message,
+                rich_message=await rich_message.write(
+                    client=self,
+                    chat_id=chat_id,
+                )
+                if rich_message
+                else None,
                 media=(
                     raw.types.InputMediaWebPage(
                         url=link_preview_options.url,

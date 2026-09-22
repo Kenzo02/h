@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+GuestMessageCallbackType = Callable[["pyrogram.Client", types.Message], Any]
 
 
-class GuestMessageHandler(Handler):
+class GuestMessageHandler(Handler[GuestMessageCallbackType]):
     """The Guest Message handler class. Used to handle guest messages.
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`
 
@@ -37,7 +44,7 @@ class GuestMessageHandler(Handler):
             Pass a function that will be called when a new guest message arrives. It takes *(client, message)*
             as positional arguments (look at the section below for a detailed description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of messages to be passed
             in your callback function.
 
@@ -49,7 +56,5 @@ class GuestMessageHandler(Handler):
             The received message.
     """
 
-    def __init__(
-        self, callback: Callable[["pyrogram.Client", "types.Message"], Any], filters=None
-    ):
+    def __init__(self, callback: GuestMessageCallbackType, filters: Filter | None = None) -> None:
         super().__init__(callback, filters)

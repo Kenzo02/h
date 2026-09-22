@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import re
 from struct import unpack
 
@@ -26,9 +28,10 @@ SMP_RE = re.compile(r"[\U00010000-\U0010FFFF]")
 def add_surrogates(text: str) -> str:
     # Replace each SMP code point with a surrogate pair
     return SMP_RE.sub(
-        lambda match:  # Split SMP in two surrogates
-        "".join(chr(i) for i in unpack("<HH", match.group().encode("utf-16le"))),
-        text
+        lambda match: (  # Split SMP in two surrogates
+            "".join(chr(i) for i in unpack("<HH", match.group().encode("utf-16le")))
+        ),
+        text,
     )
 
 
@@ -45,7 +48,7 @@ def remove_surrogates(text: str) -> str:
         while i < len(text):
             char = text[i]
             char_code = ord(char)
-            
+
             # Check if it's a high surrogate
             if 0xD800 <= char_code <= 0xDBFF:
                 # Look for corresponding low surrogate
@@ -55,13 +58,17 @@ def remove_surrogates(text: str) -> str:
                     if 0xDC00 <= next_code <= 0xDFFF:
                         # Valid surrogate pair - reconstruct
                         try:
-                            reconstructed = (char + next_char).encode("utf-16", "surrogatepass").decode("utf-16")
+                            reconstructed = (
+                                (char + next_char)
+                                .encode("utf-16", "surrogatepass")
+                                .decode("utf-16")
+                            )
                             result.append(reconstructed)
                             i += 2
                             continue
                         except UnicodeError:
                             pass
-                
+
                 # Invalid or orphaned high surrogate - skip it
                 i += 1
             elif 0xDC00 <= char_code <= 0xDFFF:
@@ -71,8 +78,8 @@ def remove_surrogates(text: str) -> str:
                 # Normal character - keep it
                 result.append(char)
                 i += 1
-        
-        return ''.join(result)
+
+        return "".join(result)
 
 
 def replace_once(source: str, old: str, new: str, start: int):

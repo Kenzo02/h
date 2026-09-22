@@ -16,8 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 import pyrogram
 from pyrogram import raw
@@ -26,30 +28,30 @@ from pyrogram.session import Session
 
 log = logging.getLogger(__name__)
 
-ReturnType = TypeVar('ReturnType')
+ReturnType = TypeVar("ReturnType")
 
 
 class Invoke:
     async def invoke(
-        self: "pyrogram.Client",
+        self: pyrogram.Client,
         query: TLObject[ReturnType],
         retries: int = Session.MAX_RETRIES,
         timeout: float = Session.WAIT_TIMEOUT,
-        sleep_threshold: Optional[float] = None,
+        sleep_threshold: float | None = None,
         retry_delay: float = Session.RETRY_DELAY,
-        recaptcha_token: Optional[str] = None,
-        business_connection_id: Optional[str] = None
+        recaptcha_token: str | None = None,
+        business_connection_id: str | None = None,
     ) -> ReturnType:
         """Invoke raw Telegram functions.
 
         This method makes it possible to manually call every single Telegram API method in a low-level manner.
-        Available functions are listed in the :obj:`functions <pyrogram.api.functions>` package and may accept compound
-        data types from :obj:`types <pyrogram.api.types>` as well as bare types such as ``int``, ``str``, etc...
+        Available functions are listed in the :obj:`functions <pyrogram.raw.functions>` package and may accept compound
+        data types from :obj:`types <pyrogram.raw.types>` as well as bare types such as ``int``, ``str``, etc...
 
         .. note::
 
             This is a utility method intended to be used **only** when working with raw
-            :obj:`functions <pyrogram.api.functions>` (i.e: a Telegram API method you wish to use which is not
+            :obj:`functions <pyrogram.raw.functions>` (i.e: a Telegram API method you wish to use which is not
             available yet in the Client class as an easy-to-use method).
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -89,8 +91,7 @@ class Invoke:
 
         if business_connection_id:
             query = raw.functions.InvokeWithBusinessConnection(
-                connection_id=business_connection_id,
-                query=query
+                connection_id=business_connection_id, query=query
             )
 
             session = await self.get_session(business_connection_id=business_connection_id)
@@ -105,11 +106,13 @@ class Invoke:
             query = raw.functions.InvokeWithTakeout(takeout_id=self.takeout_id, query=query)
 
         r = await session.invoke(
-            query=query, retries=retries, timeout=timeout,
+            query=query,
+            retries=retries,
+            timeout=timeout,
             sleep_threshold=(
                 sleep_threshold if sleep_threshold is not None else self.sleep_threshold
             ),
-            retry_delay=retry_delay
+            retry_delay=retry_delay,
         )
 
         await self.fetch_peers(getattr(r, "users", []))

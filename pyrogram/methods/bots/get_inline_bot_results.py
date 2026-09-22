@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw
@@ -25,13 +25,13 @@ from pyrogram.errors import Timeout503
 
 class GetInlineBotResults:
     async def get_inline_bot_results(
-        self: "pyrogram.Client",
-        bot: Union[int, str],
+        self: pyrogram.Client,
+        bot: int | str,
         query: str = "",
         offset: str = "",
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None
-    ):
+        latitude: float | None = None,
+        longitude: float | None = None,
+    ) -> raw.base.messages.BotResults:
         """Get bot results via inline queries.
         You can then send a result using :meth:`~pyrogram.Client.send_inline_bot_result`
 
@@ -58,7 +58,7 @@ class GetInlineBotResults:
                 Useful for location-based results only.
 
         Returns:
-            :obj:`BotResults <pyrogram.api.types.messages.BotResults>`: On Success.
+            :obj:`~pyrogram.raw.base.messages.BotResults`: On Success.
 
         Raises:
             TimeoutError: In case the bot fails to answer within 10 seconds.
@@ -78,10 +78,9 @@ class GetInlineBotResults:
                     peer=raw.types.InputPeerSelf(),
                     query=query,
                     offset=offset,
-                    geo_point=raw.types.InputGeoPoint(
-                        lat=latitude,
-                        long=longitude
-                    ) if (latitude is not None and longitude is not None) else None
+                    geo_point=raw.types.InputGeoPoint(lat=latitude, long=longitude)
+                    if (latitude is not None and longitude is not None)
+                    else None,
                 )
             )
         # A bot that takes too long to answer is reported as the -503 `Timeout`, which is a

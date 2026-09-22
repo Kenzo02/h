@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Optional
+from __future__ import annotations as _annotations
 
 from pyrogram import raw, types
 
@@ -34,16 +34,14 @@ class BotAccessSettings(Object):
             The list of other users who have access to the bot if the access is restricted.
     """
 
-    def __init__(
-        self, is_access_restricted: bool, added_users: Optional[List["types.User"]] = None
-    ):
+    def __init__(self, is_access_restricted: bool, added_users: list[types.User] | None = None):
         super().__init__()
 
         self.is_access_restricted = is_access_restricted
         self.added_users = added_users
 
     @staticmethod
-    async def _parse(client, bot_access_settings: "raw.base.bots.AccessSettings"):
+    async def _parse(client, bot_access_settings: raw.base.bots.AccessSettings):
         return BotAccessSettings(
             is_access_restricted=bot_access_settings.restricted,
             added_users=types.List(

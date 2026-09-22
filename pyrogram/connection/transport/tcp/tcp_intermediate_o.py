@@ -16,11 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-import asyncio
+from __future__ import annotations as _annotations
+
 import logging
 import os
 from struct import pack, unpack
-from typing import Optional, Tuple
 
 from pyrogram.connection.proxy import Proxy
 from pyrogram.connection.transport.tcp.tcp import TCP
@@ -35,17 +35,16 @@ class TCPIntermediateO(TCP):
     def __init__(
         self,
         ipv6: bool,
-        proxy: Optional[Proxy] = None,
+        proxy: Proxy | None = None,
         crypto_executor_workers: int = 1,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        dc_id: Optional[int] = None,
+        dc_id: int | None = None,
     ) -> None:
-        super().__init__(ipv6, proxy, crypto_executor_workers, loop, dc_id=dc_id)
+        super().__init__(ipv6, proxy, crypto_executor_workers, dc_id=dc_id)
 
         self.encrypt = None
         self.decrypt = None
 
-    async def connect(self, address: Tuple[str, int]) -> None:
+    async def connect(self, address: tuple[str, int]) -> None:
         self.marker_event.clear()
         await super().connect(address)
 
@@ -71,9 +70,17 @@ class TCPIntermediateO(TCP):
         self.marker_event.set()
 
     async def send(self, data: bytes, *args) -> None:
+        if self.encrypt is None:
+            msg = "`send()` requires `connect()` to have run first"
+            raise RuntimeError(msg)
+
         await super().send(aes.ctr256_encrypt(pack("<i", len(data)) + data, *self.encrypt))
 
-    async def recv(self, length: int = 0) -> Optional[bytes]:
+    async def recv(self, length: int = 0) -> bytes | None:
+        if self.decrypt is None:
+            msg = "`recv()` requires `connect()` to have run first"
+            raise RuntimeError(msg)
+
         length = await super().recv(4)
 
         if length is None:

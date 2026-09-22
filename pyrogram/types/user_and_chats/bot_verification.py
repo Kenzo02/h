@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional
+from __future__ import annotations as _annotations
 
 from pyrogram import raw, types
 from ..object import Object
@@ -36,28 +36,20 @@ class BotVerification(Object):
             Additional description about the verification.
     """
 
-    def __init__(
-        self,
-        *,
-        bot: int,
-        custom_emoji_id: str,
-        description: str
-    ):
+    def __init__(self, *, bot: int, custom_emoji_id: str, description: str):
         self.bot = bot
         self.custom_emoji_id = custom_emoji_id
         self.description = description
 
     @staticmethod
     async def _parse(
-        client,
-        verification: "raw.types.BotVerification",
-        users
-    ) -> Optional["BotVerification"]:
+        client, verification: raw.types.BotVerification, users
+    ) -> BotVerification | None:
         if not verification:
             return None
 
         return BotVerification(
             bot=await types.User._parse(client, users.get(verification.bot_id)),
             custom_emoji_id=str(verification.icon),
-            description=verification.description
+            description=verification.description,
         )

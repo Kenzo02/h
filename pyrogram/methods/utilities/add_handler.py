@@ -16,17 +16,15 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import pyrogram
 from pyrogram.handlers import StartHandler, StopHandler, ConnectHandler, DisconnectHandler
 from pyrogram.handlers.handler import Handler
 
 
 class AddHandler:
-    def add_handler(
-        self: "pyrogram.Client",
-        handler: "Handler",
-        group: int = 0
-    ):
+    def add_handler(self: pyrogram.Client, handler: Handler, group: int = 0) -> tuple[Handler, int]:
         """Register an update handler.
 
         You can register multiple handlers, but at most one handler within a group will be used for a single update.

@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import asyncio
 import base64
 import hashlib
@@ -26,7 +28,8 @@ import ssl
 from dataclasses import dataclass
 from enum import IntEnum
 from http import HTTPStatus
-from typing import Coroutine, Dict, Final, FrozenSet, List, Optional, Set
+from typing import Final
+from collections.abc import Coroutine
 
 from pyrogram.connection.proxy import HTTPS_PORT
 
@@ -62,7 +65,7 @@ class FrameType(IntEnum):
     BYE = 0x1F
 
 
-_KNOWN_FRAME_TYPES: Final[FrozenSet[int]] = frozenset(frame_type.value for frame_type in FrameType)
+_KNOWN_FRAME_TYPES: Final[frozenset[int]] = frozenset(frame_type.value for frame_type in FrameType)
 
 # The stream id is three bytes wide.
 _MAX_STREAM_ID: Final[int] = 0x00FFFFFF
@@ -88,19 +91,21 @@ def serialize_frame(frame_type: FrameType, *, stream_id: int, payload: bytes) ->
         msg = f"frame: payload too large ({len(payload)} bytes)"
         raise ValueError(msg)
 
-    header = bytes((
-        frame_type & 0xFF,
-        (stream_id >> 16) & 0xFF,
-        (stream_id >> 8) & 0xFF,
-        stream_id & 0xFF,
-    )) + len(payload).to_bytes(4, "big")
+    header = bytes(
+        (
+            frame_type & 0xFF,
+            (stream_id >> 16) & 0xFF,
+            (stream_id >> 8) & 0xFF,
+            stream_id & 0xFF,
+        )
+    ) + len(payload).to_bytes(4, "big")
 
     return header + payload
 
 
 @dataclass(frozen=True)
 class ParsedFrames:
-    frames: List[Frame]
+    frames: list[Frame]
     consumed: int  # a trailing partial frame is left unconsumed
 
 
@@ -109,7 +114,7 @@ def parse_frames(wire: bytes) -> ParsedFrames:
     #  into one response, so a count limit would turn a legal batch into a parse
     #  error.
     #  https://github.com/telegramdesktop/tdesktop/blob/23dff657fc857c3223fa20472aa8614b9ab2c7eb/docs/web-proxy-plan.md#L246
-    frames: List[Frame] = []
+    frames: list[Frame] = []
     offset = 0
     wire_len = len(wire)
 
@@ -121,7 +126,7 @@ def parse_frames(wire: bytes) -> ParsedFrames:
             raise FrameParseError(msg)
 
         stream_id = (wire[offset + 1] << 16) | (wire[offset + 2] << 8) | wire[offset + 3]
-        size = int.from_bytes(wire[offset + 4:offset + 8], "big")
+        size = int.from_bytes(wire[offset + 4 : offset + 8], "big")
 
         if size > FRAME_MAX_PAYLOAD:
             msg = f"frame: payload too large ({size} bytes)"
@@ -132,14 +137,14 @@ def parse_frames(wire: bytes) -> ParsedFrames:
         if wire_len - offset < full:
             break
 
-        payload = bytes(wire[offset + FRAME_HEADER_SIZE:offset + full])
+        payload = bytes(wire[offset + FRAME_HEADER_SIZE : offset + full])
         frames.append(Frame(FrameType(type_byte), stream_id, payload))
         offset += full
 
     return ParsedFrames(frames=frames, consumed=offset)
 
 
-def parse_frame_message(body: bytes) -> List[Frame]:
+def parse_frame_message(body: bytes) -> list[Frame]:
     # One HTTP body must be one or more complete frames, nothing more, nothing less.
     if not body:
         msg = "frame: empty message"
@@ -212,7 +217,7 @@ class WebCarrierError(ConnectionError):
 @dataclass(frozen=True)
 class StatusAndHeaders:
     status: int
-    headers: Dict[str, str]
+    headers: dict[str, str]
 
 
 _CRLF: Final[bytes] = b"\r\n"
@@ -249,7 +254,7 @@ _WINDOW_PAYLOAD_SIZE: Final[int] = 4
 @dataclass(frozen=True)
 class HttpResponse:
     status: int
-    headers: Dict[str, str]
+    headers: dict[str, str]
     body: bytes
 
 
@@ -262,8 +267,8 @@ class _HttpConnection:
         self._port = port
         self._ssl_context = ssl_context
 
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
         self._lock = asyncio.Lock()
 
     async def _ensure_connected(self) -> None:
@@ -301,10 +306,10 @@ class _HttpConnection:
         *,
         path: str,
         body: bytes = b"",
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         timeout: float = _REQUEST_TIMEOUT,
     ) -> HttpResponse:
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         last_detail: str = ""
 
         # Retries on a fresh connection - the pooled one may have died silently
@@ -341,9 +346,9 @@ class _HttpConnection:
         *,
         path: str,
         body: bytes,
-        headers: Optional[Dict[str, str]],
+        headers: dict[str, str] | None,
     ) -> HttpResponse:
-        request_headers: Dict[str, str] = {
+        request_headers: dict[str, str] = {
             "Host": self._host,
             "Connection": "keep-alive",
             "Content-Length": str(len(body)),
@@ -352,7 +357,7 @@ class _HttpConnection:
         if headers:
             request_headers.update(headers)
 
-        lines: List[str] = [f"{method} {path} HTTP/1.1"]
+        lines: list[str] = [f"{method} {path} HTTP/1.1"]
         lines += [f"{name}: {value}" for name, value in request_headers.items()]
         request = ("\r\n".join(lines) + "\r\n\r\n").encode("ascii") + body
 
@@ -370,7 +375,7 @@ class _HttpConnection:
 
         return HttpResponse(status=head.status, headers=head.headers, body=response_body)
 
-    async def _read_body(self, status: int, *, response_headers: Dict[str, str]) -> bytes:
+    async def _read_body(self, status: int, *, response_headers: dict[str, str]) -> bytes:
         # A reverse proxy in front of the relay re-frames anything it cannot
         #  buffer whole, so every downlink batch above a few KiB arrives as
         #  `transfer-encoding: chunked` with no `Content-Length`. Reading only
@@ -383,7 +388,7 @@ class _HttpConnection:
         if "chunked" in transfer_encoding:
             return await self._read_chunked_body()
 
-        content_length_header: Optional[str] = response_headers.get("content-length")
+        content_length_header: str | None = response_headers.get("content-length")
 
         if content_length_header is not None:
             try:
@@ -405,7 +410,7 @@ class _HttpConnection:
         raise ConnectionError(msg)
 
     async def _read_chunked_body(self) -> bytes:
-        chunks: List[bytes] = []
+        chunks: list[bytes] = []
 
         while True:
             size_line: bytes = await self._reader.readline()
@@ -457,7 +462,7 @@ class _HttpConnection:
             msg = f"malformed HTTP status line: {status_line!r}"
             raise ConnectionError(msg) from e
 
-        headers: Dict[str, str] = {}
+        headers: dict[str, str] = {}
 
         while True:
             line: bytes = await self._reader.readline()
@@ -483,11 +488,9 @@ class WebProxyCarrier:
         *,
         secret: bytes,
         port: int = HTTPS_PORT,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         self._hostname = hostname
         self._secret = secret
-        self._loop = loop or asyncio.get_event_loop()
 
         # `http/1.1` only: the framing this client speaks is HTTP/1.1, and an
         #  ALPN-negotiated h2 would make every response unparseable.
@@ -501,7 +504,7 @@ class WebProxyCarrier:
         self._down = _HttpConnection(hostname, port=port, ssl_context=ssl_context)
         self._up_send_lock = asyncio.Lock()
 
-        self._session_id: Optional[str] = None
+        self._session_id: str | None = None
         self._up_seq = 0
         self._down_cursor = 0
 
@@ -512,14 +515,14 @@ class WebProxyCarrier:
         self._recv_window_remaining = _INITIAL_STREAM_WINDOW
         self._recv_buffer = bytearray()
         self._pending_grant = 0
-        self._grant_flush_task: Optional["asyncio.Task"] = None
+        self._grant_flush_task: asyncio.Task | None = None
 
-        self._recv_queue: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+        self._recv_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._welcome_event = asyncio.Event()
         self._closed = False
-        self._fail_exc: Optional[Exception] = None
-        self._poll_task: Optional["asyncio.Task"] = None
-        self._background_tasks: Set["asyncio.Task"] = set()
+        self._fail_exc: Exception | None = None
+        self._poll_task: asyncio.Task | None = None
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def start(self) -> None:
         # The relay authenticates the session by the bridge capability alone:
@@ -551,26 +554,32 @@ class WebProxyCarrier:
 
         # The poll has to be running before HELLO goes out: WELCOME comes back
         #  down the downlink, and nothing would be reading it otherwise.
-        self._poll_task = self._loop.create_task(self._poll_loop())
+        self._poll_task = asyncio.create_task(self._poll_loop())
 
-        await self._send_frames([
-            serialize_frame(FrameType.HELLO, stream_id=_CONTROL_STREAM_ID, payload=_HELLO_PAYLOAD),
-        ])
+        await self._send_frames(
+            [
+                serialize_frame(
+                    FrameType.HELLO, stream_id=_CONTROL_STREAM_ID, payload=_HELLO_PAYLOAD
+                ),
+            ]
+        )
 
         try:
             await asyncio.wait_for(self._welcome_event.wait(), timeout=_WELCOME_TIMEOUT)
 
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             exc = WebCarrierError("timed out waiting for WELCOME")
             await self._fail(exc)
-            raise exc
+            raise exc from e
 
         if self._fail_exc is not None:
             raise self._fail_exc
 
-        await self._send_frames([
-            serialize_frame(FrameType.OPEN, stream_id=_STREAM_ID, payload=b""),
-        ])
+        await self._send_frames(
+            [
+                serialize_frame(FrameType.OPEN, stream_id=_STREAM_ID, payload=b""),
+            ]
+        )
 
     async def send(self, data: bytes) -> None:
         if self._fail_exc is not None:
@@ -579,11 +588,11 @@ class WebProxyCarrier:
         if not data:
             return
 
-        pending: List[bytes] = []
+        pending: list[bytes] = []
         offset = 0
 
         while offset < len(data):
-            chunk = data[offset:offset + _UPLINK_FRAME_MAX]
+            chunk = data[offset : offset + _UPLINK_FRAME_MAX]
 
             if self._send_window < len(chunk):
                 # Nothing we are waiting on can arrive until the relay sees what
@@ -604,7 +613,7 @@ class WebProxyCarrier:
         if pending:
             await self._send_frames(pending)
 
-    async def recv(self, length: int) -> Optional[bytes]:
+    async def recv(self, length: int) -> bytes | None:
         # The relay hands over frames of its own choosing, so the buffer is what
         #  turns them into the exact count the caller asked for.
         while len(self._recv_buffer) < length:
@@ -639,7 +648,7 @@ class WebProxyCarrier:
             return
 
         if self._grant_flush_task is None:
-            task = self._loop.create_task(self._delayed_grant_flush())
+            task = asyncio.create_task(self._delayed_grant_flush())
             self._grant_flush_task = task
             self._track(task)
 
@@ -669,12 +678,12 @@ class WebProxyCarrier:
         # `None` is what `recv()` hands its caller as end-of-stream.
         self._recv_queue.put_nowait(None)
 
-    def _track(self, task: "asyncio.Task") -> None:
+    def _track(self, task: asyncio.Task) -> None:
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         task.add_done_callback(self._log_task_exception)
 
-    def _log_task_exception(self, task: "asyncio.Task") -> None:
+    def _log_task_exception(self, task: asyncio.Task) -> None:
         # Nothing awaits a tracked task, so asyncio would print its traceback at
         #  collection. Retrieving it here silences that, which makes this the
         #  only report the failure gets - so the level has to say whether
@@ -696,10 +705,10 @@ class WebProxyCarrier:
 
         log.debug("WEB proxy: background task failed: %s", exception)
 
-    def _track_task(self, coroutine: "Coroutine[None, None, None]") -> None:
-        self._track(self._loop.create_task(coroutine))
+    def _track_task(self, coroutine: Coroutine[None, None, None]) -> None:
+        self._track(asyncio.create_task(coroutine))
 
-    async def _cancel_tracked(self, task: "asyncio.Task") -> None:
+    async def _cancel_tracked(self, task: asyncio.Task) -> None:
         task.cancel()
         try:
             await task
@@ -723,10 +732,10 @@ class WebProxyCarrier:
             try:
                 await asyncio.wait_for(self._send_window_event.wait(), timeout=_CREDIT_WAIT_TIMEOUT)
 
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
                 exc = WebCarrierError("timed out waiting for uplink WINDOW credit")
                 await self._fail(exc)
-                raise exc
+                raise exc from e
 
         self._send_window -= amount
 
@@ -740,9 +749,11 @@ class WebProxyCarrier:
         credit = amount.to_bytes(_WINDOW_PAYLOAD_SIZE, "big")
 
         try:
-            await self._send_frames([
-                serialize_frame(FrameType.WINDOW, stream_id=_STREAM_ID, payload=credit),
-            ])
+            await self._send_frames(
+                [
+                    serialize_frame(FrameType.WINDOW, stream_id=_STREAM_ID, payload=credit),
+                ]
+            )
 
         # The carrier has already failed, so there is nothing left to credit.
         except WebCarrierError as e:
@@ -756,7 +767,7 @@ class WebProxyCarrier:
         finally:
             self._grant_flush_task = None
 
-    async def _send_frames(self, frames: List[bytes]) -> None:
+    async def _send_frames(self, frames: list[bytes]) -> None:
         body = b"".join(frames)
 
         async with self._up_send_lock:
@@ -850,13 +861,17 @@ class WebProxyCarrier:
             return
 
         if one_frame.type == FrameType.PING:
-            self._track_task(self._send_frames([
-                serialize_frame(
-                    FrameType.PONG,
-                    stream_id=_CONTROL_STREAM_ID,
-                    payload=one_frame.payload,
-                ),
-            ]))
+            self._track_task(
+                self._send_frames(
+                    [
+                        serialize_frame(
+                            FrameType.PONG,
+                            stream_id=_CONTROL_STREAM_ID,
+                            payload=one_frame.payload,
+                        ),
+                    ]
+                )
+            )
             return
 
         if one_frame.type == FrameType.BYE:
@@ -867,9 +882,11 @@ class WebProxyCarrier:
             self._recv_window_remaining -= len(one_frame.payload)
 
             if self._recv_window_remaining < 0:
-                self._track_task(self._fail(
-                    WebCarrierError("relay sent DATA beyond granted receive credit"),
-                ))
+                self._track_task(
+                    self._fail(
+                        WebCarrierError("relay sent DATA beyond granted receive credit"),
+                    )
+                )
                 return
 
             self._recv_queue.put_nowait(one_frame.payload)

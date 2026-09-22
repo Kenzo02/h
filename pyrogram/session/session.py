@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import asyncio
 import bisect
 import logging
@@ -24,7 +26,9 @@ import time
 from enum import Enum, auto
 from hashlib import sha1
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
+from collections.abc import Coroutine
+from collections.abc import Iterable
 
 import pyrogram
 from pyrogram import raw, utils
@@ -43,7 +47,7 @@ from pyrogram.errors import (
     Unauthorized,
 )
 from pyrogram.raw.all import layer
-from pyrogram.raw.core import FutureSalts, Int, MsgContainer, TLObject
+from pyrogram.raw.core import FutureSalt, FutureSalts, Int, MsgContainer, TLObject
 
 from .internals import MsgFactory
 
@@ -74,15 +78,19 @@ class InvalidDC(TransportError):
 
 
 class Result:
-    __slots__ = ("value", "event")
+    __slots__ = ("value", "event", "exception")
 
     def __init__(self):
         self.value: Any = None
         self.event: asyncio.Event = asyncio.Event()
 
+        # Set instead of `value` when no answer can arrive; `send()` re-raises it.
+        self.exception: Exception | None = None
+
 
 class Session:
     START_TIMEOUT = 2
+    STOP_TIMEOUT = 2
     WAIT_TIMEOUT = 15
     SLEEP_THRESHOLD = 10
     MAX_RETRIES = 10
@@ -95,9 +103,18 @@ class Session:
     RESTART_RETRY_DELAY = 1
     RESTART_RETRY_MAX_DELAY = 30
 
+    # TDLib asks for a new pool when the pool is empty or the current salt has under a
+    #  minute left, and never more often than once a minute. Both thresholds and the
+    #  count are TDLib's:
+    #  https://github.com/tdlib/td/blob/d1085f9cebc5a62379991ae1652673954f229c1f/td/mtproto/AuthData.h#L233-L245
+    #  https://github.com/tdlib/td/blob/d1085f9cebc5a62379991ae1652673954f229c1f/td/mtproto/SessionConnection.cpp#L949-L954
+    FUTURE_SALTS_COUNT = 64
+    FUTURE_SALTS_THRESHOLD = 60
+    FUTURE_SALTS_INTERVAL = 60
+
     def __init__(
         self,
-        client: "pyrogram.Client",
+        client: pyrogram.Client,
         dc_id: int,
         server_address: str,
         port: int,
@@ -105,7 +122,7 @@ class Session:
         test_mode: bool,
         is_media: bool = False,
         is_cdn: bool = False,
-        fallback_endpoints: Optional[Tuple[Tuple[str, int], ...]] = None,
+        fallback_endpoints: Iterable[tuple[str, int]] | None = None,
     ):
         self.client = client
         self.dc_id = dc_id
@@ -115,11 +132,11 @@ class Session:
         self.test_mode = test_mode
         self.is_media = is_media
         self.is_cdn = is_cdn
-        self.fallback_endpoints = tuple(dict.fromkeys(
-            ((server_address, port),) + tuple(fallback_endpoints or ())
-        ))
+        self.fallback_endpoints = tuple(
+            dict.fromkeys(((server_address, port),) + tuple(fallback_endpoints or ()))
+        )
 
-        self.connection: Optional[Connection] = None
+        self.connection: Connection | None = None
 
         self._state = SessionState.STOPPED
         self._state_lock = asyncio.Lock()
@@ -130,24 +147,37 @@ class Session:
         self.msg_factory = MsgFactory(self.client)
 
         self.salt = 0
+        self.salt_valid_until: float = 0.0
+
+        # A salt changes every 30 minutes and the old one is accepted for a further 1800
+        #  seconds, so a session holding a single one is wrong within the hour:
+        #  https://core.telegram.org/mtproto/description (Terminology, "Server Salt").
+        self.future_salts: list[FutureSalt] = []
+        self._future_salts_requested_at: float = 0.0
 
         self.ignore_count = 0
 
-        self.pending_acks: Set[int] = set()
+        self.pending_acks: set[int] = set()
 
-        self.results: Dict[int, Result] = {}
+        self.results: dict[int, Result] = {}
 
-        self.stored_msg_ids: List[int] = []
-        self.recent_msg_ids: List[int] = []
+        self.stored_msg_ids: list[int] = []
+        self.recent_msg_ids: list[int] = []
 
-        self.ping_task: Optional[asyncio.Task] = None
+        self.ping_task: asyncio.Task | None = None
         self.ping_task_event = asyncio.Event()
 
-        self.recv_task: Optional[asyncio.Task] = None
+        self.recv_task: asyncio.Task | None = None
+
+        self.pending_tasks: set[asyncio.Task] = set()
 
         self.is_started = asyncio.Event()
         self.restart_lock = asyncio.Lock()
-        self.restart_task: Optional[asyncio.Task] = None
+        self.restart_task: asyncio.Task | None = None
+
+        # Never cleared: a stopped session is replaced rather than started again, since
+        #  every caller that stops one then asks for a new one (`pyrogram/client.py:1428`).
+        self._must_stay_stopped: bool = False
 
     @property
     def state(self) -> SessionState:
@@ -162,46 +192,91 @@ class Session:
 
             log.debug("Session state changed: %s -> %s", old_state.name, new_state.name)
 
+    def _create_tracked_task(self, coroutine: Coroutine[Any, Any, Any]) -> asyncio.Task:
+        # The set is what `stop()` waits on, and it is also the strong reference the
+        #  loop does not hold: an unreferenced task can be collected mid-execution.
+        #  https://docs.python.org/3/library/asyncio-task.html#creating-tasks
+        task = asyncio.create_task(coroutine)
+
+        self.pending_tasks.add(task)
+        task.add_done_callback(self.pending_tasks.discard)
+
+        return task
+
+    async def _wait_pending_tasks(self) -> None:
+        # A tracked `handle_packet` spawns a tracked `handle_updates`, so one round can
+        #  leave a task behind. Every level is already running, so the loop ends.
+        while self.pending_tasks:
+            round_tasks = set(self.pending_tasks)
+            _, running = await asyncio.wait(round_tasks, timeout=self.STOP_TIMEOUT)
+
+            # Both waits inside `invoke` run for `WAIT_TIMEOUT`: for `is_started`, which
+            #  stopping has just cleared, and for an answer that is not coming. So a task
+            #  caught mid-request would hold the shutdown that long.
+            for task in running:
+                task.cancel()
+
+            for result in await asyncio.gather(*round_tasks, return_exceptions=True):
+                if isinstance(result, Exception):
+                    log.error("Task failed while the session was stopping", exc_info=result)
+
     async def start(self):
         if self._state in (SessionState.STARTED, SessionState.STARTING):
             log.debug("Session already started")
             return
 
+        if self._must_stay_stopped:
+            log.debug("Session must remain stopped")
+            return
+
         for endpoint_index, (server_address, port) in enumerate(self.fallback_endpoints):
+            if self._must_stay_stopped:
+                return
+
             await self._set_state(SessionState.STARTING)
             self.server_address = server_address
             self.port = port
-            self.connection = self.client.connection_factory(
+            connection = self.client.connection_factory(
                 dc_id=self.dc_id,
-                server_address=self.server_address,
-                port=self.port,
+                server_address=server_address,
+                port=port,
                 test_mode=self.test_mode,
                 proxy=self.client.proxy,
                 media=self.is_media,
                 protocol_factory=self.client.protocol_factory,
                 crypto_executor_workers=self.CRYPTO_EXECUTOR_WORKERS,
-                loop=self.client.loop
             )
-
+            self.connection = connection
             started_at = time.monotonic()
 
             try:
-                await self.connection.connect()
+                await connection.connect()
 
-                self.recv_task = self.client.loop.create_task(self.recv_worker())
+                # An owner can stop the session while the transport is blocked
+                # in connect(). Do not begin the MTProto handshake after that
+                # stop has closed this connection.
+                if self._must_stay_stopped:
+                    # The owner's stop saw STARTING and closed this connection before
+                    # its blocked connect() completed. It may have opened afterwards,
+                    # while the session is already STOPPED, so close this exact transport.
+                    await connection.close()
+                    return
+
+                self.recv_task = asyncio.create_task(self.recv_worker())
+
+                if self._must_stay_stopped:
+                    await self._stop()
+                    return
 
                 await self.send(raw.functions.Ping(ping_id=0), timeout=self.START_TIMEOUT)
 
                 init_connection_params = self.client.init_connection_params
-
-                # Telegram wants to know which proxy a client sits behind.
                 proxy_address = client_proxy_address(self.client.proxy)
-                client_proxy: Optional[raw.types.InputClientProxy] = None
+                client_proxy: raw.types.InputClientProxy | None = None
 
                 if proxy_address is not None:
                     client_proxy = raw.types.InputClientProxy(
-                        address=proxy_address.hostname,
-                        port=proxy_address.port,
+                        address=proxy_address.hostname, port=proxy_address.port
                     )
 
                 if isinstance(init_connection_params, dict):
@@ -222,67 +297,62 @@ class Session:
                                 query=raw.functions.help.GetConfig(),
                                 params=init_connection_params,
                                 proxy=client_proxy,
-                            )
+                            ),
                         ),
-                        timeout=self.START_TIMEOUT
+                        timeout=self.START_TIMEOUT,
                     )
 
-                self.ping_task = self.client.loop.create_task(self.ping_worker())
-
-                log.info(
-                    "Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer
-                )
-                log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
-                log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
-            except (AuthKeyDuplicated, Unauthorized) as e:
-                await self.stop()
-                raise e
+                self.ping_task = asyncio.create_task(self.ping_worker())
+            except (AuthKeyDuplicated, Unauthorized):
+                await self._stop()
+                raise
             except (OSError, RPCError, ConnectionError, TimeoutError) as e:
                 elapsed = time.monotonic() - started_at
+                await self._stop()
+
+                if self._must_stay_stopped:
+                    return
+
                 next_endpoint = (
                     self.fallback_endpoints[endpoint_index + 1]
                     if endpoint_index + 1 < len(self.fallback_endpoints)
                     else None
                 )
 
-                await self.stop()
-
-                if next_endpoint:
-                    log.warning(
-                        "DC%s endpoint %s:%s failed after %.3fs with %s: %s; "
-                        "falling back to %s:%s",
-                        self.dc_id,
-                        server_address,
-                        port,
-                        elapsed,
-                        e.__class__.__name__,
-                        e,
-                        next_endpoint[0],
-                        next_endpoint[1],
-                    )
-                    continue
+                if next_endpoint is None:
+                    raise ConnectionError(
+                        f"Unable to start session on DC{self.dc_id} via "
+                        f"{len(self.fallback_endpoints)} endpoint(s)"
+                    ) from e
 
                 log.warning(
-                    "DC%s endpoint %s:%s failed after %.3fs with %s: %s; "
-                    "no fallback endpoint left",
+                    "DC%s endpoint %s:%s failed after %.3fs with %s: %s; falling back to %s:%s",
                     self.dc_id,
                     server_address,
                     port,
                     elapsed,
                     e.__class__.__name__,
                     e,
+                    next_endpoint[0],
+                    next_endpoint[1],
                 )
-                raise ConnectionError(
-                    f"Unable to start session on DC{self.dc_id} via {len(self.fallback_endpoints)} endpoint(s)"
-                ) from e
-            except Exception as e:
-                await self.stop()
-                raise e
+                continue
+            except Exception:
+                await self._stop()
+                raise
             else:
-                self.fallback_endpoints = tuple(dict.fromkeys(
-                    ((server_address, port),) + self.fallback_endpoints
-                ))
+                self.fallback_endpoints = tuple(
+                    dict.fromkeys(((server_address, port),) + self.fallback_endpoints)
+                )
                 break
+
+        if self._must_stay_stopped:
+            await self._stop()
+            return
+
+        log.info("Session initialized: Pyrogram v%s (Layer %s)", pyrogram.__version__, layer)
+        log.info("Device: %s - %s", self.client.device_model, self.client.app_version)
+        log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
 
         await self._set_state(SessionState.STARTED)
         self.is_started.set()
@@ -296,6 +366,14 @@ class Session:
                 log.exception(e)
 
     async def stop(self):
+        # `restart()` reads this, and the flag is set before the state check below so a
+        #  stop that arrives while a restart is already between its own `stop()` and
+        #  `start()` still counts.
+        self._must_stay_stopped = True
+
+        await self._stop()
+
+    async def _stop(self) -> None:
         if self._state in (SessionState.STOPPED, SessionState.STOPPING):
             log.debug("Session already stopped")
             return
@@ -307,6 +385,19 @@ class Session:
         self.is_started.clear()
 
         self.stored_msg_ids.clear()
+
+        # The unsent acks name msg ids of the connection this stop closes, which the
+        #  server cannot match after a reconnect.
+        self.pending_acks.clear()
+
+        # A pending waiter's msg id also dies with the connection and nothing re-sends
+        #  the request, so no answer can arrive: failing each waiter here turns a
+        #  silent `WAIT_TIMEOUT` into an immediate, accurate error.
+        for result in self.results.values():
+            result.exception = TimeoutError("Session stopped before an answer arrived")
+            result.event.set()
+
+        self.results.clear()
 
         self.ping_task_event.set()
 
@@ -321,6 +412,8 @@ class Session:
             await self.recv_task
             self.recv_task = None
 
+        await self._wait_pending_tasks()
+
         await self._set_state(SessionState.STOPPED)
 
         log.info("Session stopped")
@@ -334,30 +427,42 @@ class Session:
     async def restart(self):
         async with self.restart_lock:
             if self.stored_msg_ids:
-               self.recent_msg_ids = self.stored_msg_ids[:30]
+                self.recent_msg_ids = self.stored_msg_ids[:30]
 
-            await self.stop()
+            await self._stop()
+
+            if self._must_stay_stopped:
+                return
+
             await self.start()
+
+            # `stop()` does not acquire `restart_lock`: it may race the call
+            # above and must win even if `start()` completed its handshake.
+            if self._must_stay_stopped:
+                await self._stop()
 
     def schedule_restart(self, reason: str):
         if self.restart_task and not self.restart_task.done():
             log.debug("Session restart already scheduled; latest reason: %s", reason)
             return
 
-        self.restart_task = self.client.loop.create_task(self._restart_until_started(reason))
+        self.restart_task = asyncio.create_task(self._restart_until_started(reason))
 
     async def _restart_until_started(self, reason: str):
         retry_delay = self.RESTART_RETRY_DELAY
 
-        while getattr(self.client, "is_connected", True):
+        while getattr(self.client, "is_connected", True) and not self._must_stay_stopped:
             try:
                 await self.restart()
             except (AuthKeyDuplicated, Unauthorized):
-                log.exception("Background session restart aborted due to unrecoverable auth error: %s", reason)
+                log.exception(
+                    "Background session restart aborted due to unrecoverable auth error: %s", reason
+                )
                 return
             except Exception as e:
                 log.warning(
-                    "Background session restart failed due to %s: %s; retrying in %.1fs; reason: %s",
+                    "Background session restart failed due to %s: %s; retrying in %.1fs; "
+                    "reason: %s",
                     e.__class__.__name__,
                     e,
                     retry_delay,
@@ -369,17 +474,17 @@ class Session:
                 log.info("Background session restart completed: %s", reason)
                 return
 
-        log.info("Background session restart skipped because client is disconnected: %s", reason)
+        log.info("Background session restart stopped: %s", reason)
 
     async def handle_packet(self, packet):
         try:
-            data = await self.client.loop.run_in_executor(
+            data = await asyncio.get_running_loop().run_in_executor(
                 self.connection.protocol.crypto_executor,
                 mtproto.unpack,
                 BytesIO(packet),
                 self.session_id,
                 self.auth_key,
-                self.auth_key_id
+                self.auth_key_id,
             )
         except ValueError as e:
             log.debug(e)
@@ -387,11 +492,7 @@ class Session:
             self.schedule_restart(f"{e.__class__.__name__}: {e}")
             return
 
-        messages = (
-            data.body.messages
-            if isinstance(data.body, MsgContainer)
-            else [data]
-        )
+        messages = data.body.messages if isinstance(data.body, MsgContainer) else [data]
 
         log.debug("Received: %s", data)
 
@@ -407,13 +508,13 @@ class Session:
 
             try:
                 if len(self.stored_msg_ids) > Session.STORED_MSG_IDS_MAX_SIZE:
-                    del self.stored_msg_ids[:Session.STORED_MSG_IDS_MAX_SIZE // 2]
+                    del self.stored_msg_ids[: Session.STORED_MSG_IDS_MAX_SIZE // 2]
 
                 if msg.msg_id in self.recent_msg_ids:
-                   self.recent_msg_ids.remove(msg.msg_id)
-                   raise SecurityCheckMismatch(
-                         "The msg_id is belong to most recent closed connection."
-                   )
+                    self.recent_msg_ids.remove(msg.msg_id)
+                    raise SecurityCheckMismatch(
+                        "The msg_id is belong to most recent closed connection."
+                    )
 
                 if self.stored_msg_ids:
                     if msg.msg_id < self.stored_msg_ids[0]:
@@ -426,7 +527,9 @@ class Session:
                             "The msg_id is equal to any of the stored values"
                         )
 
-                    time_diff = (msg.msg_id - (await self.msg_factory.allocate_message_identity())) / 2 ** 32
+                    time_diff = (
+                        msg.msg_id - (await self.msg_factory.allocate_message_identity())
+                    ) / 2**32
 
                     if time_diff > 30:
                         raise SecurityCheckMismatch(
@@ -463,7 +566,16 @@ class Session:
 
             msg_id = None
 
-            if isinstance(msg.body, (raw.types.BadMsgNotification, raw.types.BadServerSalt)):
+            if isinstance(msg.body, raw.types.BadServerSalt):
+                msg_id = msg.body.bad_msg_id
+
+                # Taken here rather than in `send()`, which only ever sees an answer
+                #  somebody awaited. `ping_worker` sends with `wait_response=False`, so a
+                #  salt offered in reply to a ping was dropped and an idle media session
+                #  kept a retired one until every request on it timed out.
+                #  https://core.telegram.org/mtproto/service_messages_about_messages#notice-of-ignored-error-message
+                self.salt = msg.body.new_server_salt
+            elif isinstance(msg.body, raw.types.BadMsgNotification):
                 msg_id = msg.body.bad_msg_id
             elif isinstance(msg.body, (FutureSalts, raw.types.RpcResult)):
                 msg_id = msg.body.req_msg_id
@@ -471,7 +583,7 @@ class Session:
                 msg_id = msg.body.msg_id
             else:
                 if self.client is not None:
-                    self.client.loop.create_task(self.client.handle_updates(msg.body))
+                    self._create_tracked_task(self.client.handle_updates(msg.body))
 
             if msg_id in self.results:
                 self.results[msg_id].value = getattr(msg.body, "result", msg.body)
@@ -486,6 +598,40 @@ class Session:
                 pass
             else:
                 self.pending_acks.clear()
+
+    def _current_salt(self, server_time: float) -> int:
+        """Get the salt valid at `server_time`, dropping the ones it has passed"""
+        while self.future_salts and self.future_salts[0].valid_since <= server_time:
+            salt = self.future_salts.pop(0)
+
+            self.salt = salt.salt
+            self.salt_valid_until = salt.valid_until
+
+        return self.salt
+
+    async def _update_future_salts(self) -> None:
+        server_time = self.client.server_time
+
+        if server_time - self._future_salts_requested_at < self.FUTURE_SALTS_INTERVAL:
+            return
+
+        # Promote first, so `salt_valid_until` is the one actually in use right now.
+        self._current_salt(server_time)
+
+        if self.future_salts and self.salt_valid_until - server_time > self.FUTURE_SALTS_THRESHOLD:
+            return
+
+        self._future_salts_requested_at = server_time
+
+        # The same budget `start()` gives its own round trips, rather than the whole
+        #  `WAIT_TIMEOUT`: `stop()` waits on this task, and the request is pre-emptive,
+        #  so an answer that does not arrive is asked for again a minute later.
+        future_salts = await self.send(
+            raw.functions.GetFutureSalts(num=self.FUTURE_SALTS_COUNT),
+            timeout=self.START_TIMEOUT,
+        )
+
+        self.future_salts = sorted(future_salts.salts, key=lambda salt: salt.valid_since)
 
     async def ping_worker(self):
         log.info("PingTask started")
@@ -502,9 +648,9 @@ class Session:
                 await self.send(
                     raw.functions.PingDelayDisconnect(
                         ping_id=await self.msg_factory.allocate_message_identity(),
-                        disconnect_delay=self.WAIT_TIMEOUT + 10
+                        disconnect_delay=self.WAIT_TIMEOUT + 10,
                     ),
-                    wait_response=False
+                    wait_response=False,
                 )
             except OSError as e:
                 log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
@@ -512,6 +658,15 @@ class Session:
                 break
             except RPCError:
                 pass
+
+            try:
+                await self._update_future_salts()
+
+            # Only logged: the current salt still has a minute of life, and a
+            #  `BadServerSalt` recovers the session anyway. `send` reports an answer
+            #  that never came as `TimeoutError`, which is an `OSError`.
+            except (OSError, RPCError) as e:
+                log.info("Could not get future salts - %s - %s", e.__class__.__name__, e)
 
         log.info("PingTask stopped")
 
@@ -534,18 +689,13 @@ class Session:
 
                     try:
                         if error_code == 429:
-                            raise TransportFlood(
-                                "Transport flood. Please slow down your requests."
-                            )
+                            raise TransportFlood("Transport flood. Please slow down your requests.")
                         elif error_code == 444:
-                            raise InvalidDC(
-                                "Invalid data center. Please check your configuration."
-                            )
+                            raise InvalidDC("Invalid data center. Please check your configuration.")
                     except TransportError as e:
                         error_msg = str(e)
 
                     log.warning("Server sent transport error: %s (%s)", error_code, error_msg)
-
 
                 if self.is_started.is_set():
                     if packet:
@@ -558,29 +708,32 @@ class Session:
 
                 break
 
-            self.client.loop.create_task(self.handle_packet(packet))
+            self._create_tracked_task(self.handle_packet(packet))
 
         log.info("NetworkTask stopped")
 
-    async def send(
-        self, data: TLObject, wait_response: bool = True, timeout: float = WAIT_TIMEOUT
-    ):
+    async def send(self, data: TLObject, wait_response: bool = True, timeout: float = WAIT_TIMEOUT):
         message = await self.msg_factory.create(data)
         msg_id = message.msg_id
 
+        # Held locally as well: `_stop()` empties `self.results` when it fails the
+        #  pending waiters, so the dict entry may be gone by the time the wait ends.
+        pending_result: Result | None = None
+
         if wait_response:
-            self.results[msg_id] = Result()
+            pending_result = Result()
+            self.results[msg_id] = pending_result
 
         log.debug("Sent: %s", message)
 
-        payload = await self.client.loop.run_in_executor(
+        payload = await asyncio.get_running_loop().run_in_executor(
             self.connection.protocol.crypto_executor,
             mtproto.pack,
             message,
-            self.salt,
+            self._current_salt(self.client.server_time),
             self.session_id,
             self.auth_key,
-            self.auth_key_id
+            self.auth_key_id,
         )
 
         try:
@@ -589,13 +742,18 @@ class Session:
             self.results.pop(msg_id, None)
             raise e
 
-        if wait_response:
+        if pending_result is not None:
             try:
-                await asyncio.wait_for(self.results[msg_id].event.wait(), timeout)
+                await asyncio.wait_for(pending_result.event.wait(), timeout)
             except asyncio.TimeoutError:
                 pass
 
-            result = self.results.pop(msg_id).value
+            self.results.pop(msg_id, None)
+
+            if pending_result.exception is not None:
+                raise pending_result.exception
+
+            result = pending_result.value
 
             if result is None:
                 raise TimeoutError("Request timed out")
@@ -613,8 +771,8 @@ class Session:
                     "%s: %s", BadMsgNotification.__name__, BadMsgNotification(result.error_code)
                 )
 
+            # `handle_packet` has already taken the new salt, so this only re-sends.
             if isinstance(result, raw.types.BadServerSalt):
-                self.salt = result.new_server_salt
                 return await self.send(data, wait_response, timeout)
 
             return result
@@ -625,21 +783,25 @@ class Session:
         retries: int = MAX_RETRIES,
         timeout: float = WAIT_TIMEOUT,
         sleep_threshold: float = SLEEP_THRESHOLD,
-        retry_delay: float = RETRY_DELAY
+        retry_delay: float = RETRY_DELAY,
     ):
-        try:
-            await asyncio.wait_for(self.is_started.wait(), self.WAIT_TIMEOUT)
-        except asyncio.TimeoutError:
-            pass
-
-        if isinstance(
-            query, (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout)
-        ):
+        if isinstance(query, (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout)):
             inner_query = query.query
         else:
             inner_query = query
 
         query_name = ".".join(inner_query.QUALNAME.split(".")[1:])
+
+        try:
+            await asyncio.wait_for(self.is_started.wait(), self.WAIT_TIMEOUT)
+
+        # Carrying on instead reaches `send()`, which reads `self.connection.protocol` on a
+        #  session whose `connection` is still `None`: `AttributeError: 'NoneType' object has
+        #  no attribute 'protocol'`, naming neither the session nor the query.
+        except asyncio.TimeoutError as e:
+            raise TimeoutError(
+                f'Waited {self.WAIT_TIMEOUT}s to invoke "{query_name}", and {self} is not started'
+            ) from e
 
         for attempt in range(1, retries + 1):
             try:
@@ -647,7 +809,7 @@ class Session:
             except (FloodWait, FloodPremiumWait) as e:
                 amount = e.seconds
 
-                if amount > sleep_threshold >= 0:
+                if amount is None or amount > sleep_threshold >= 0:
                     raise
 
                 log.warning(
@@ -659,9 +821,7 @@ class Session:
 
                 await asyncio.sleep(amount)
             except (OSError, InternalServerError, ServiceUnavailable) as e:
-                log.warning(
-                    '[%s] Retrying "%s" due to: %s', attempt, query_name, str(e) or repr(e)
-                )
+                log.warning('[%s] Retrying "%s" due to: %s', attempt, query_name, str(e) or repr(e))
 
                 await asyncio.sleep(retry_delay)
 

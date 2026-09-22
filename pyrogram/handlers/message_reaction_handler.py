@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+MessageReactionCallbackType = Callable[["pyrogram.Client", types.MessageReactionUpdated], Any]
 
 
-class MessageReactionHandler(Handler):
+class MessageReactionHandler(Handler[MessageReactionCallbackType]):
     """The MessageReaction handler class.
     Used to handle changes in the reaction of a message.
 
@@ -40,7 +47,7 @@ class MessageReactionHandler(Handler):
             *(client, reactions)* as positional arguments (look at the section below for a detailed
             description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of updates to be passed in your callback function.
 
     Other parameters:
@@ -53,7 +60,7 @@ class MessageReactionHandler(Handler):
 
     def __init__(
         self,
-        callback: Callable[["pyrogram.Client", "types.MessageReactionUpdated"], Any],
-        filters=None,
-    ):
+        callback: MessageReactionCallbackType,
+        filters: Filter | None = None,
+    ) -> None:
         super().__init__(callback, filters)

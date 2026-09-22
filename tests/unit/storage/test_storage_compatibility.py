@@ -101,9 +101,12 @@ async def test_legacy_storage_implements_split_api_with_partial_merges():
     assert await storage.set_update_state(UpdateState(0, None, 21, None, 41)) is None
     assert await storage.get_update_states(0) == [UpdateState(0, 10, 21, 30, 41)]
 
-    assert await storage.set_update_state(
-        [UpdateState(0, 11, None, None, None), UpdateState(2, None, 22, 32, None)]
-    ) is None
+    assert (
+        await storage.set_update_state(
+            [UpdateState(0, 11, None, None, None), UpdateState(2, None, 22, 32, None)]
+        )
+        is None
+    )
     assert await storage.get_update_states([0, 2]) == [
         UpdateState(0, 11, 21, 30, 41),
         UpdateState(2, None, 22, 32, None),

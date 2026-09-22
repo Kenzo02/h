@@ -16,10 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import BinaryIO, Optional, Union
+from __future__ import annotations as _annotations
+
+from typing import BinaryIO, cast
 
 import pyrogram
 from pyrogram import raw, utils
+from pyrogram._typing import PathType
 from pyrogram.file_id import FileType
 
 from ..object import Object
@@ -34,6 +37,7 @@ class InputChatPhoto(Object):
     - :obj:`~pyrogram.types.InputChatPhotoStatic`
     - :obj:`~pyrogram.types.InputChatPhotoAnimation`
     """
+
     # TODO: - :obj:`~pyrogram.types.InputChatPhotoSticker`
 
     def __init__(
@@ -41,7 +45,7 @@ class InputChatPhoto(Object):
     ):
         super().__init__()
 
-    async def write(self, client: "pyrogram.Client") -> "raw.base.InputFile":
+    async def write(self, client: pyrogram.Client) -> raw.base.InputFile | raw.base.InputPhoto:
         raise NotImplementedError
 
 
@@ -52,36 +56,34 @@ class InputChatPhotoPrevious(InputChatPhoto):
         chat_photo_file_id (``str``):
             Identifier of the current user's profile photo to reuse.
     """
-    def __init__(
-        self,
-        chat_photo_file_id: int
-    ):
+
+    def __init__(self, chat_photo_file_id: str):
         super().__init__()
 
         self.chat_photo_file_id = chat_photo_file_id
 
-    async def write(self, client: "pyrogram.Client") -> "raw.types.InputPhoto":
+    async def write(self, client: pyrogram.Client) -> raw.base.InputPhoto:
         photo = utils.get_input_media_from_file_id(self.chat_photo_file_id, FileType.PHOTO)
-        
-        return photo.id
+
+        # The helper rejects any other file type when it is given one to expect, so the
+        #  document half of its return type is unreachable from here.
+        return cast("raw.types.InputMediaPhoto", photo).id
 
 
 class InputChatPhotoStatic(InputChatPhoto):
     """A static photo in JPEG format.
 
     Parameters:
-        photo (``str`` | ``BinaryIO``):
+        photo (``str`` | ``os.PathLike`` | ``BinaryIO``):
             Photo to be set as profile photo.
     """
-    def __init__(
-        self,
-        photo: Union[str, BinaryIO]
-    ):
+
+    def __init__(self, photo: PathType | BinaryIO):
         super().__init__()
 
         self.photo = photo
 
-    async def write(self, client: "pyrogram.Client") -> "raw.base.InputFile":
+    async def write(self, client: pyrogram.Client) -> raw.base.InputFile:
         return await client.save_file(self.photo)
 
 
@@ -93,21 +95,18 @@ class InputChatPhotoAnimation(InputChatPhoto):
         Must be square, at most 10 seconds long, have width between 160 and 1280 and be at most 2MB in size
 
     Parameters:
-        animation (``str`` | ``BinaryIO``):
+        animation (``str`` | ``os.PathLike`` | ``BinaryIO``):
             Animation to be set as profile photo.
 
         main_frame_timestamp (``float``):
             Timestamp of the frame, which will be used as static chat photo.
     """
-    def __init__(
-        self,
-        animation: Union[str, BinaryIO],
-        main_frame_timestamp: Optional[float] = None
-    ):
+
+    def __init__(self, animation: PathType | BinaryIO, main_frame_timestamp: float | None = None):
         super().__init__()
 
         self.animation = animation
         self.main_frame_timestamp = main_frame_timestamp
 
-    async def write(self, client: "pyrogram.Client") -> "raw.base.InputFile":
+    async def write(self, client: pyrogram.Client) -> raw.base.InputFile:
         return await client.save_file(self.animation)

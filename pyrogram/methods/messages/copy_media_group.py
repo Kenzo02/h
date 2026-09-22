@@ -16,40 +16,41 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
 from datetime import datetime
-from typing import List, Optional, Union
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
 
 log = logging.getLogger(__name__)
 
+
 class CopyMediaGroup:
     async def copy_media_group(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        from_chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
+        from_chat_id: int | str,
         message_id: int,
-        captions: Optional[Union[List[str], str]] = None,
-        has_spoilers: Optional[Union[List[bool], bool]] = None,
-        disable_notification: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
-        schedule_date: Optional[datetime] = None,
-        protect_content: Optional[bool] = None,
-        show_caption_above_media: Optional[bool] = None,
-        allow_paid_broadcast: Optional[bool] = None,
-        paid_message_star_count: Optional[int] = None,
-        reply_parameters: Optional["types.ReplyParameters"] = None,
-
-        reply_to_message_id: Optional[int] = None,
-        reply_to_chat_id: Optional[Union[int, str]] = None,
-        reply_to_story_id: Optional[int] = None,
-        quote_text: Optional[str] = None,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        quote_entities: Optional[List["types.MessageEntity"]] = None,
-        quote_offset: Optional[int] = None,
-    ) -> List["types.Message"]:
+        captions: list[str] | str | None = None,
+        has_spoilers: list[bool] | bool | None = None,
+        disable_notification: bool | None = None,
+        message_thread_id: int | None = None,
+        schedule_date: datetime | None = None,
+        protect_content: bool | None = None,
+        show_caption_above_media: bool | None = None,
+        allow_paid_broadcast: bool | None = None,
+        paid_message_star_count: int | None = None,
+        reply_parameters: types.ReplyParameters | None = None,
+        reply_to_message_id: int | None = None,
+        reply_to_chat_id: int | str | None = None,
+        reply_to_story_id: int | None = None,
+        quote_text: str | None = None,
+        parse_mode: enums.ParseMode | None = None,
+        quote_entities: list[types.MessageEntity] | None = None,
+        quote_offset: int | None = None,
+    ) -> list[types.Message]:
         """Copy a media group by providing one of the message ids.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -173,7 +174,7 @@ class CopyMediaGroup:
                 quote=quote_text,
                 quote_parse_mode=parse_mode,
                 quote_entities=quote_entities,
-                quote_position=quote_offset
+                quote_position=quote_offset,
             )
 
         media_group = await self.get_media_group(from_chat_id, message_id)
@@ -195,8 +196,7 @@ class CopyMediaGroup:
                 file_id=file_id,
                 has_spoiler=(
                     has_spoilers[i]
-                    if isinstance(has_spoilers, list)
-                    and i < len(has_spoilers)
+                    if isinstance(has_spoilers, list) and i < len(has_spoilers)
                     else (
                         has_spoilers
                         if isinstance(has_spoilers, bool)
@@ -209,10 +209,16 @@ class CopyMediaGroup:
                     media=media,
                     random_id=self.rnd_id(),
                     **await self.parser.parse(
-                        captions[i] if isinstance(captions, list) and i < len(captions) and captions[i] else
-                        captions if isinstance(captions, str) and i == 0 else
-                        message.caption if message.caption and message.caption != "None" and not type(
-                            captions) is str else "")
+                        captions[i]
+                        if isinstance(captions, list) and i < len(captions) and captions[i]
+                        else captions
+                        if isinstance(captions, str) and i == 0
+                        else message.caption
+                        if message.caption
+                        and message.caption != "None"
+                        and not type(captions) is str
+                        else ""
+                    ),
                 )
             )
 
@@ -220,19 +226,15 @@ class CopyMediaGroup:
             raw.functions.messages.SendMultiMedia(
                 peer=await self.resolve_peer(chat_id),
                 multi_media=multi_media,
-                silent=disable_notification or None,
-                reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id
-                ),
+                silent=disable_notification,
+                reply_to=await utils.get_reply_to(self, reply_parameters, message_thread_id),
                 schedule_date=utils.datetime_to_timestamp(schedule_date),
                 noforwards=protect_content,
                 invert_media=show_caption_above_media,
                 allow_paid_floodskip=allow_paid_broadcast,
-                allow_paid_stars=paid_message_star_count
+                allow_paid_stars=paid_message_star_count,
             ),
-            sleep_threshold=60
+            sleep_threshold=60,
         )
 
         return await utils.parse_messages(client=self, messages=r)

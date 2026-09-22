@@ -16,13 +16,18 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import io
-import pathlib
+import os
 import re
-from typing import BinaryIO, Callable, List, Optional, Union
+from pathlib import Path
+from typing import BinaryIO
+from collections.abc import Callable
 
 import pyrogram
 from pyrogram import raw, utils
+from pyrogram._typing import PathType
 from pyrogram.file_id import FileType
 
 from ... import enums
@@ -36,14 +41,14 @@ class InputMediaAudio(InputMedia):
     It is intended to be used with :meth:`~pyrogram.Client.send_media_group`.
 
     Parameters:
-        media (``str`` | ``BinaryIO``):
+        media (``str`` | ``os.PathLike`` | ``BinaryIO``):
             Audio to send.
             Pass a file_id as string to send an audio that exists on the Telegram servers or
             pass a file path as string to upload a new audio that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
             pass an HTTP URL as a string for Telegram to get an audio file from the Internet.
 
-        thumb (``str``, *optional*):
+        thumb (``str`` | ``os.PathLike``, *optional*):
             Thumbnail of the music file album cover.
             The thumbnail should be in JPEG format and less than 200 KB in size.
             A thumbnail's width and height should not exceed 320 pixels.
@@ -72,19 +77,22 @@ class InputMediaAudio(InputMedia):
         file_name (``str``, *optional*):
             File name of the audio sent.
             Defaults to file's path basename.
+
+    Raises:
+        FileNotFoundError: In case a local ``os.PathLike`` doesn't point to an existing file.
     """
 
     def __init__(
         self,
-        media: Union[str, BinaryIO],
-        thumb: Optional[str] = None,
+        media: PathType | BinaryIO,
+        thumb: PathType | None = None,
         caption: str = "",
-        parse_mode: Optional["enums.ParseMode"] = None,
-        caption_entities: Optional[List[MessageEntity]] = None,
+        parse_mode: enums.ParseMode | None = None,
+        caption_entities: list[MessageEntity] | None = None,
         duration: int = 0,
         performer: str = "",
         title: str = "",
-        file_name: Optional[str] = None
+        file_name: str | None = None,
     ):
         super().__init__(media, caption, parse_mode, caption_entities)
 
@@ -97,19 +105,19 @@ class InputMediaAudio(InputMedia):
     async def write(
         self,
         *,
-        client: "pyrogram.Client",
-        chat_id: Optional[Union[int, str]] = None,
-        progress: Optional[Callable] = None,
+        client: pyrogram.Client,
+        chat_id: int | str | None = None,
+        progress: Callable | None = None,
         progress_args: tuple = (),
-        ttl_seconds: Optional[int] = None,
-        **kwargs
-    ) -> "raw.base.InputMedia":
+        ttl_seconds: int | None = None,
+        **kwargs,
+    ) -> raw.base.InputMedia:
         if chat_id is None:
             peer = raw.types.InputPeerSelf()
         else:
             peer = await client.resolve_peer(chat_id)
 
-        if isinstance(self.media, io.BytesIO) or pathlib.Path(self.media).is_file():
+        if isinstance(self.media, io.BytesIO) or Path(self.media).is_file():
             mime_type = client.guess_mime_type(self.media) or "audio/mpeg"
 
             if mime_type == "audio/ogg":
@@ -148,10 +156,15 @@ class InputMediaAudio(InputMedia):
                 ),
             )
 
+        if isinstance(self.media, os.PathLike):
+            raise FileNotFoundError(f"No such file or directory: {self.media}")
+
         if re.match("^https?://", self.media):
             return raw.types.InputMediaDocumentExternal(
                 url=self.media,
                 ttl_seconds=ttl_seconds,
             )
 
-        return utils.get_input_media_from_file_id(self.media, FileType.AUDIO, ttl_seconds=ttl_seconds)
+        return utils.get_input_media_from_file_id(
+            self.media, FileType.AUDIO, ttl_seconds=ttl_seconds
+        )

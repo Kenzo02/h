@@ -16,16 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+
+from pyrogram import types
+from pyrogram.filters import Filter
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+UserStatusCallbackType = Callable[["pyrogram.Client", types.User], Any]
 
 
-class UserStatusHandler(Handler):
+class UserStatusHandler(Handler[UserStatusCallbackType]):
     """The UserStatus handler class. Used to handle user status updates (user going online or offline).
     It is intended to be used with :meth:`~pyrogram.Client.add_handler`.
 
@@ -36,7 +43,7 @@ class UserStatusHandler(Handler):
             Pass a function that will be called when a new user status update arrives. It takes *(client, user)*
             as positional arguments (look at the section below for a detailed description).
 
-        filters (:obj:`Filters`):
+        filters (:obj:`~pyrogram.filters.Filter`):
             Pass one or more filters to allow only a subset of users to be passed in your callback function.
 
     Other parameters:
@@ -47,5 +54,5 @@ class UserStatusHandler(Handler):
             The user containing the updated status.
     """
 
-    def __init__(self, callback: Callable[["pyrogram.Client", "types.User"], Any], filters=None):
+    def __init__(self, callback: UserStatusCallbackType, filters: Filter | None = None) -> None:
         super().__init__(callback, filters)

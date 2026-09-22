@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from datetime import datetime
-from typing import Dict, Optional
 
 from pyrogram import raw, types, utils
 
@@ -44,10 +45,10 @@ class UpgradedGiftOriginalDetails(Object):
     def __init__(
         self,
         *,
-        sender: Optional["types.Chat"] = None,
-        receiver: Optional["types.Chat"] = None,
-        text: Optional["types.FormattedText"] = None,
-        date: Optional[datetime] = None
+        sender: types.Chat | None = None,
+        receiver: types.Chat | None = None,
+        text: types.FormattedText | None = None,
+        date: datetime | None = None,
     ):
         super().__init__()
 
@@ -59,16 +60,18 @@ class UpgradedGiftOriginalDetails(Object):
     @staticmethod
     async def _parse(
         client,
-        attr: "raw.types.StarGiftAttributeOriginalDetails",
-        users: Dict[int, "raw.base.User"],
-        chats: Dict[int, "raw.base.Chat"]
-    ) -> "UpgradedGiftOriginalDetails":
+        attr: raw.types.StarGiftAttributeOriginalDetails,
+        users: dict[int, raw.base.User],
+        chats: dict[int, raw.base.Chat],
+    ) -> UpgradedGiftOriginalDetails:
         sender_id = utils.get_raw_peer_id(attr.sender_id)
         recipient_id = utils.get_raw_peer_id(attr.recipient_id)
 
         return UpgradedGiftOriginalDetails(
             sender=await types.User._parse(client, users.get(sender_id) or chats.get(sender_id)),
-            receiver=await types.User._parse(client, users.get(recipient_id) or chats.get(recipient_id)),
+            receiver=await types.User._parse(
+                client, users.get(recipient_id) or chats.get(recipient_id)
+            ),
             text=await types.FormattedText._parse(client, attr.message),
             date=utils.timestamp_to_datetime(attr.date),
         )

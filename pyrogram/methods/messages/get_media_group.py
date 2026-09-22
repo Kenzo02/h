@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Union, List
 
 import pyrogram
 from pyrogram import types
@@ -27,10 +28,8 @@ log = logging.getLogger(__name__)
 
 class GetMediaGroup:
     async def get_media_group(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
-        message_id: int
-    ) -> List["types.Message"]:
+        self: pyrogram.Client, chat_id: int | str, message_id: int
+    ) -> list[types.Message]:
         """Get the media group a message belongs to.
 
         .. include:: /_includes/usable-by/users-bots.rst
@@ -59,8 +58,8 @@ class GetMediaGroup:
         # Get messages with id from `id - 9` to `id + 10` to get all possible media group messages.
         messages = await self.get_messages(
             chat_id=chat_id,
-            message_ids=[msg_id for msg_id in range(message_id - 9, message_id + 10)],
-            replies=0
+            message_ids=list(range(message_id - 9, message_id + 10)),
+            replies=0,
         )
 
         # Get media group id from message with selected message id

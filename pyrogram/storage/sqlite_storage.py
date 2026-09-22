@@ -16,18 +16,21 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import base64
 import logging
 import sqlite3
 import struct
 import time
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import Any
+from collections.abc import Iterable
 
 from pyrogram import raw
 
 from .. import utils
-from ..dc_options import PROD, TEST, get_dc_endpoint
+from ..dc_options import get_dc_endpoint
 from .storage import Storage, UpdateState
 
 log = logging.getLogger(__name__)
@@ -115,6 +118,7 @@ CREATE TABLE update_state
 );
 """
 
+
 def get_input_peer(peer_id: int, access_hash: int, peer_type: str):
     if peer_type in {"user", "bot"}:
         return raw.types.InputPeerUser(user_id=peer_id, access_hash=access_hash)
@@ -139,12 +143,12 @@ class SQLiteStorage(Storage):
         self,
         name: str,
         workdir: Path,
-        session_string: Optional[str] = None,
-        in_memory: Optional[bool] = False,
-        use_wal: Optional[bool] = False,
+        session_string: str | None = None,
+        in_memory: bool = False,
+        use_wal: bool = False,
     ):
         self.name = name
-        self.conn = None  # type: sqlite3.Connection
+        self._conn: sqlite3.Connection | None = None
 
         self.session_string = session_string
         self.in_memory = in_memory
@@ -154,6 +158,21 @@ class SQLiteStorage(Storage):
             self.database = ":memory:"
         else:
             self.database = workdir / (self.name + self.FILE_EXTENSION)
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        # Every method below this point runs only after open() has set a real
+        #  connection; raising here narrows the type once for all of them
+        #  instead of repeating the same guard at every call site.
+        if self._conn is None:
+            msg = "`SQLiteStorage.conn` accessed before `open()`"
+            raise RuntimeError(msg)
+
+        return self._conn
+
+    @conn.setter
+    def conn(self, value: sqlite3.Connection | None) -> None:
+        self._conn = value
 
     async def update(self):
         version = await self.version()
@@ -189,10 +208,7 @@ class SQLiteStorage(Storage):
             version += 1
 
         if version == 6:
-            address, port = get_dc_endpoint(
-                await self.dc_id(),
-                await self.test_mode()
-            )
+            address, port = get_dc_endpoint(await self.dc_id(), await self.test_mode())
 
             with self.conn:
                 self.conn.execute("ALTER TABLE sessions ADD server_address TEXT;")
@@ -301,12 +317,12 @@ class SQLiteStorage(Storage):
         if not self.in_memory:
             Path(self.database).unlink()
 
-    async def update_peers(self, peers: Iterable[Tuple[int, int, str, Optional[str]]]):
+    async def update_peers(self, peers: Iterable[tuple[int, int, str, str | None]]):
         self.conn.executemany(
             "REPLACE INTO peers (id, access_hash, type, phone_number) VALUES (?, ?, ?, ?)", peers
         )
 
-    async def update_usernames(self, usernames: Iterable[Tuple[int, List[Optional[str]]]]):
+    async def update_usernames(self, usernames: Iterable[tuple[int, list[str | None]]]):
         usernames = list(usernames)
 
         if not usernames:
@@ -330,7 +346,7 @@ class SQLiteStorage(Storage):
             ],
         )
 
-    async def get_update_states(self, ids: Optional[Union[int, Iterable[int]]] = None):
+    async def get_update_states(self, ids: int | Iterable[int] | None = None):
         query = "SELECT id, pts, qts, date, seq FROM update_state"
 
         if ids is not None:
@@ -347,7 +363,7 @@ class SQLiteStorage(Storage):
         rows = self.conn.execute(query + " ORDER BY date ASC", state_ids).fetchall()
         return [UpdateState(*row) for row in rows]
 
-    async def set_update_state(self, update_state: Union[UpdateState, Iterable[UpdateState]]):
+    async def set_update_state(self, update_state: UpdateState | Iterable[UpdateState]):
         states = [update_state] if isinstance(update_state, UpdateState) else update_state
 
         self.conn.executemany(
@@ -426,37 +442,38 @@ class SQLiteStorage(Storage):
 
     async def _accessor(self, table: str, attr: str, value: Any = object):
         return (
-            await self._get(table, attr)
-            if value is object
-            else await self._set(table, attr, value)
+            await self._get(table, attr) if value is object else await self._set(table, attr, value)
         )
 
-    async def dc_id(self, value: int = object):
+    # `object` (the class, not an instance) is the sentinel for "no value passed"
+    #  (read the column instead of writing to it), so every accessor's parameter type
+    #  has to include it alongside the column's real type.
+    async def dc_id(self, value: int | type[object] = object):
         return await self._accessor("sessions", "dc_id", value)
 
-    async def server_address(self, value: str = object):
+    async def server_address(self, value: str | type[object] = object):
         return await self._accessor("sessions", "server_address", value)
 
-    async def port(self, value: int = object):
+    async def port(self, value: int | type[object] = object):
         return await self._accessor("sessions", "port", value)
 
-    async def api_id(self, value: int = object):
+    async def api_id(self, value: int | type[object] = object):
         return await self._accessor("sessions", "api_id", value)
 
-    async def test_mode(self, value: bool = object):
+    async def test_mode(self, value: bool | type[object] = object):
         return await self._accessor("sessions", "test_mode", value)
 
-    async def auth_key(self, value: bytes = object):
+    async def auth_key(self, value: bytes | type[object] = object):
         return await self._accessor("sessions", "auth_key", value)
 
-    async def date(self, value: int = object):
+    async def date(self, value: int | type[object] = object):
         return await self._accessor("sessions", "date", value)
 
-    async def user_id(self, value: int = object):
+    async def user_id(self, value: int | type[object] = object):
         return await self._accessor("sessions", "user_id", value)
 
-    async def is_bot(self, value: bool = object):
+    async def is_bot(self, value: bool | type[object] = object):
         return await self._accessor("sessions", "is_bot", value)
 
-    async def version(self, value: int = object):
+    async def version(self, value: int | type[object] = object):
         return await self._accessor("version", "number", value)

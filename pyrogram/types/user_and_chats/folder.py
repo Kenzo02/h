@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List, Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
@@ -93,26 +93,26 @@ class Folder(Object):
     def __init__(
         self,
         *,
-        client: Optional["pyrogram.Client"] = None,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-        entities: Optional[List["types.MessageEntity"]] = None,
-        animate_custom_emoji: Optional[bool] = None,
-        icon: Optional[str] = None,
-        color: Optional["enums.FolderColor"] = None,
-        is_shareable: Optional[bool] = None,
-        pinned_chats: Optional[List["types.Chat"]] = None,
-        included_chats: Optional[List["types.Chat"]] = None,
-        excluded_chats: Optional[List["types.Chat"]] = None,
-        exclude_muted: Optional[bool] = None,
-        exclude_read: Optional[bool] = None,
-        exclude_archived: Optional[bool] = None,
-        include_contacts: Optional[bool] = None,
-        include_non_contacts: Optional[bool] = None,
-        include_bots: Optional[bool] = None,
-        include_groups: Optional[bool] = None,
-        include_channels: Optional[bool] = None,
-        raw: Optional["raw.base.DialogFilter"] = None
+        client: pyrogram.Client | None = None,
+        id: int | None = None,
+        name: str | None = None,
+        entities: list[types.MessageEntity] | None = None,
+        animate_custom_emoji: bool | None = None,
+        icon: str | None = None,
+        color: enums.FolderColor | None = None,
+        is_shareable: bool | None = None,
+        pinned_chats: list[types.Chat] | None = None,
+        included_chats: list[types.Chat] | None = None,
+        excluded_chats: list[types.Chat] | None = None,
+        exclude_muted: bool | None = None,
+        exclude_read: bool | None = None,
+        exclude_archived: bool | None = None,
+        include_contacts: bool | None = None,
+        include_non_contacts: bool | None = None,
+        include_bots: bool | None = None,
+        include_groups: bool | None = None,
+        include_channels: bool | None = None,
+        raw: raw.base.DialogFilter | None = None,
     ):
         super().__init__(client)
 
@@ -137,7 +137,9 @@ class Folder(Object):
         self.raw = raw
 
     @staticmethod
-    async def _parse(client: "pyrogram.Client", folder: "raw.base.DialogFilter", users, chats) -> Optional["Folder"]:
+    async def _parse(
+        client: pyrogram.Client, folder: raw.base.DialogFilter, users, chats
+    ) -> Folder | None:
         if not folder:
             return
 
@@ -179,7 +181,7 @@ class Folder(Object):
             include_groups=getattr(folder, "groups", None),
             include_channels=getattr(folder, "broadcasts", None),
             raw=folder,
-            client=client
+            client=client,
         )
 
     async def delete(self) -> bool:
@@ -203,23 +205,23 @@ class Folder(Object):
 
     async def edit(
         self,
-        name: Optional[str] = None,
-        parse_mode: Optional["enums.ParseMode"] = None,
-        entities: Optional[List["types.MessageEntity"]] = None,
-        animate_custom_emoji: Optional[bool] = None,
-        icon: Optional[str] = None,
-        color: Optional["enums.FolderColor"] = None,
-        pinned_chats: Optional[List[Union[int, str]]] = None,
-        included_chats: Optional[List[Union[int, str]]] = None,
-        excluded_chats: Optional[List[Union[int, str]]] = None,
-        exclude_muted: Optional[bool] = None,
-        exclude_read: Optional[bool] = None,
-        exclude_archived: Optional[bool] = None,
-        include_contacts: Optional[bool] = None,
-        include_non_contacts: Optional[bool] = None,
-        include_bots: Optional[bool] = None,
-        include_groups: Optional[bool] = None,
-        include_channels: Optional[bool] = None
+        name: str | None = None,
+        parse_mode: enums.ParseMode | None = None,
+        entities: list[types.MessageEntity] | None = None,
+        animate_custom_emoji: bool | None = None,
+        icon: str | None = None,
+        color: enums.FolderColor | None = None,
+        pinned_chats: list[int | str] | None = None,
+        included_chats: list[int | str] | None = None,
+        excluded_chats: list[int | str] | None = None,
+        exclude_muted: bool | None = None,
+        exclude_read: bool | None = None,
+        exclude_archived: bool | None = None,
+        include_contacts: bool | None = None,
+        include_non_contacts: bool | None = None,
+        include_bots: bool | None = None,
+        include_groups: bool | None = None,
+        include_channels: bool | None = None,
     ) -> bool:
         """Bound method *update_peers* of :obj:`~pyrogram.types.Folder`.
 
@@ -302,7 +304,9 @@ class Folder(Object):
             True on success.
         """
         if name:
-            name, entities = (await utils.parse_text_entities(self, name, parse_mode, entities)).values()
+            name, entities = (
+                await utils.parse_text_entities(self, name, parse_mode, entities)
+            ).values()
             entities = entities or []
 
         return await self._client.edit_folder(
@@ -313,9 +317,15 @@ class Folder(Object):
             animate_custom_emoji=animate_custom_emoji or self.animate_custom_emoji,
             icon=icon or self.icon,
             color=color or self.color,
-            pinned_chats=[i.id for i in self.included_chats or []] if pinned_chats is None else pinned_chats,
-            included_chats=[i.id for i in self.included_chats or []] if included_chats is None else included_chats,
-            excluded_chats=[i.id for i in self.excluded_chats or []] if excluded_chats is None else excluded_chats,
+            pinned_chats=[i.id for i in self.included_chats or []]
+            if pinned_chats is None
+            else pinned_chats,
+            included_chats=[i.id for i in self.included_chats or []]
+            if included_chats is None
+            else included_chats,
+            excluded_chats=[i.id for i in self.excluded_chats or []]
+            if excluded_chats is None
+            else excluded_chats,
             exclude_muted=exclude_muted or self.exclude_muted,
             exclude_read=exclude_read or self.exclude_read,
             exclude_archived=exclude_archived or self.exclude_archived,
@@ -323,10 +333,10 @@ class Folder(Object):
             include_non_contacts=include_non_contacts or self.include_non_contacts,
             include_bots=include_bots or self.include_bots,
             include_groups=include_groups or self.include_groups,
-            include_channels=include_channels or self.include_channels
+            include_channels=include_channels or self.include_channels,
         )
 
-    async def include_chat(self, chat_id: Union[int, str]) -> bool:
+    async def include_chat(self, chat_id: int | str) -> bool:
         """Bound method *include_chat* of :obj:`~pyrogram.types.Folder`.
 
         Always include a chat in the folder.
@@ -358,7 +368,7 @@ class Folder(Object):
             included_chats=[i.id for i in self.included_chats or []] + [chat_id],
         )
 
-    async def exclude_chat(self, chat_id: Union[int, str]) -> bool:
+    async def exclude_chat(self, chat_id: int | str) -> bool:
         """Bound method *exclude_chat* of :obj:`~pyrogram.types.Folder`.
 
         Always exclude a chat from the folder.
@@ -390,7 +400,7 @@ class Folder(Object):
             excluded_chats=[i.id for i in self.excluded_chats or []] + [chat_id],
         )
 
-    async def pin_chat(self, chat_id: Union[int, str]):
+    async def pin_chat(self, chat_id: int | str) -> bool:
         """Bound method *pin_chat* of :obj:`~pyrogram.types.Folder`.
 
         Use as a shortcut for:
@@ -419,10 +429,10 @@ class Folder(Object):
         """
         return await self.edit(
             included_chats=[i.id for i in self.included_chats or []] + [chat_id],
-            pinned_chats=[i.id for i in self.pinned_chats or []] + [chat_id]
+            pinned_chats=[i.id for i in self.pinned_chats or []] + [chat_id],
         )
 
-    async def remove_chat(self, chat_id: Union[int, str]):
+    async def remove_chat(self, chat_id: int | str) -> bool:
         """Bound method *remove_chat* of :obj:`~pyrogram.types.Folder`.
 
         Remove chat in folder from included/excluded/pinned chats.
@@ -447,11 +457,10 @@ class Folder(Object):
         return await self.edit(
             pinned_chats=[i.id for i in self.pinned_chats or [] if peer_id != i.id],
             included_chats=[i.id for i in self.included_chats or [] if peer_id != i.id],
-            excluded_chats=[i.id for i in self.excluded_chats or [] if peer_id != i.id]
+            excluded_chats=[i.id for i in self.excluded_chats or [] if peer_id != i.id],
         )
 
-
-    async def update_color(self, color: "enums.FolderColor"):
+    async def update_color(self, color: enums.FolderColor) -> bool:
         """Bound method *update_color* of :obj:`~pyrogram.types.Folder`.
 
         Use as a shortcut for:
@@ -476,11 +485,11 @@ class Folder(Object):
         Returns:
             True on success.
         """
-        return await self.edit(
-            color=color
-        )
+        return await self.edit(color=color)
 
-    async def create_invite_link(self, name: Optional[str] = None, chat_ids: Optional[List[Union[int, str]]] = None) -> "types.FolderInviteLink":
+    async def create_invite_link(
+        self, name: (str | None) = None, chat_ids: (list[int | str] | None) = None
+    ) -> types.FolderInviteLink:
         """Bound method *create_invite_link* of :obj:`~pyrogram.types.Folder`.
 
         Use as a shortcut for:
@@ -498,10 +507,8 @@ class Folder(Object):
             :obj:`~pyrogram.types.FolderInviteLink`: On success, information about the invite link is returned.
         """
         if chat_ids is None:
-            chat_ids = [i.id for i in self.included_chats]
+            chat_ids = [i.id for i in self.included_chats or []]
 
         return await self._client.create_folder_invite_link(
-            chat_folder_id=self.id,
-            name=name,
-            chat_ids=chat_ids
+            chat_folder_id=self.id, name=name, chat_ids=chat_ids
         )

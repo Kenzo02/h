@@ -16,10 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
 
 from importlib import import_module
 from types import ModuleType
-from typing import Final, Set, Type
+from typing import Final
 
 import pytest
 
@@ -35,7 +36,7 @@ from pyrogram.errors import (
     PremiumSubActiveUntil,
     PreviousChatImportActiveWaitMin,
     RPCError,
-    StoryLiveAlready
+    StoryLiveAlready,
 )
 from pyrogram.errors.exceptions.all import exceptions
 from tests.unit.errors import RPC_NAME, raise_it
@@ -52,29 +53,17 @@ NAMED_ERRORS: Final[int] = 32
         pytest.param(420, "FLOOD_WAIT_42", FloodWait, "seconds", 42, id="seconds"),
         pytest.param(303, "PHONE_MIGRATE_2", PhoneMigrate, "dc_id", 2, id="dc-id"),
         pytest.param(400, "FILE_PART_3_MISSING", FilePartMissing, "file_part", 3, id="file-part"),
-        pytest.param(
-            400,
-            "FILE_REFERENCE_1_EXPIRED",
-            FileReferenceExpired,
-            "index",
-            1,
-            id="index"
-        ),
+        pytest.param(400, "FILE_REFERENCE_1_EXPIRED", FileReferenceExpired, "index", 1, id="index"),
         pytest.param(
             406,
             "PREVIOUS_CHAT_IMPORT_ACTIVE_WAIT_5MIN",
             PreviousChatImportActiveWaitMin,
             "minutes",
             5,
-            id="minutes"
+            id="minutes",
         ),
         pytest.param(
-            400,
-            "EMAIL_UNCONFIRMED_6",
-            EmailUnconfirmed,
-            "code_length",
-            6,
-            id="code-length"
+            400, "EMAIL_UNCONFIRMED_6", EmailUnconfirmed, "code_length", 6, id="code-length"
         ),
         pytest.param(
             403,
@@ -82,33 +71,22 @@ NAMED_ERRORS: Final[int] = 32
             AllowPaymentRequired,
             "star_count",
             25,
-            id="star-count"
+            id="star-count",
         ),
-        pytest.param(
-            400,
-            "STORY_LIVE_ALREADY_9",
-            StoryLiveAlready,
-            "story_id",
-            9,
-            id="story-id"
-        ),
+        pytest.param(400, "STORY_LIVE_ALREADY_9", StoryLiveAlready, "story_id", 9, id="story-id"),
         pytest.param(
             420,
             "PREMIUM_SUB_ACTIVE_UNTIL_1755561600",
             PremiumSubActiveUntil,
             "until_date",
             1755561600,
-            id="until-date"
+            id="until-date",
         ),
-        pytest.param(500, "AUTH_RESTART_7", AuthRestart, "debug_info", 7, id="debug-info")
-    ]
+        pytest.param(500, "AUTH_RESTART_7", AuthRestart, "debug_info", 7, id="debug-info"),
+    ],
 )
 def test_an_error_says_what_its_value_means(
-    code: int,
-    message: str,
-    error_type: Type[RPCError],
-    value_name: str,
-    value: int
+    code: int, message: str, error_type: type[RPCError], value_name: str, value: int
 ) -> None:
     with pytest.raises(error_type) as raised:
         raise_it(code, message=message)
@@ -169,14 +147,15 @@ def test_no_message_asks_for_more_than_one_value() -> None:
 
 def test_every_named_value_is_the_value_under_another_name() -> None:
     errors: ModuleType = import_module("pyrogram.errors")
-    named: Set[Type[RPCError]] = set()
+    named: set[type[RPCError]] = set()
 
     for table in exceptions.values():
         for class_name in table.values():
             error_type = getattr(errors, class_name)
 
             if error_type.VALUE_NAME == "value":
-                # `value` is the attribute itself, so nothing may sit on the class under that name.
+                # `value` is `RPCError`'s own property, so nothing may sit on a subclass under
+                #  that name.
                 assert "value" not in vars(error_type)
                 continue
 

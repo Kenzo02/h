@@ -51,9 +51,7 @@ def photo(video_sizes):
 async def test_emoji_markup_only_photo_keeps_sticker_without_animation():
     parsed = await types.ChatPhoto._parse(
         client=None,
-        chat_photo=photo(
-            [raw.types.VideoSizeEmojiMarkup(emoji_id=112233, background_colors=[])]
-        ),
+        chat_photo=photo([raw.types.VideoSizeEmojiMarkup(emoji_id=112233, background_colors=[])]),
         peer_id=PEER_ID,
         peer_access_hash=PEER_ACCESS_HASH,
     )
@@ -152,9 +150,7 @@ async def test_photo_with_video_size_keeps_animation_and_sticker_semantics():
         (photo([]), None, None),
     ],
 )
-async def test_chat_photo_preserves_legacy_flags(
-    chat_photo, has_animation, is_personal
-):
+async def test_chat_photo_preserves_legacy_flags(chat_photo, has_animation, is_personal):
     parsed = await types.ChatPhoto._parse(
         client=None,
         chat_photo=chat_photo,

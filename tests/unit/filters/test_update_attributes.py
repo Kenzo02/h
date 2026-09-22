@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import inspect
 from datetime import datetime
 
@@ -61,11 +63,15 @@ def in_private(update_type, **kwargs):
 
 
 def inline_query(from_user: User) -> InlineQuery:
-    return InlineQuery(id="1", from_user=from_user, query="", offset="", chat_type=enums.ChatType.PRIVATE)
+    return InlineQuery(
+        id="1", from_user=from_user, query="", offset="", chat_type=enums.ChatType.PRIVATE
+    )
 
 
 def pre_checkout_query(from_user: User) -> PreCheckoutQuery:
-    return PreCheckoutQuery(id="1", from_user=from_user, currency="XTR", total_amount=1, invoice_payload="x")
+    return PreCheckoutQuery(
+        id="1", from_user=from_user, currency="XTR", total_amount=1, invoice_payload="x"
+    )
 
 
 def poll() -> Poll:
@@ -83,7 +89,9 @@ WITHOUT_A_CHAT = [
     pytest.param(inline_query(SOMEONE), id="inline_query"),
     pytest.param(pre_checkout_query(SOMEONE), id="pre_checkout_query"),
     pytest.param(poll(), id="poll"),
-    pytest.param(CallbackQuery(id="1", from_user=SOMEONE), id="callback_query_on_an_inline_message"),
+    pytest.param(
+        CallbackQuery(id="1", from_user=SOMEONE), id="callback_query_on_an_inline_message"
+    ),
 ]
 
 FROM_A_BOT = [
@@ -161,7 +169,7 @@ async def test_message_filters_are_unchanged():
 async def test_chat_me_is_saved_messages_and_nothing_else():
     """`filters.chat("me")` means the chat whose id is your own user id.
 
-    It used to test the sender instead — `is_self and not outgoing` — which is
+    It used to test the sender instead (`is_self and not outgoing`), which is
     also true of an update you caused in a chat that is not Saved Messages.
     """
     assert await filters.chat("me")(CLIENT, Message(id=1, chat=SAVED_MESSAGES, from_user=MYSELF))
@@ -192,13 +200,14 @@ async def test_me_added_to_the_container_after_the_fact_still_matches():
 
 
 UPDATE_TYPES = [
-    one for one in vars(types).values()
+    one
+    for one in vars(types).values()
     if inspect.isclass(one) and issubclass(one, Update) and one is not Update
 ]
 
 
 def carries(update_type, field: str) -> bool:
-    """Whether `update_type` answers `field` -- as an `__init__` argument or as a property.
+    """Whether `update_type` answers `field`, as an `__init__` argument or as a property.
 
     The property is looked up in the class dictionaries along the MRO rather than read off
     the class, so it is found as the descriptor it is instead of being evaluated.
@@ -217,6 +226,9 @@ def carries(update_type, field: str) -> bool:
         ("sender_chat", filters._WITH_A_SENDER_CHAT),
         ("outgoing", filters._CAN_BE_OUTGOING),
         ("message", filters._WITH_A_MESSAGE),
+        ("user", filters._WITH_A_SENDER_NAMED_USER),
+        ("actor_chat", filters._WITH_A_SENDER_CHAT_NAMED_ACTOR_CHAT),
+        ("boost", filters._WITH_A_BOOSTER),
     ],
 )
 def test_the_filters_name_every_update_type_that_carries_the_field(field, declared):
@@ -256,7 +268,9 @@ def business_message() -> Message:
 @pytest.mark.asyncio
 async def test_business_reads_the_message_the_update_is_about():
     assert await filters.business(CLIENT, business_message())
-    assert await filters.business(CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=business_message()))
+    assert await filters.business(
+        CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=business_message())
+    )
     assert not await filters.business(CLIENT, Message(id=1, chat=PRIVATE))
 
 
@@ -265,7 +279,9 @@ async def test_linked_channel_reads_the_message_the_update_is_about():
     forwarded = Message(id=1, chat=CHANNEL, **FROM_THE_LINKED_CHANNEL)
 
     assert await filters.linked_channel(CLIENT, forwarded)
-    assert await filters.linked_channel(CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=forwarded))
+    assert await filters.linked_channel(
+        CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=forwarded)
+    )
     assert not await filters.linked_channel(CLIENT, Message(id=1, chat=CHANNEL))
 
 
@@ -274,7 +290,9 @@ async def test_topic_reads_the_message_the_update_is_about():
     in_a_topic = Message(id=1, chat=PRIVATE, topic=A_TOPIC)
 
     assert await filters.topic(13)(CLIENT, in_a_topic)
-    assert await filters.topic(13)(CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=in_a_topic))
+    assert await filters.topic(13)(
+        CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=in_a_topic)
+    )
     assert not await filters.topic(1)(CLIENT, in_a_topic)
     assert not await filters.topic(13)(CLIENT, Message(id=1, chat=PRIVATE))
 
@@ -302,10 +320,94 @@ def test_callback_query_chat_stays_out_of_the_serialized_form():
     """`chat` is derived, so it must not show up next to `message` in the output.
 
     `Object.default()` and `Object.__repr__()` walk `__dict__`, and `bind()`
-    documents `eval(repr(obj))` as supported — an attribute here would repeat the
+    documents `eval(repr(obj))` as supported, so an attribute here would repeat the
     whole chat in the JSON and feed `__init__` a keyword it does not take.
     """
     query = in_private(CallbackQuery, from_user=SOMEONE)
 
     assert "chat" not in query.__dict__
     assert repr(query).count("Chat(") == 1
+
+
+def a_reaction(
+    *,
+    user: User | None = None,
+    actor_chat: Chat | None = None,
+) -> types.MessageReactionUpdated:
+    return types.MessageReactionUpdated(
+        chat=CHANNEL,
+        message_id=1,
+        date=DATE,
+        old_reaction=[],
+        new_reaction=[],
+        user=user,
+        actor_chat=actor_chat,
+    )
+
+
+def a_boost(from_user: User) -> types.ChatBoostUpdated:
+    return types.ChatBoostUpdated(
+        chat=CHANNEL,
+        boost=types.ChatBoost(
+            id="1", date=DATE, expire_date=DATE, multiplier=1, from_user=from_user
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_user_status_update_is_its_own_sender() -> None:
+    """`UpdateUserStatus` is parsed into the `User` it is about and nothing else.
+
+    So `@app.on_user_status(filters.user(42))` had no sender to read and never fired,
+    even though the update names the user it is about.
+    """
+    assert await filters.user(42)(CLIENT, SOMEONE)
+    assert await filters.user("someone")(CLIENT, SOMEONE)
+    assert not await filters.user("nobody")(CLIENT, SOMEONE)
+
+    assert await filters.me(CLIENT, MYSELF)
+    assert await filters.bot(CLIENT, A_BOT)
+
+
+@pytest.mark.asyncio
+async def test_a_reaction_reads_the_user_that_reacted() -> None:
+    assert await filters.user(42)(CLIENT, a_reaction(user=SOMEONE))
+    assert await filters.user("someone")(CLIENT, a_reaction(user=SOMEONE))
+    assert await filters.bot(CLIENT, a_reaction(user=A_BOT))
+    assert not await filters.user(42)(CLIENT, a_reaction(actor_chat=CHANNEL))
+
+
+@pytest.mark.asyncio
+async def test_a_reaction_left_anonymously_reads_the_chat_it_was_left_as() -> None:
+    assert await filters.sender_chat(CLIENT, a_reaction(actor_chat=CHANNEL))
+    assert not await filters.sender_chat(CLIENT, a_reaction(user=SOMEONE))
+
+    # The chat the message lives in keeps answering, whoever reacted.
+    assert await filters.channel(CLIENT, a_reaction(user=SOMEONE))
+
+
+@pytest.mark.asyncio
+async def test_a_boost_reads_the_user_that_boosted() -> None:
+    assert await filters.user(42)(CLIENT, a_boost(SOMEONE))
+    assert await filters.user("someone")(CLIENT, a_boost(SOMEONE))
+    assert await filters.me(CLIENT, a_boost(MYSELF))
+    assert not await filters.user(42)(CLIENT, types.ChatBoostUpdated(chat=CHANNEL, boost=None))
+
+
+@pytest.mark.asyncio
+async def test_a_callback_query_reads_the_sender_chat_of_its_message() -> None:
+    """A button under a channel post: the post has a sender chat, the query has none of its own."""
+    posted_as_the_channel = Message(id=1, chat=CHANNEL, sender_chat=CHANNEL)
+
+    assert await filters.sender_chat(
+        CLIENT, CallbackQuery(id="1", from_user=SOMEONE, message=posted_as_the_channel)
+    )
+    assert not await filters.sender_chat(CLIENT, in_private(CallbackQuery, from_user=SOMEONE))
+    assert not await filters.sender_chat(CLIENT, CallbackQuery(id="1", from_user=SOMEONE))
+
+
+def test_the_filters_name_every_update_type_that_is_a_user() -> None:
+    """`_IS_ITS_OWN_SENDER` cannot be checked by field, the way the tuples above are."""
+    assert {one.__name__ for one in UPDATE_TYPES if issubclass(one, User)} == {
+        one.__name__ for one in filters._IS_ITS_OWN_SENDER
+    }

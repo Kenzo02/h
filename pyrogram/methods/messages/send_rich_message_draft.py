@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional, Union
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, types
@@ -24,11 +24,13 @@ from pyrogram import raw, types
 
 class SendRichMessageDraft:
     async def send_rich_message_draft(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         draft_id: int,
-        rich_message: "types.InputRichMessage",
-        message_thread_id: Optional[int] = None,
+        rich_message: types.InputRichMessage,
+        message_thread_id: int | None = None,
+        can_stop: bool | None = None,
+        keep_on_stop: bool | None = None,
     ) -> bool:
         """Use this method to stream a partial rich message to a user while the message is being generated.
 
@@ -52,6 +54,14 @@ class SendRichMessageDraft:
 
             message_thread_id (``int``, *optional*):
                 Unique identifier for the target message thread.
+
+            can_stop (``bool``, *optional*):
+                Pass *True* to show the user a button to stop further drafts.
+
+            keep_on_stop (``bool``, *optional*):
+                Pass *True* to keep the draft in the chat when the button is pressed.
+                The draft will still disappear after a short time or if the bot sends a message.
+                To fully preserve the partial draft, the bot should send it as a new message.
 
         Returns:
             ``bool``: On success, True is returned.
@@ -86,7 +96,12 @@ class SendRichMessageDraft:
                 peer=await self.resolve_peer(chat_id),
                 action=raw.types.InputSendMessageRichMessageDraftAction(
                     random_id=draft_id,
-                    rich_message=rich_message.write(),
+                    rich_message=await rich_message.write(
+                        client=self,
+                        chat_id=chat_id,
+                    ),
+                    can_stop=can_stop,
+                    keep_on_stop=keep_on_stop,
                 ),
                 top_msg_id=message_thread_id,
             )

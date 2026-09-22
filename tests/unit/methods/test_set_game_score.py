@@ -41,4 +41,4 @@ async def test_set_game_score_preserves_legacy_all_positional_mapping():
     assert client.query.id == 17
     assert client.query.score == 900
     assert client.query.force is True
-    assert client.query.edit_message is None
+    assert client.query.edit_message is False

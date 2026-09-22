@@ -16,35 +16,37 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import logging
-from typing import Optional, Union
 
 import pyrogram
 from pyrogram import raw, types, utils
 
 log = logging.getLogger(__name__)
 
+
 class SendGame:
     async def send_game(
-        self: "pyrogram.Client",
-        chat_id: Union[int, str],
+        self: pyrogram.Client,
+        chat_id: int | str,
         game_short_name: str,
-        disable_notification: Optional[bool] = None,
-        message_thread_id: Optional[int] = None,
-        effect_id: Optional[int] = None,
-        reply_parameters: Optional["types.ReplyParameters"] = None,
-        protect_content: Optional[bool] = None,
-        allow_paid_broadcast: Optional[bool] = None,
-        reply_markup: Optional[Union[
-            "types.InlineKeyboardMarkup",
-            "types.ReplyKeyboardMarkup",
-            "types.ReplyKeyboardRemove",
-            "types.ForceReply",
-        ]] = None,
-
-        reply_to_message_id: Optional[int] = None,
-        reply_to_chat_id: Optional[Union[int, str]] = None,
-    ) -> Optional["types.Message"]:
+        disable_notification: bool | None = None,
+        message_thread_id: int | None = None,
+        effect_id: int | None = None,
+        reply_parameters: types.ReplyParameters | None = None,
+        protect_content: bool | None = None,
+        allow_paid_broadcast: bool | None = None,
+        reply_markup: (
+            types.InlineKeyboardMarkup
+            | types.ReplyKeyboardMarkup
+            | types.ReplyKeyboardRemove
+            | types.ForceReply
+            | None
+        ) = None,
+        reply_to_message_id: int | None = None,
+        reply_to_chat_id: int | str | None = None,
+    ) -> types.Message | None:
         """Send a game.
 
         .. include:: /_includes/usable-by/bots.rst
@@ -107,8 +109,7 @@ class SendGame:
                 )
 
             reply_parameters = types.ReplyParameters(
-                chat_id=reply_to_chat_id,
-                message_id=reply_to_message_id
+                chat_id=reply_to_chat_id, message_id=reply_to_message_id
             )
 
         r = await self.invoke(
@@ -116,22 +117,17 @@ class SendGame:
                 peer=await self.resolve_peer(chat_id),
                 media=raw.types.InputMediaGame(
                     id=raw.types.InputGameShortName(
-                        bot_id=raw.types.InputUserSelf(),
-                        short_name=game_short_name
+                        bot_id=raw.types.InputUserSelf(), short_name=game_short_name
                     ),
                 ),
                 message="",
-                silent=disable_notification or None,
-                reply_to=await utils.get_reply_to(
-                    self,
-                    reply_parameters,
-                    message_thread_id
-                ),
+                silent=disable_notification,
+                reply_to=await utils.get_reply_to(self, reply_parameters, message_thread_id),
                 random_id=self.rnd_id(),
                 noforwards=protect_content,
                 allow_paid_floodskip=allow_paid_broadcast,
                 reply_markup=await reply_markup.write(self) if reply_markup else None,
-                effect=effect_id
+                effect=effect_id,
             )
         )
 

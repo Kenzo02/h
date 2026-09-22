@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional
+from __future__ import annotations as _annotations
 
 from pyrogram import types, raw
 from ..object import Object
@@ -40,9 +40,9 @@ class BusinessIntro(Object):
     def __init__(
         self,
         *,
-        title: Optional[str] = None,
-        text: Optional[str] = None,
-        sticker: Optional["types.Sticker"] = None
+        title: str | None = None,
+        text: str | None = None,
+        sticker: types.Sticker | None = None,
     ):
         super().__init__()
 
@@ -50,27 +50,19 @@ class BusinessIntro(Object):
         self.text = text
         self.sticker = sticker
 
-
     @staticmethod
-    async def _parse(
-        client,
-        business_intro: "raw.types.BusinessIntro"
-    ) -> "BusinessIntro":
+    async def _parse(client, business_intro: raw.types.BusinessIntro) -> BusinessIntro:
         if not business_intro:
             return None
-        
+
         doc = getattr(business_intro, "sticker", None)
         sticker = None
 
         if doc and isinstance(doc, raw.types.Document):
-            sticker = await types.Sticker._parse(
-                client,
-                doc,
-                {type(i): i for i in doc.attributes}
-            )
+            sticker = await types.Sticker._parse(client, doc, {type(i): i for i in doc.attributes})
 
         return BusinessIntro(
             title=getattr(business_intro, "title", None),
             text=getattr(business_intro, "description", None),
-            sticker=sticker
+            sticker=sticker,
         )

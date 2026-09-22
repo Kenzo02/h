@@ -16,16 +16,20 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING, Any, Callable
+from __future__ import annotations as _annotations
+
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
 
 from .handler import Handler
 
 if TYPE_CHECKING:
     import pyrogram
-    from pyrogram import types
+
+StopCallbackType = Callable[["pyrogram.Client"], Any]
 
 
-class StopHandler(Handler):
+class StopHandler(Handler[StopCallbackType]):
     """The Stop handler class. Used to handle client stop. It is intended to be used with
     :meth:`~pyrogram.Client.add_handler`
 
@@ -43,5 +47,5 @@ class StopHandler(Handler):
             is established.
     """
 
-    def __init__(self, callback: Callable[["pyrogram.Client"], Any]):
+    def __init__(self, callback: StopCallbackType) -> None:
         super().__init__(callback)

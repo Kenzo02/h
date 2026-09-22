@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 from datetime import datetime
-from typing import Dict, List, Optional
 
 import pyrogram
 from pyrogram import raw, types, utils
@@ -40,18 +41,18 @@ class MessageReactionCountUpdated(Object, Update):
         date (:py:obj:`~datetime.datetime`):
             Date of change of the reaction.
 
-        reactions (:obj:`~pyrogram.types.ReactionCount`):
+        reactions (List of :obj:`~pyrogram.types.Reaction`):
             List of reactions that are present on the message.
     """
 
     def __init__(
         self,
         *,
-        client: Optional["pyrogram.Client"] = None,
-        chat: "types.Chat",
+        client: pyrogram.Client | None = None,
+        chat: types.Chat,
         message_id: int,
         date: datetime,
-        reactions: List["types.ReactionCount"]
+        reactions: list[types.Reaction],
     ):
         super().__init__(client)
 
@@ -62,11 +63,11 @@ class MessageReactionCountUpdated(Object, Update):
 
     @staticmethod
     async def _parse(
-        client: "pyrogram.Client",
-        update: "raw.types.UpdateBotMessageReactions",
-        users: Dict[int, "raw.types.User"],
-        chats: Dict[int, "raw.types.Chat"]
-    ) -> "MessageReactionCountUpdated":
+        client: pyrogram.Client,
+        update: raw.types.UpdateBotMessageReactions,
+        users: dict[int, raw.types.User],
+        chats: dict[int, raw.types.Chat],
+    ) -> MessageReactionCountUpdated:
         peer_id = utils.get_peer_id(update.peer)
         raw_peer_id = utils.get_raw_peer_id(update.peer)
 
@@ -81,9 +82,6 @@ class MessageReactionCountUpdated(Object, Update):
             message_id=update.msg_id,
             date=utils.timestamp_to_datetime(update.date),
             reactions=[
-                types.Reaction._parse_count(
-                    client,
-                    reaction
-                ) for reaction in update.reactions
-            ]
+                types.Reaction._parse_count(client, reaction) for reaction in update.reactions
+            ],
         )

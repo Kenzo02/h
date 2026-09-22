@@ -16,13 +16,18 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import io
-import pathlib
+import os
 import re
-from typing import BinaryIO, Callable, List, Optional, Union
+from pathlib import Path
+from typing import BinaryIO
+from collections.abc import Callable
 
 import pyrogram
 from pyrogram import raw, utils
+from pyrogram._typing import PathType
 from pyrogram.file_id import FileType
 
 from ... import enums
@@ -35,7 +40,7 @@ class InputMediaPhoto(InputMedia):
     It is intended to be used with :obj:`~pyrogram.Client.send_media_group`.
 
     Parameters:
-        media (``str`` | ``BinaryIO``):
+        media (``str`` | ``os.PathLike`` | ``BinaryIO``):
             Photo to send.
             Pass a file_id as string to send a photo that exists on the Telegram servers or
             pass a file path as string to upload a new photo that exists on your local machine or
@@ -55,15 +60,18 @@ class InputMediaPhoto(InputMedia):
 
         has_spoiler (``bool``, *optional*):
             Pass True if the photo needs to be covered with a spoiler animation.
+
+    Raises:
+        FileNotFoundError: In case a local ``os.PathLike`` doesn't point to an existing file.
     """
 
     def __init__(
         self,
-        media: Union[str, BinaryIO],
+        media: PathType | BinaryIO,
         caption: str = "",
-        parse_mode: Optional["enums.ParseMode"] = None,
-        caption_entities: Optional[List[MessageEntity]] = None,
-        has_spoiler: Optional[bool] = None
+        parse_mode: enums.ParseMode | None = None,
+        caption_entities: list[MessageEntity] | None = None,
+        has_spoiler: bool | None = None,
     ):
         super().__init__(media, caption, parse_mode, caption_entities)
 
@@ -72,19 +80,19 @@ class InputMediaPhoto(InputMedia):
     async def write(
         self,
         *,
-        client: "pyrogram.Client",
-        chat_id: Optional[Union[int, str]] = None,
-        progress: Optional[Callable] = None,
+        client: pyrogram.Client,
+        chat_id: int | str | None = None,
+        progress: Callable | None = None,
         progress_args: tuple = (),
-        ttl_seconds: Optional[int] = None,
-        **kwargs
-    ) -> "raw.base.InputMedia":
+        ttl_seconds: int | None = None,
+        **kwargs,
+    ) -> raw.base.InputMedia:
         if chat_id is None:
             peer = raw.types.InputPeerSelf()
         else:
             peer = await client.resolve_peer(chat_id)
 
-        if isinstance(self.media, io.BytesIO) or pathlib.Path(self.media).is_file():
+        if isinstance(self.media, io.BytesIO) or Path(self.media).is_file():
             uploaded_media = await client.invoke(
                 raw.functions.messages.UploadMedia(
                     peer=peer,
@@ -107,6 +115,9 @@ class InputMediaPhoto(InputMedia):
                 spoiler=self.has_spoiler,
                 ttl_seconds=ttl_seconds,
             )
+
+        if isinstance(self.media, os.PathLike):
+            raise FileNotFoundError(f"No such file or directory: {self.media}")
 
         if re.match("^https?://", self.media):
             return raw.types.InputMediaPhotoExternal(

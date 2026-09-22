@@ -1,3 +1,5 @@
+from __future__ import annotations as _annotations
+
 import asyncio
 import base64
 import errno
@@ -70,7 +72,9 @@ def test_endpoint_cache_path_does_not_fall_back_to_a_shared_cache(monkeypatch, t
     monkeypatch.setattr(dc_options, "ensure_endpoint_cache_dir", lambda path: False, raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path, raising=False)
 
-    assert dc_options.endpoint_cache_path() == tmp_path / ".cache" / "kurigram" / "dc_endpoints.json"
+    assert (
+        dc_options.endpoint_cache_path() == tmp_path / ".cache" / "kurigram" / "dc_endpoints.json"
+    )
 
 
 def test_update_endpoint_cache_writes_private_files_atomically(monkeypatch, tmp_path: Path):
@@ -90,7 +94,9 @@ def test_update_endpoint_cache_writes_private_files_atomically(monkeypatch, tmp_
     assert not list(cache_file.parent.glob(f".{cache_file.name}.*.tmp"))
 
 
-def test_endpoint_cache_rejects_directory_symlink_without_touching_target(monkeypatch, tmp_path: Path):
+def test_endpoint_cache_rejects_directory_symlink_without_touching_target(
+    monkeypatch, tmp_path: Path
+):
     target_dir = tmp_path / "target"
     target_dir.mkdir()
     target_cache = target_dir / "dc_endpoints.json"
@@ -109,7 +115,9 @@ def test_endpoint_cache_rejects_directory_symlink_without_touching_target(monkey
     assert not list(target_dir.glob("*.tmp"))
 
 
-def test_endpoint_cache_rejects_cache_file_symlink_without_touching_target(monkeypatch, tmp_path: Path):
+def test_endpoint_cache_rejects_cache_file_symlink_without_touching_target(
+    monkeypatch, tmp_path: Path
+):
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     target_cache = tmp_path / "target.json"
@@ -129,7 +137,9 @@ def test_endpoint_cache_rejects_cache_file_symlink_without_touching_target(monke
     assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
 
 
-def test_endpoint_cache_rejects_lock_file_symlink_without_touching_target(monkeypatch, tmp_path: Path):
+def test_endpoint_cache_rejects_lock_file_symlink_without_touching_target(
+    monkeypatch, tmp_path: Path
+):
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     target_lock = tmp_path / "target.lock"
@@ -193,6 +203,7 @@ else:
         cwd=repo_root,
         env={**os.environ, "PYTHONPATH": str(repo_root)},
         capture_output=True,
+        check=False,
         text=True,
         timeout=2,
     )
@@ -227,10 +238,15 @@ def test_endpoint_cache_accepts_trusted_sticky_root_ancestor(monkeypatch, tmp_pa
 
     dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
 
-    assert json.loads(cache_file.read_text())["endpoints"]["prod:v4:dc5:api"]["server_address"] == DC5_FALLBACK
+    assert (
+        json.loads(cache_file.read_text())["endpoints"]["prod:v4:dc5:api"]["server_address"]
+        == DC5_FALLBACK
+    )
 
 
-def test_endpoint_cache_rejects_unowned_descendant_after_sticky_ancestor(monkeypatch, tmp_path: Path):
+def test_endpoint_cache_rejects_unowned_descendant_after_sticky_ancestor(
+    monkeypatch, tmp_path: Path
+):
     if not hasattr(os, "getuid"):
         pytest.skip("POSIX ownership is unavailable")
 
@@ -277,7 +293,10 @@ def test_endpoint_cache_accepts_real_root_owned_sticky_tmp(monkeypatch):
 
         dc_options.update_endpoint_cache("prod:v4:dc5:api", (DC5_FALLBACK, 443))
 
-        assert json.loads(cache_file.read_text())["endpoints"]["prod:v4:dc5:api"]["server_address"] == DC5_FALLBACK
+        assert (
+            json.loads(cache_file.read_text())["endpoints"]["prod:v4:dc5:api"]["server_address"]
+            == DC5_FALLBACK
+        )
 
 
 @pytest.mark.parametrize("error_type", [NotImplementedError, TypeError])
@@ -384,7 +403,9 @@ def test_endpoint_cache_rejects_lock_hardlink_without_touching_target(monkeypatc
     assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
 
 
-def test_endpoint_cache_retries_existing_file_after_exclusive_create_race(monkeypatch, tmp_path: Path):
+def test_endpoint_cache_retries_existing_file_after_exclusive_create_race(
+    monkeypatch, tmp_path: Path
+):
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     lock_name = "dc_endpoints.json.lock"
@@ -481,8 +502,13 @@ dc_options.update_endpoint_cache(sys.argv[2], (sys.argv[3], 443))
         )
     ]
 
-    assert [process.wait() for process in processes] == [0, 0]
-    assert all("Unable to secure DC endpoint cache lock" not in process.stderr for process in processes)
+    completed = [process.communicate() for process in processes]
+
+    assert [process.returncode for process in processes] == [0, 0]
+
+    for _, stderr in completed:
+        assert stderr is not None
+        assert "Unable to secure DC endpoint cache lock" not in stderr
 
     cache = dc_options.load_endpoint_cache(cache_file)
 
@@ -554,7 +580,9 @@ async def test_dc5_string_session_client_connect_falls_back_same_dc(monkeypatch,
     monkeypatch.setattr(Session, "send", fake_send)
     monkeypatch.setattr(Session, "recv_worker", fake_recv_worker)
     monkeypatch.setattr(Session, "ping_worker", fake_ping_worker)
-    monkeypatch.setattr("pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "empty-cache.json")
+    monkeypatch.setattr(
+        "pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "empty-cache.json"
+    )
     monkeypatch.setattr("pyrogram.dc_options.probe_tcp_endpoint", fake_probe)
 
     client = Client(
@@ -582,20 +610,26 @@ async def test_dc5_string_session_client_connect_falls_back_same_dc(monkeypatch,
 
 
 @pytest.mark.asyncio
-async def test_dc5_string_session_uses_cached_same_dc_endpoint_before_probing(monkeypatch, tmp_path: Path):
+async def test_dc5_string_session_uses_cached_same_dc_endpoint_before_probing(
+    monkeypatch, tmp_path: Path
+):
     attempts = []
     probes = []
     cache_file = tmp_path / "dc-endpoints.json"
-    cache_file.write_text(json.dumps({
-        "version": 1,
-        "endpoints": {
-            "prod:v4:dc5:api": {
-                "server_address": DC5_FALLBACK,
-                "port": 443,
-                "updated_at": 1,
-            },
-        },
-    }))
+    cache_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "endpoints": {
+                    "prod:v4:dc5:api": {
+                        "server_address": DC5_FALLBACK,
+                        "port": 443,
+                        "updated_at": 1,
+                    },
+                },
+            }
+        )
+    )
     auth_key = b"c" * 256
     session_string = encode_session_string(
         Storage.SESSION_STRING_FORMAT,
@@ -646,7 +680,9 @@ async def test_dc5_string_session_uses_cached_same_dc_endpoint_before_probing(mo
 
 
 @pytest.mark.asyncio
-async def test_startup_stored_custom_endpoint_is_not_preempted_by_static_fallback(monkeypatch, tmp_path: Path):
+async def test_startup_stored_custom_endpoint_is_not_preempted_by_static_fallback(
+    monkeypatch, tmp_path: Path
+):
     attempts = []
     probes = []
     custom_address = "203.0.113.10"
@@ -665,7 +701,9 @@ async def test_startup_stored_custom_endpoint_is_not_preempted_by_static_fallbac
         probes.append((server_address, port))
         return True, 0.010, None
 
-    monkeypatch.setattr("pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json")
+    monkeypatch.setattr(
+        "pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json"
+    )
     monkeypatch.setattr(Session, "send", fake_send)
     monkeypatch.setattr(Session, "recv_worker", fake_recv_worker)
     monkeypatch.setattr(Session, "ping_worker", fake_ping_worker)
@@ -689,7 +727,9 @@ async def test_startup_stored_custom_endpoint_is_not_preempted_by_static_fallbac
 
 
 @pytest.mark.asyncio
-async def test_startup_stored_custom_endpoint_failure_does_not_try_static_fallback(monkeypatch, tmp_path: Path):
+async def test_startup_stored_custom_endpoint_failure_does_not_try_static_fallback(
+    monkeypatch, tmp_path: Path
+):
     attempts = []
     custom_address = "203.0.113.10"
     client = make_loaded_client(
@@ -701,7 +741,9 @@ async def test_startup_stored_custom_endpoint_failure_does_not_try_static_fallba
     async def fail_probe(*args, **kwargs):
         raise AssertionError("custom startup endpoint must not use endpoint probes")
 
-    monkeypatch.setattr("pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json")
+    monkeypatch.setattr(
+        "pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json"
+    )
     monkeypatch.setattr("pyrogram.dc_options.probe_tcp_endpoint", fail_probe)
 
     with pytest.raises(ConnectionError):
@@ -776,10 +818,12 @@ async def test_dc5_successful_fallback_updates_endpoint_cache(monkeypatch, tmp_p
 
 @pytest.mark.asyncio
 async def test_get_dc_option_prefers_fastest_reachable_same_dc_endpoint(monkeypatch):
-    client = make_endpoint_client([
-        dc_option(5, DC5_CONFIG_ENDPOINT),
-        dc_option(4, "149.154.167.91"),
-    ])
+    client = make_endpoint_client(
+        [
+            dc_option(5, DC5_CONFIG_ENDPOINT),
+            dc_option(4, "149.154.167.91"),
+        ]
+    )
     probes = []
 
     async def fake_probe(server_address, port, timeout):
@@ -816,7 +860,9 @@ async def test_set_dc_keeps_current_reachable_same_dc_endpoint(monkeypatch, tmp_
         return True, 0.020, None
 
     monkeypatch.setattr("pyrogram.dc_options.probe_tcp_endpoint", fake_probe)
-    monkeypatch.setattr("pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json")
+    monkeypatch.setattr(
+        "pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json"
+    )
 
     await client.set_dc(dc_id=5)
 
@@ -837,7 +883,9 @@ async def test_set_dc_preserves_explicit_custom_endpoint(monkeypatch, tmp_path: 
         raise AssertionError("explicit set_dc endpoint must not use endpoint probes")
 
     monkeypatch.setattr("pyrogram.dc_options.probe_tcp_endpoint", fail_probe)
-    monkeypatch.setattr("pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json")
+    monkeypatch.setattr(
+        "pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json"
+    )
 
     await client.set_dc(dc_id=5, server_address=custom_address, port=443)
 
@@ -858,7 +906,9 @@ async def test_set_dc_preserves_explicit_custom_address_without_port(monkeypatch
         raise AssertionError("explicit set_dc address must not use endpoint probes")
 
     monkeypatch.setattr("pyrogram.dc_options.probe_tcp_endpoint", fail_probe)
-    monkeypatch.setattr("pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json")
+    monkeypatch.setattr(
+        "pyrogram.dc_options.endpoint_cache_path", lambda: tmp_path / "dc-cache.json"
+    )
 
     await client.set_dc(dc_id=5, server_address=custom_address)
 
@@ -1288,12 +1338,22 @@ async def test_dc5_session_start_falls_back_to_same_dc_endpoint(monkeypatch, cap
         assert session.server_address == DC5_FALLBACK
         assert session.port == 443
         assert session.fallback_endpoints[0] == (DC5_FALLBACK, 443)
+        assert not session._must_stay_stopped
         assert send_calls
         assert "DC5" in caplog.text
         assert DC5_PRIMARY in caplog.text
         assert DC5_FALLBACK in caplog.text
         assert "OSError" in caplog.text
         assert (b"s" * 256).hex() not in caplog.text
+
+        await session.restart()
+
+        assert attempts == [
+            (DC5_PRIMARY, 443),
+            (DC5_FALLBACK, 443),
+            (DC5_FALLBACK, 443),
+        ]
+        assert session.is_started.is_set()
     finally:
         await session.stop()
 
@@ -1327,6 +1387,75 @@ async def test_session_start_raises_when_all_endpoints_fail(monkeypatch):
 
     assert attempts == [(DC5_PRIMARY, 443), (DC5_FALLBACK, 443)]
     assert not session.is_started.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connect_result", [OSError("timed out"), None], ids=["error", "success"])
+async def test_terminal_stop_during_primary_connect_never_tries_a_fallback(
+    monkeypatch, connect_result
+):
+    attempts = []
+    entered_connect = asyncio.Event()
+    release_connect = asyncio.Event()
+    connections = []
+
+    class BlockingConnection(FailingConnection):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.close_calls = 0
+            self.transport_open = False
+
+        async def connect(self):
+            if self.server_address == DC5_PRIMARY:
+                entered_connect.set()
+                await release_connect.wait()
+
+                if connect_result is not None:
+                    raise connect_result
+
+                self.transport_open = True
+
+        async def close(self):
+            self.close_calls += 1
+            self.transport_open = False
+
+    def connection_factory(**kwargs):
+        connection = BlockingConnection(attempts, {}, **kwargs)
+        connections.append(connection)
+        return connection
+
+    client = make_client(asyncio.get_running_loop(), attempts, {})
+    client.connection_factory = connection_factory
+    send_calls = []
+
+    async def fake_send(self, query, *args, **kwargs):
+        send_calls.append(query)
+        return object()
+
+    monkeypatch.setattr(Session, "send", fake_send)
+
+    session = Session(
+        client,
+        5,
+        DC5_PRIMARY,
+        443,
+        b"s" * 256,
+        False,
+        fallback_endpoints=((DC5_PRIMARY, 443), (DC5_FALLBACK, 443)),
+    )
+    starting = asyncio.create_task(session.start())
+
+    await entered_connect.wait()
+    await session.stop()
+    release_connect.set()
+    await starting
+
+    assert attempts == [(DC5_PRIMARY, 443)]
+    assert send_calls == []
+    assert session._must_stay_stopped
+    assert not session.is_started.is_set()
+    assert not connections[0].transport_open
+    assert connections[0].close_calls == (2 if connect_result is None else 1)
 
 
 @pytest.mark.asyncio

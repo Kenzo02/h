@@ -26,12 +26,15 @@ one entry at a time so the two stay comparable.
 https://github.com/tdlib/td/blob/d1085f9cebc5a62379991ae1652673954f229c1f/td/mtproto/TlsInit.cpp
 """
 
+from __future__ import annotations as _annotations
+
 import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Final, List, NamedTuple, Sequence, Tuple
+from typing import Final, NamedTuple
+from collections.abc import Sequence
 
 # GREASE values are drawn once per greeting and referenced by index, because the
 #  same value has to appear in more than one extension.
@@ -100,7 +103,7 @@ class _Op:
     data: bytes = b""
     length: int = 0
     seed: int = 0
-    parts: Tuple[Tuple["_Op", ...], ...] = ()
+    parts: tuple[tuple[_Op, ...], ...] = ()
 
 
 def _string(data: bytes) -> _Op:
@@ -151,7 +154,7 @@ def _padding() -> _Op:
     return _Op(kind=_OpKind.PADDING)
 
 
-def _client_hello_ops() -> Tuple[_Op, ...]:
+def _client_hello_ops() -> tuple[_Op, ...]:
     """TDLib's non-Apple op list, entry for entry.
 
     The byte strings are the fixed fields of a Chrome ClientHello - record and
@@ -205,7 +208,11 @@ def _client_hello_ops() -> Tuple[_Op, ...]:
                         b"\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01"
                     ),
                 ),
-                (_string(b"\x00\x10\x00\x0e\x00\x0c\x02\x68\x32\x08\x68\x74\x74\x70\x2f\x31\x2e\x31"),),
+                (
+                    _string(
+                        b"\x00\x10\x00\x0e\x00\x0c\x02\x68\x32\x08\x68\x74\x74\x70\x2f\x31\x2e\x31"
+                    ),
+                ),
                 (_string(b"\x00\x12\x00\x00"),),
                 (_string(b"\x00\x17\x00\x00"),),
                 (_string(b"\x00\x1b\x00\x03\x02\x00\x02"),),
@@ -277,7 +284,9 @@ def _curve25519_double_x(x: int) -> int:
     denominator = _curve25519_y_squared(x) * 4 % _CURVE25519_PRIME
     numerator = pow(x * x - 1, 2, _CURVE25519_PRIME)
 
-    return numerator * pow(denominator, _CURVE25519_PRIME - 2, _CURVE25519_PRIME) % _CURVE25519_PRIME
+    return (
+        numerator * pow(denominator, _CURVE25519_PRIME - 2, _CURVE25519_PRIME) % _CURVE25519_PRIME
+    )
 
 
 def _generate_curve25519_key() -> bytes:
@@ -325,7 +334,7 @@ def _generate_ml_kem_768_key() -> bytes:
     return bytes(key) + secrets.token_bytes(_ML_KEM_768_SEED_SIZE)
 
 
-def _shuffled(parts: List[bytes]) -> List[bytes]:
+def _shuffled(parts: list[bytes]) -> list[bytes]:
     shuffled = list(parts)
 
     for index in range(len(shuffled) - 1):
@@ -341,7 +350,7 @@ class _HelloWriter:
         self._domain = domain
 
         self._out = bytearray()
-        self._scopes: List[int] = []
+        self._scopes: list[int] = []
 
     def render(self, ops: Sequence[_Op]) -> bytearray:
         for op in ops:
@@ -404,12 +413,13 @@ class _HelloWriter:
 
         self._out[begin : begin + _SCOPE_LENGTH_SIZE] = size.to_bytes(_SCOPE_LENGTH_SIZE, "big")
 
-    def _write_permutation(self, parts: Tuple[Tuple[_Op, ...], ...]) -> None:
+    def _write_permutation(self, parts: tuple[tuple[_Op, ...], ...]) -> None:
         # Each extension is rendered on its own, then the finished blocks are
         #  shuffled - so no scope ever spans two of them.
         #  https://github.com/tdlib/td/blob/d1085f9cebc5a62379991ae1652673954f229c1f/td/mtproto/TlsInit.cpp#L467-L489
         rendered = [
-            bytes(_HelloWriter(grease=self._grease, domain=self._domain).render(part)) for part in parts
+            bytes(_HelloWriter(grease=self._grease, domain=self._domain).render(part))
+            for part in parts
         ]
 
         for part in _shuffled(rendered):
@@ -437,7 +447,9 @@ class FakeTlsHello(NamedTuple):
 
 def build_client_hello(*, domain: str, secret: bytes, unix_time: int) -> FakeTlsHello:
     """The greeting for `domain`, authenticated with the proxy's 16-byte secret."""
-    hello = _HelloWriter(grease=_generate_grease(), domain=domain.encode("ascii")).render(_client_hello_ops())
+    hello = _HelloWriter(grease=_generate_grease(), domain=domain.encode("ascii")).render(
+        _client_hello_ops()
+    )
 
     # The digest covers the greeting with its random field still zeroed; the last
     #  four bytes then carry the clock, so a proxy can reject a replayed greeting.

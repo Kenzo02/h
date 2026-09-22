@@ -16,15 +16,14 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations as _annotations
+
 import pyrogram
 from pyrogram import raw
 
 
 class SetUpgradedGiftColors:
-    async def set_upgraded_gift_colors(
-        self: "pyrogram.Client",
-        upgraded_gift_colors_id: int
-    ) -> bool:
+    async def set_upgraded_gift_colors(self: pyrogram.Client, upgraded_gift_colors_id: int) -> bool:
         """Changes color scheme for the current user based on an owned or a hosted upgraded gift.
 
         .. include:: /_includes/usable-by/users.rst
@@ -38,9 +37,7 @@ class SetUpgradedGiftColors:
         """
         r = await self.invoke(
             raw.functions.account.UpdateColor(
-                color=raw.types.InputPeerColorCollectible(
-                    collectible_id=upgraded_gift_colors_id
-                )
+                color=raw.types.InputPeerColorCollectible(collectible_id=upgraded_gift_colors_id)
             )
         )
 

@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Optional
+from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, utils
@@ -24,9 +24,9 @@ from pyrogram import raw, utils
 
 class DropGiftOriginalDetails:
     async def drop_gift_original_details(
-        self: "pyrogram.Client",
+        self: pyrogram.Client,
         owned_gift_id: str,
-        star_count: Optional[int] = None,
+        star_count: int | None = None,
     ) -> bool:
         """Drops original details for an upgraded gift.
 
@@ -53,11 +53,7 @@ class DropGiftOriginalDetails:
             stargift=await utils.get_input_stargift(self, owned_gift_id)
         )
 
-        form = await self.invoke(
-            raw.functions.payments.GetPaymentForm(
-                invoice=invoice
-            )
-        )
+        form = await self.invoke(raw.functions.payments.GetPaymentForm(invoice=invoice))
 
         if star_count is not None:
             if star_count < 0:
@@ -67,10 +63,7 @@ class DropGiftOriginalDetails:
                 raise ValueError("Have not enough Telegram Stars.")
 
         await self.invoke(
-            raw.functions.payments.SendStarsForm(
-                form_id=form.form_id,
-                invoice=invoice
-            )
+            raw.functions.payments.SendStarsForm(form_id=form.form_id, invoice=invoice)
         )
 
         return True
