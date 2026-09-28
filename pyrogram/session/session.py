@@ -497,34 +497,27 @@ class Session:
         log.debug("Received: %s", data)
 
         for msg in messages:
+            if msg.msg_id in self.recent_msg_ids or msg.msg_id in self.stored_msg_ids:
+                # A known retransmission still needs an ACK, but must not replay its
+                # body, change the clock, or count towards a security restart.
+                # https://core.telegram.org/mtproto/service_messages#message-copies
+                if msg.seq_no % 2 != 0:
+                    self.pending_acks.add(msg.msg_id)
+                continue
+
+            # Preserve initial clock synchronization and recovery from bad client time
+            # before applying the time window. Known duplicates cannot reach this path.
             if msg.seq_no == 0:
                 self.client._set_server_time(msg.msg_id)
-
-            if msg.seq_no % 2 != 0:
-                if msg.msg_id in self.pending_acks:
-                    continue
-                else:
-                    self.pending_acks.add(msg.msg_id)
 
             try:
                 if len(self.stored_msg_ids) > Session.STORED_MSG_IDS_MAX_SIZE:
                     del self.stored_msg_ids[: Session.STORED_MSG_IDS_MAX_SIZE // 2]
 
-                if msg.msg_id in self.recent_msg_ids:
-                    self.recent_msg_ids.remove(msg.msg_id)
-                    raise SecurityCheckMismatch(
-                        "The msg_id is belong to most recent closed connection."
-                    )
-
                 if self.stored_msg_ids:
                     if msg.msg_id < self.stored_msg_ids[0]:
                         raise SecurityCheckMismatch(
                             "The msg_id is lower than all the stored values"
-                        )
-
-                    if msg.msg_id in self.stored_msg_ids:
-                        raise SecurityCheckMismatch(
-                            "The msg_id is equal to any of the stored values"
                         )
 
                     time_diff = (
@@ -543,19 +536,27 @@ class Session:
                             "Most likely the client time has to be synchronized."
                         )
 
-                    self.ignore_count = 0
             except SecurityCheckMismatch as e:
-                log.info("Discarding packet: %s", e)
+                log.info("Discarding message: %s", e)
 
                 self.ignore_count += 1
 
                 if self.ignore_count >= self.MAX_CONSECUTIVE_IGNORED:
                     log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
                     self.schedule_restart(f"{e.__class__.__name__}: {e}")
+                    return
 
-                return
+                # A container can mix invalid messages with a fresh handshake reply.
+                # Reject this item without dropping independently validated siblings.
+                continue
             else:
                 bisect.insort(self.stored_msg_ids, msg.msg_id)
+                self.ignore_count = 0
+
+            if msg.seq_no % 2 != 0:
+                # `MsgDetailedInfo` can queue an ACK before the answer body arrives,
+                # so membership in `pending_acks` alone cannot identify a duplicate.
+                self.pending_acks.add(msg.msg_id)
 
             if isinstance(msg.body, (raw.types.MsgDetailedInfo, raw.types.MsgNewDetailedInfo)):
                 self.pending_acks.add(msg.body.answer_msg_id)
