@@ -1527,7 +1527,7 @@ class Message(Object, Update):
                 raw_reply_to_message=raw_reply_to_message,
             )
 
-        if not parsed_message.topic:
+        if not parsed_message.topic and parsed_message.chat.is_forum:
             parsed_topic = await client.topic_cache.get(
                 (parsed_message.chat.id, parsed_message.message_thread_id)
             )
@@ -2292,7 +2292,7 @@ class Message(Object, Update):
                 replies=replies,
             )
 
-        if not parsed_message.topic:
+        if not parsed_message.topic and parsed_message.chat.is_forum:
             parsed_topic = await client.topic_cache.get(
                 (parsed_message.chat.id, parsed_message.message_thread_id)
             )
