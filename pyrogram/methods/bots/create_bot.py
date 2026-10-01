@@ -19,7 +19,7 @@
 from __future__ import annotations as _annotations
 
 import pyrogram
-from pyrogram import raw, types
+from pyrogram import raw, types, utils
 
 
 class CreateBot:
@@ -46,7 +46,7 @@ class CreateBot:
                 The username must end with "bot".
                 Use :meth:`~pyrogram.Client.check_bot_username` to find whether the name is suitable.
 
-            via_link (``bool``):
+            via_link (``bool``, *optional*):
                 Pass True if the bot is created from link.
 
         Returns:
@@ -61,4 +61,4 @@ class CreateBot:
             )
         )
 
-        return await types.User._parse(self, r)
+        return utils.require_parsed(await types.User._parse(self, r))

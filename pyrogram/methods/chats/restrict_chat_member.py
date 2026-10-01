@@ -18,11 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pyrogram
-from pyrogram import raw, utils
-from pyrogram import types
+from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from datetime import datetime, timedelta
 
 
 class RestrictChatMember:
@@ -31,7 +33,7 @@ class RestrictChatMember:
         chat_id: int | str,
         user_id: int | str,
         permissions: types.ChatPermissions,
-        until_date: datetime | None = None,
+        until_date: datetime | timedelta | None = None,
     ) -> types.Chat:
         """Restrict a user in a supergroup.
 
@@ -51,10 +53,11 @@ class RestrictChatMember:
             permissions (:obj:`~pyrogram.types.ChatPermissions`):
                 New user permissions.
 
-            until_date (:py:obj:`~datetime.datetime`, *optional*):
+            until_date (:py:obj:`~datetime.datetime` | :py:obj:`~datetime.timedelta`, *optional*):
                 Date when the user will be unbanned.
                 If user is banned for more than 366 days or less than 30 seconds from the current time they are
                 considered to be banned forever. Defaults to epoch (ban forever).
+                A :py:obj:`~datetime.timedelta` is counted from now.
 
         Returns:
             :obj:`~pyrogram.types.Chat`: On success, a chat object is returned.
@@ -62,14 +65,15 @@ class RestrictChatMember:
         Example:
             .. code-block:: python
 
-                from datetime import datetime, timedelta
+                from datetime import timedelta
                 from pyrogram.types import ChatPermissions
 
                 # Completely restrict chat member (mute) forever
-                await app.restrict_chat_member(chat_id, user_id)
+                await app.restrict_chat_member(chat_id, user_id, ChatPermissions())
 
                 # Chat member muted for 24h
-                await app.restrict_chat_member(chat_id, user_id, timedelta(days=1))
+                await app.restrict_chat_member(chat_id, user_id, ChatPermissions(),
+                    until_date=timedelta(days=1))
 
                 # Chat member can only send text messages
                 await app.restrict_chat_member(chat_id, user_id,
@@ -85,4 +89,4 @@ class RestrictChatMember:
             )
         )
 
-        return await types.Chat._parse_chat(self, r.chats[0])
+        return utils.require_parsed(await types.Chat._parse_chat(self, r.chats[0]))

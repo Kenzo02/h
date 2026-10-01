@@ -20,6 +20,7 @@ from __future__ import annotations as _annotations
 
 import pyrogram
 from pyrogram import raw, types
+
 from ..object import Object
 
 
@@ -27,7 +28,7 @@ class ChatReactions(Object):
     """A chat reactions
 
     Parameters:
-        all_are_enabled (``bool``, *optional*)
+        all_are_enabled (``bool``, *optional*):
 
         allow_custom_emoji (``bool``, *optional*):
             Whether custom emoji are allowed or not.

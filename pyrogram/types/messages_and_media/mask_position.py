@@ -51,7 +51,7 @@ class MaskPosition(Object):
         self.scale = scale
 
     @staticmethod
-    def _parse(coords: raw.types.MaskCoords) -> MaskPosition:
+    def _parse(coords: raw.types.MaskCoords) -> MaskPosition | None:
         if not coords:
             return None
 
@@ -60,4 +60,12 @@ class MaskPosition(Object):
             x_shift=coords.x,
             y_shift=coords.y,
             scale=coords.zoom,
+        )
+
+    def write(self) -> raw.types.MaskCoords:
+        return raw.types.MaskCoords(
+            n=self.point.value,
+            x=self.x_shift,
+            y=self.y_shift,
+            zoom=self.scale,
         )

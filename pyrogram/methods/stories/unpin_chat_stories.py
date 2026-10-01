@@ -18,11 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class UnpinChatStories:
@@ -38,7 +40,7 @@ class UnpinChatStories:
                 Unique identifier (int) or username (str) of the target chat.
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
 
-            stories_ids (``int`` | Iterable of ``int``, *optional*):
+            stories_ids (``int`` | Iterable of ``int``):
                 List of unique identifiers of the target stories.
 
         Returns:

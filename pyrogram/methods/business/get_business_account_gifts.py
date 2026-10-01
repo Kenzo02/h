@@ -18,11 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pyrogram
-from pyrogram import raw, types
-from pyrogram import utils
+from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 class GetBusinessAccountGifts:
@@ -86,6 +88,9 @@ class GetBusinessAccountGifts:
 
             limit (``int``, *optional*):
                 The maximum number of gifts to be returned.
+
+            offset (``str``, *optional*):
+                Offset of the first entry to return as received from the previous request.
 
         Returns:
             ``Generator``: A generator yielding :obj:`~pyrogram.types.Gift` objects.

@@ -286,7 +286,6 @@ def pyrogram_api():
             get_available_effects
             get_messages
             get_scheduled_messages
-            get_stickers
             get_user_personal_chat_messages
             get_web_app_link_url
             get_web_app_url
@@ -318,7 +317,6 @@ def pyrogram_api():
             get_discussion_replies
             get_discussion_replies_count
             get_main_web_app
-            get_custom_emoji_stickers
             get_direct_messages_chat_topic_history
             delete_direct_messages_chat_topic_history
             set_direct_messages_chat_topic_is_marked_as_unread
@@ -334,6 +332,37 @@ def pyrogram_api():
             add_poll_option
             delete_poll_option
             summarize_message
+        """,
+        "stickers": """
+        Stickers
+            add_recent_sticker
+            remove_recent_sticker
+            get_recent_stickers
+            clear_recent_stickers
+            get_favorite_stickers
+            add_favorite_sticker
+            remove_favorite_sticker
+            reorder_installed_sticker_sets
+            get_owned_sticker_sets
+            add_sticker_to_set
+            change_sticker_set
+            create_new_sticker_set
+            delete_sticker_from_set
+            delete_sticker_set
+            get_custom_emoji_stickers
+            get_sticker_set
+            get_suggested_sticker_set_name
+            replace_sticker_in_set
+            search_sticker_sets
+            search_stickers
+            set_custom_emoji_sticker_set_thumbnail
+            set_sticker_set_thumbnail
+            set_sticker_emoji_list
+            set_sticker_keywords
+            set_sticker_mask_position
+            set_sticker_position_in_set
+            set_sticker_set_title
+            upload_sticker_file
         """,
         "folders": """
         Folders
@@ -409,6 +438,7 @@ def pyrogram_api():
             set_upgraded_gift_colors
             update_chat_notifications
             create_folder_invite_link
+            edit_folder_invite_link
             get_chats_for_folder_invite_link
             get_folders
             create_folder
@@ -439,6 +469,7 @@ def pyrogram_api():
             get_chat_photos_count
             get_chat_audios_count
             set_profile_photo
+            set_bot_profile_photo
             set_personal_channel
             delete_profile_photos
             set_username
@@ -620,6 +651,7 @@ def pyrogram_api():
         Advanced
             invoke
             recover_gaps
+            get_app_config
             resolve_peer
             save_file
         """,
@@ -673,10 +705,10 @@ def pyrogram_api():
     shutil.rmtree(root, ignore_errors=True)
     os.mkdir(root)
 
-    with open(HOME + "/template/methods.rst") as f:
+    with open(HOME + "/template/methods.rst", encoding="utf-8") as f:
         template = f.read()
 
-    with open(root + "/index.rst", "w") as f:
+    with open(root + "/index.rst", "w", encoding="utf-8") as f:
         fmt_keys = {}
 
         for k, v in categories.items():
@@ -684,7 +716,7 @@ def pyrogram_api():
             fmt_keys.update({k: "\n    ".join(f"{m} <{m}>" for m in methods)})
 
             for method in methods:
-                with open(root + f"/{method}.rst", "w") as f2:
+                with open(root + f"/{method}.rst", "w", encoding="utf-8") as f2:
                     title = f"{method}()"
 
                     f2.write(title + "\n" + "=" * len(title) + "\n\n")
@@ -693,7 +725,7 @@ def pyrogram_api():
             functions = ["idle", "compose"]
 
             for func in functions:
-                with open(root + f"/{func}.rst", "w") as f2:
+                with open(root + f"/{func}.rst", "w", encoding="utf-8") as f2:
                     title = f"{func}()"
 
                     f2.write(title + "\n" + "=" * len(title) + "\n\n")
@@ -726,7 +758,7 @@ def pyrogram_api():
             ChatInviteLink
             ChatAdminWithInviteLinks
             ChatEvent
-            ChatEventFilter
+            ChatEventLogFilters
             ChatMemberUpdated
             ChatJoinRequest
             ChatJoinResult
@@ -760,6 +792,60 @@ def pyrogram_api():
             CommunityMemberStatusLeft
             CommunityMemberStatusBanned
             CommunityPermissions
+            ChatEventAction
+            ChatEventActionMessageEdited
+            ChatEventActionMessageDeleted
+            ChatEventActionMessagePinned
+            ChatEventActionMessageUnpinned
+            ChatEventActionPollStopped
+            ChatEventActionMemberJoined
+            ChatEventActionMemberJoinedByInviteLink
+            ChatEventActionMemberJoinedByRequest
+            ChatEventActionMemberInvited
+            ChatEventActionMemberLeft
+            ChatEventActionMemberPromoted
+            ChatEventActionMemberRestricted
+            ChatEventActionMemberTagChanged
+            ChatEventActionMemberSubscriptionExtended
+            ChatEventActionAvailableReactionsChanged
+            ChatEventActionBackgroundChanged
+            ChatEventActionDescriptionChanged
+            ChatEventActionEmojiStatusChanged
+            ChatEventActionLinkedChatChanged
+            ChatEventActionLocationChanged
+            ChatEventActionMessageAutoDeleteTimeChanged
+            ChatEventActionPermissionsChanged
+            ChatEventActionPhotoChanged
+            ChatEventActionSlowModeDelayChanged
+            ChatEventActionStickerSetChanged
+            ChatEventActionCustomEmojiStickerSetChanged
+            ChatEventActionTitleChanged
+            ChatEventActionUsernameChanged
+            ChatEventActionActiveUsernamesChanged
+            ChatEventActionAccentColorChanged
+            ChatEventActionProfileAccentColorChanged
+            ChatEventActionHasProtectedContentToggled
+            ChatEventActionInvitesToggled
+            ChatEventActionIsAllHistoryAvailableToggled
+            ChatEventActionHasAggressiveAntiSpamEnabledToggled
+            ChatEventActionSignMessagesToggled
+            ChatEventActionShowMessageSenderToggled
+            ChatEventActionAutomaticTranslationToggled
+            ChatEventActionInviteLinkEdited
+            ChatEventActionInviteLinkRevoked
+            ChatEventActionInviteLinkDeleted
+            ChatEventActionVideoChatCreated
+            ChatEventActionVideoChatEnded
+            ChatEventActionVideoChatMuteNewParticipantsToggled
+            ChatEventActionVideoChatParticipantIsMutedToggled
+            ChatEventActionVideoChatParticipantVolumeLevelChanged
+            ChatEventActionIsForumToggled
+            ChatEventActionForumTopicCreated
+            ChatEventActionForumTopicEdited
+            ChatEventActionForumTopicToggleIsClosed
+            ChatEventActionForumTopicToggleIsHidden
+            ChatEventActionForumTopicDeleted
+            ChatEventActionForumTopicPinned
         """,
         "messages_media": """
         Messages & Media
@@ -783,6 +869,7 @@ def pyrogram_api():
             Document
             ExternalReplyInfo
             FactCheck
+            File
             FormattedText
             ForumTopic
             ForumTopicClosed
@@ -796,6 +883,7 @@ def pyrogram_api():
             Voice
             VideoNote
             Contact
+            StickerSet
             CraftGiftResult
             CraftGiftResultSuccess
             CraftGiftResultFail
@@ -1042,6 +1130,7 @@ def pyrogram_api():
             InputCredentialsSaved
             InputInvoice
             InputInvoiceMessage
+            InputSticker
             InputInvoiceMessageContent
             InputInvoiceName
             InputLocationMessageContent
@@ -1148,10 +1237,10 @@ def pyrogram_api():
     shutil.rmtree(root, ignore_errors=True)
     os.mkdir(root)
 
-    with open(HOME + "/template/types.rst") as f:
+    with open(HOME + "/template/types.rst", encoding="utf-8") as f:
         template = f.read()
 
-    with open(root + "/index.rst", "w") as f:
+    with open(root + "/index.rst", "w", encoding="utf-8") as f:
         fmt_keys = {}
 
         for k, v in categories.items():
@@ -1161,7 +1250,7 @@ def pyrogram_api():
 
             # noinspection PyShadowingBuiltins
             for type in types:
-                with open(root + f"/{type}.rst", "w") as f2:
+                with open(root + f"/{type}.rst", "w", encoding="utf-8") as f2:
                     title = type
 
                     f2.write(title + "\n" + "=" * len(title) + "\n\n")
@@ -1369,10 +1458,10 @@ def pyrogram_api():
     shutil.rmtree(root, ignore_errors=True)
     os.mkdir(root)
 
-    with open(HOME + "/template/bound-methods.rst") as f:
+    with open(HOME + "/template/bound-methods.rst", encoding="utf-8") as f:
         template = f.read()
 
-    with open(root + "/index.rst", "w") as f:
+    with open(root + "/index.rst", "w", encoding="utf-8") as f:
         fmt_keys = {}
 
         for k, v in categories.items():
@@ -1392,7 +1481,7 @@ def pyrogram_api():
 
             # noinspection PyShadowingBuiltins
             for bm in bound_methods:
-                with open(root + f"/{bm}.rst", "w") as f2:
+                with open(root + f"/{bm}.rst", "w", encoding="utf-8") as f2:
                     title = f"{bm}()"
 
                     f2.write(title + "\n" + "=" * len(title) + "\n\n")
@@ -1409,7 +1498,7 @@ def pyrogram_api():
             BusinessSchedule
             ButtonStyle
             ChatAction
-            ChatEventAction
+            ChatEventActionType
             ChatJoinType
             ChatMemberStatus
             ChatMembersFilter
@@ -1454,10 +1543,10 @@ def pyrogram_api():
     shutil.rmtree(root, ignore_errors=True)
     os.mkdir(root)
 
-    with open(HOME + "/template/enums.rst") as f:
+    with open(HOME + "/template/enums.rst", encoding="utf-8") as f:
         template = f.read()
 
-    with open(root + "/cleanup.html", "w") as f:
+    with open(root + "/cleanup.html", "w", encoding="utf-8") as f:
         f.write("""<script>
   document
     .querySelectorAll("em.property")
@@ -1468,7 +1557,7 @@ def pyrogram_api():
     .forEach((elem, i) => [0, 1].includes(i) ? true : elem.remove())
 </script>""")
 
-    with open(root + "/index.rst", "w") as f:
+    with open(root + "/index.rst", "w", encoding="utf-8") as f:
         fmt_keys = {}
 
         for k, v in categories.items():
@@ -1480,7 +1569,7 @@ def pyrogram_api():
 
             # noinspection PyShadowingBuiltins
             for enum in enums:
-                with open(root + f"/{enum}.rst", "w") as f2:
+                with open(root + f"/{enum}.rst", "w", encoding="utf-8") as f2:
                     title = enum
 
                     f2.write(title + "\n" + "=" * len(title) + "\n\n")

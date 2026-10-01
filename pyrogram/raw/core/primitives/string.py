@@ -18,15 +18,21 @@
 
 from __future__ import annotations as _annotations
 
-from io import BytesIO
+from typing import TYPE_CHECKING, Any
 
+from ..tl_object import TLObject
 from .bytes import Bytes
 
+if TYPE_CHECKING:
+    from io import BytesIO
 
-class String(Bytes):
+
+# Not a `Bytes` subclass: `read` returns `str` where `Bytes.read` returns `bytes`,
+#  so inheriting would break substitutability. The wire format is delegated instead.
+class String(bytes, TLObject):
     @classmethod
-    def read(cls, data: BytesIO, *args) -> str:
-        return super(String, String).read(data).decode(errors="replace")
+    def read(cls, data: BytesIO, *args: Any) -> str:
+        return Bytes.read(data).decode(errors="replace")
 
     def __new__(cls, value: str) -> bytes:
-        return super().__new__(cls, value.encode("utf-8", errors="replace"))
+        return Bytes(value.encode("utf-8", errors="replace"))

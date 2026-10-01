@@ -30,12 +30,18 @@ from __future__ import annotations as _annotations
 
 import ast
 from dataclasses import dataclass
-from typing import Final
-from collections.abc import Iterator
+from typing import TYPE_CHECKING, Final
 
-from tests.guards.name_resolution import REPOSITORY_ROOT
+from tests.guards.name_resolution import REPOSITORY_ROOT, source_of
 
-_SWEPT: Final[tuple[str, ...]] = ("pyrogram/client.py", "pyrogram/dispatcher.py")
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+_SWEPT: Final[tuple[str, ...]] = (
+    "pyrogram/client.py",
+    "pyrogram/dispatcher.py",
+    "pyrogram/utils/cache.py",
+)
 
 _LOOP_BOUND: Final[frozenset[str]] = frozenset({"Queue", "Event", "Lock", "Semaphore"})
 
@@ -129,7 +135,7 @@ def primitives_never_rebuilt(tree: ast.Module, *, file: str) -> list[Attribute]:
 
 def swept() -> Iterator[tuple[str, ast.Module]]:
     for file in _SWEPT:
-        yield file, ast.parse((REPOSITORY_ROOT / file).read_text(), filename=file)
+        yield file, ast.parse(source_of(REPOSITORY_ROOT / file), filename=file)
 
 
 def test_every_loop_bound_primitive_is_rebuilt_somewhere() -> None:

@@ -18,11 +18,14 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import AsyncGenerator
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import raw, types, utils, enums
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from datetime import datetime, timedelta
 
 
 # noinspection PyShadowingBuiltins
@@ -33,8 +36,8 @@ async def get_chunk(
     filter: enums.MessagesFilter = enums.MessagesFilter.EMPTY,
     offset: int = 0,
     offset_id: int = 0,
-    min_date: datetime | None = None,
-    max_date: datetime | None = None,
+    min_date: datetime | timedelta | None = None,
+    max_date: datetime | timedelta | None = None,
     limit: int = 100,
     min_id: int = 0,
     max_id: int = 0,
@@ -74,8 +77,8 @@ class SearchMessages:
         query: str = "",
         offset: int = 0,
         offset_id: int = 0,
-        min_date: datetime | None = None,
-        max_date: datetime | None = None,
+        min_date: datetime | timedelta | None = None,
+        max_date: datetime | timedelta | None = None,
         min_id: int = 0,
         max_id: int = 0,
         filter: enums.MessagesFilter = enums.MessagesFilter.EMPTY,
@@ -108,11 +111,13 @@ class SearchMessages:
             offset_id (``int``, *optional*):
                 Identifier of the first message to be returned.
 
-            min_date (:py:obj:`~datetime.datetime`, *optional*):
+            min_date (:py:obj:`~datetime.datetime` | :py:obj:`~datetime.timedelta`, *optional*):
                 Pass a date as offset to retrieve only older messages starting from that date.
+                A :py:obj:`~datetime.timedelta` is counted from now.
 
-            max_date (:py:obj:`~datetime.datetime`, *optional*):
+            max_date (:py:obj:`~datetime.datetime` | :py:obj:`~datetime.timedelta`, *optional*):
                 Pass a date as offset to retrieve only newer messages starting from that date.
+                A :py:obj:`~datetime.timedelta` is counted from now.
 
             min_id (``int``, *optional*):
                 If a positive value was provided, the method will return only messages with IDs more than min_id.

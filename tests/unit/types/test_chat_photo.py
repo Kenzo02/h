@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pyrogram import enums, raw, types
+from pyrogram import enums, raw, types, utils
 
 PHOTO_ID = 123
 ACCESS_HASH = 456
@@ -31,6 +31,9 @@ PEER_ACCESS_HASH = 987
 
 
 class StickerSetClient:
+    def __init__(self):
+        self.sticker_set_name_cache = utils.Cache(250)
+
     async def invoke(self, query):
         return SimpleNamespace(set=SimpleNamespace(short_name="photo-set"))
 

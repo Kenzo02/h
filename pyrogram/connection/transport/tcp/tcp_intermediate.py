@@ -20,9 +20,12 @@ from __future__ import annotations as _annotations
 
 import logging
 from struct import pack, unpack
+from typing import TYPE_CHECKING
 
-from pyrogram.connection.proxy import Proxy
 from pyrogram.connection.transport.tcp.tcp import TCP
+
+if TYPE_CHECKING:
+    from pyrogram.connection.proxy import Proxy
 
 log = logging.getLogger(__name__)
 
@@ -43,8 +46,8 @@ class TCPIntermediate(TCP):
         await super().send(b"\xee" * 4, wait_for_marker=False)
         self.marker_event.set()
 
-    async def send(self, data: bytes, *args) -> None:
-        await super().send(pack("<i", len(data)) + data)
+    async def send(self, data: bytes, wait_for_marker: bool = True) -> None:
+        await super().send(pack("<i", len(data)) + data, wait_for_marker)
 
     async def recv(self, length: int = 0) -> bytes | None:
         length = await super().recv(4)

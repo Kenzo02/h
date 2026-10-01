@@ -20,10 +20,17 @@ from __future__ import annotations as _annotations
 
 import ast
 import pathlib
-from typing import Final
-from collections.abc import Iterator
+from typing import TYPE_CHECKING, Final
 
-from tests.guards.name_resolution import REPOSITORY_ROOT, hand_written_files, is_generated
+from tests.guards.name_resolution import (
+    REPOSITORY_ROOT,
+    hand_written_files,
+    is_generated,
+    source_of,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 # A parameter annotated `Optional` and defaulting to something else says two things at once:
 #  the caller may pass `None`, and the caller who passes nothing does not get `None`. Almost
@@ -43,6 +50,14 @@ _EXEMPTIONS: Final[dict[tuple[str, str], str]] = {
         "pyrogram/types/messages_and_media/message.py",
         "reply_markup",
     ): "`object` is the not-specified sentinel, so `None` is free to mean remove the markup.",
+    (
+        "pyrogram/storage/storage.py",
+        "value",
+    ): "`object` is the not-specified sentinel, so `None` is free to mean clear the stored value.",
+    (
+        "pyrogram/storage/sqlite_storage.py",
+        "value",
+    ): "`object` is the not-specified sentinel, so `None` is free to mean clear the stored value.",
 }
 
 
@@ -101,7 +116,7 @@ def optional_parameters_that_do_not_default_to_none() -> list[tuple[str, int, st
 
     for path in hand_written_files():
         relative = path.relative_to(REPOSITORY_ROOT).as_posix()
-        tree = ast.parse(path.read_text(), filename=relative)
+        tree = ast.parse(source_of(path), filename=relative)
 
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

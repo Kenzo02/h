@@ -28,18 +28,21 @@ from __future__ import annotations as _annotations
 import ast
 import builtins
 import importlib
-import pathlib
 from dataclasses import dataclass
-from types import ModuleType
-from typing import Any
-from collections.abc import Iterator, Sequence
+from typing import TYPE_CHECKING, Any
 
 import pyrogram
 from tests.guards.name_resolution import (
     REPOSITORY_ROOT,
     attribute_chain,
     hand_written_files,
+    source_of,
 )
+
+if TYPE_CHECKING:
+    import pathlib
+    from collections.abc import Iterator, Sequence
+    from types import ModuleType
 
 
 @dataclass(frozen=True)
@@ -194,7 +197,7 @@ def namespace_of(module: ModuleType, *, tree: ast.Module) -> dict[str, Any]:
 
 def annotations_in(path: pathlib.Path) -> Iterator[tuple[Annotation, dict[str, Any]]]:
     module = importlib.import_module(module_name_of(path))
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = ast.parse(source_of(path))
     namespace = namespace_of(module, tree=tree)
 
     for annotation in annotations_of(tree):

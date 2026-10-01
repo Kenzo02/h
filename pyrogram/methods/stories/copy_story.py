@@ -19,9 +19,11 @@
 from __future__ import annotations as _annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-import pyrogram
-from pyrogram import types, enums
+if TYPE_CHECKING:
+    import pyrogram
+    from pyrogram import enums, types
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +91,7 @@ class CopyStory:
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
 
-            caption_entities (List of :obj:`~pyrogram.types.MessageEntity`):
+            caption_entities (List of :obj:`~pyrogram.types.MessageEntity`, *optional*):
                 List of special entities that appear in the new caption, which can be specified instead of *parse_mode*.
 
         Returns:

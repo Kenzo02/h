@@ -20,8 +20,8 @@ from __future__ import annotations as _annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
-from pyrogram.connection.proxy import Proxy
 from pyrogram.connection.transport.tcp.tcp import (
     ABRIDGED_OBFUSCATE_TAG,
     TCP,
@@ -29,6 +29,9 @@ from pyrogram.connection.transport.tcp.tcp import (
     generate_obfuscated2_nonce,
 )
 from pyrogram.crypto import aes
+
+if TYPE_CHECKING:
+    from pyrogram.connection.proxy import Proxy
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +66,7 @@ class TCPAbridgedO(TCP):
         await super().send(nonce, wait_for_marker=False)
         self.marker_event.set()
 
-    async def send(self, data: bytes, *args) -> None:
+    async def send(self, data: bytes, wait_for_marker: bool = True) -> None:
         if self.encrypt is None:
             msg = "`send()` requires `connect()` to have run first"
             raise RuntimeError(msg)
@@ -74,7 +77,7 @@ class TCPAbridgedO(TCP):
             self.crypto_executor, aes.ctr256_encrypt, data, *self.encrypt
         )
 
-        await super().send(payload)
+        await super().send(payload, wait_for_marker)
 
     async def recv(self, length: int = 0) -> bytes | None:
         if self.decrypt is None:

@@ -19,16 +19,22 @@
 from __future__ import annotations as _annotations
 
 import inspect
+import sys
+from collections.abc import Callable, Coroutine, Sequence
 from pathlib import Path
-from typing import Final
-from collections.abc import Callable
+from typing import Any, Final
 
 import pytest
 
 import pyrogram
 from pyrogram import filters
+from pyrogram.filters import Filter
 from pyrogram.methods import decorators
 from pyrogram.methods.decorators.handler_type import HandlerType
+
+# The production `HandlerType` is a bare `TypeVar`, which names no concrete callable;
+#  this is the shape the `handler` fixture actually returns.
+HandlerCallback = Callable[[pyrogram.Client, pyrogram.types.Update], Coroutine[Any, Any, None]]
 
 
 def _decorator_names() -> list[str]:
@@ -82,14 +88,27 @@ def test_decorator_binds_the_callback_signature_to_one_type_variable(decorator_n
     decorator = getattr(pyrogram.Client, decorator_name)
 
     # `from __future__ import annotations` leaves the return annotation a string, and
-    #  `eval_str` is what turns it back into the object this compares against.
-    signature = inspect.signature(decorator, eval_str=True)
+    #  `eval_str` is what turns it back into the object this compares against. A decorator
+    #  module imports `Callable`/`HandlerType` (and, for `on_error`, `Filter`/`Sequence`)
+    #  under `TYPE_CHECKING` only, so its own globals cannot resolve them: hand them in, the
+    #  same way `test_handler_update_types.py` does for handler modules.
+    signature = inspect.signature(
+        decorator,
+        globals=vars(sys.modules[decorator.__module__]),
+        locals={
+            "Callable": Callable,
+            "HandlerType": HandlerType,
+            "Filter": Filter,
+            "Sequence": Sequence,
+        },
+        eval_str=True,
+    )
 
     assert signature.return_annotation == Callable[[HandlerType], HandlerType]
 
 
 @pytest.fixture
-def handler() -> HandlerType:
+def handler() -> HandlerCallback:
     async def callback(client: pyrogram.Client, update: pyrogram.types.Update) -> None: ...
 
     return callback
@@ -100,7 +119,7 @@ def handler() -> HandlerType:
 @pytest.mark.parametrize("decorator_name", _filtered_decorator_names())
 def test_the_positional_form_stores_the_filter_and_the_group(
     decorator_name: str,
-    handler: HandlerType,
+    handler: HandlerCallback,
 ) -> None:
     getattr(pyrogram.Client, decorator_name)(filters.text, 1)(handler)
 
@@ -113,7 +132,7 @@ def test_the_positional_form_stores_the_filter_and_the_group(
 @pytest.mark.parametrize("decorator_name", _filtered_decorator_names())
 def test_the_mixed_form_stores_the_filter_and_the_group(
     decorator_name: str,
-    handler: HandlerType,
+    handler: HandlerCallback,
 ) -> None:
     getattr(pyrogram.Client, decorator_name)(filters.text, group=1)(handler)
 
@@ -126,7 +145,7 @@ def test_the_mixed_form_stores_the_filter_and_the_group(
 @pytest.mark.parametrize("decorator_name", _filtered_decorator_names())
 def test_the_keyword_form_stores_the_filter_and_the_group(
     decorator_name: str,
-    handler: HandlerType,
+    handler: HandlerCallback,
 ) -> None:
     getattr(pyrogram.Client, decorator_name)(filters=filters.text, group=1)(handler)
 
@@ -141,7 +160,7 @@ def test_the_keyword_form_stores_the_filter_and_the_group(
 )
 def test_a_decorator_called_with_no_arguments_stores_the_default_group(
     decorator_name: str,
-    handler: HandlerType,
+    handler: HandlerCallback,
 ) -> None:
     getattr(pyrogram.Client, decorator_name)()(handler)
 
@@ -152,7 +171,7 @@ def test_a_decorator_called_with_no_arguments_stores_the_default_group(
 
 # `on_error` carries an `exceptions` argument its siblings do not, so an unbound call
 #  shifts three slots instead of two.
-def test_on_error_reads_the_positional_form(handler: HandlerType) -> None:
+def test_on_error_reads_the_positional_form(handler: HandlerCallback) -> None:
     pyrogram.Client.on_error(ValueError, filters.text, 1)(handler)
 
     ((built, group),) = handler.handlers
@@ -162,7 +181,7 @@ def test_on_error_reads_the_positional_form(handler: HandlerType) -> None:
     assert built.filters is filters.text
 
 
-def test_on_error_reads_the_keyword_form(handler: HandlerType) -> None:
+def test_on_error_reads_the_keyword_form(handler: HandlerCallback) -> None:
     pyrogram.Client.on_error(exceptions=ValueError, filters=filters.text, group=1)(handler)
 
     ((built, group),) = handler.handlers
@@ -172,7 +191,7 @@ def test_on_error_reads_the_keyword_form(handler: HandlerType) -> None:
     assert built.filters is filters.text
 
 
-def test_on_error_keeps_the_only_exception_it_was_given(handler: HandlerType) -> None:
+def test_on_error_keeps_the_only_exception_it_was_given(handler: HandlerCallback) -> None:
     pyrogram.Client.on_error(ValueError)(handler)
 
     ((built, group),) = handler.handlers

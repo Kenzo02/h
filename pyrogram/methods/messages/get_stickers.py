@@ -1,60 +1,29 @@
-#  Pyrogram - Telegram MTProto API Client Library for Python
-#  Copyright (C) 2017-present Dan <https://github.com/delivrance>
-#
-#  This file is part of Pyrogram.
-#
-#  Pyrogram is free software: you can redistribute it and/or modify
-#  it under the terms of the GNU Lesser General Public License as published
-#  by the Free Software Foundation, either version 3 of the License, or
-#  (at your option) any later version.
-#
-#  Pyrogram is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU Lesser General Public License for more details.
-#
-#  You should have received a copy of the GNU Lesser General Public License
-#  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
-
 from __future__ import annotations as _annotations
 
-import logging
-
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
-
-log = logging.getLogger(__name__)
+from pyrogram import raw, types
 
 
 class GetStickers:
     async def get_stickers(self: pyrogram.Client, short_name: str) -> list[types.Sticker]:
-        """Get all stickers from set by short name.
+        """Get all stickers from a set, preserving the legacy list-returning API.
 
         .. include:: /_includes/usable-by/users-bots.rst
 
         Parameters:
             short_name (``str``):
-                Short name of the sticker set, serves as the unique identifier for the sticker set.
+                Short name of the sticker set.
 
         Returns:
-            List of :obj:`~pyrogram.types.Sticker`: A list of stickers is returned.
-
-        Example:
-            .. code-block:: python
-
-                # Get all stickers by short name
-                await app.get_stickers("short_name")
-
-        Raises:
-            ValueError: In case of invalid arguments.
+            List of :obj:`~pyrogram.types.Sticker`: Stickers in the set.
         """
+        # Do not alias get_sticker_set: it returns metadata rather than the old list,
+        # and may fetch thumbnails unrelated to the caller's requested stickers.
         sticker_set = await self.invoke(
             raw.functions.messages.GetStickerSet(
                 stickerset=raw.types.InputStickerSetShortName(short_name=short_name), hash=0
             )
         )
-
         return types.List(
             [
                 await types.Sticker._parse(self, doc, {type(a): a for a in doc.attributes})

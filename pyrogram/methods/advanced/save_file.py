@@ -26,14 +26,16 @@ import logging
 import math
 import os
 from hashlib import md5
-from typing import BinaryIO, overload
-from collections.abc import Callable
+from typing import TYPE_CHECKING, BinaryIO, overload
 
 import pyrogram
-from pyrogram import StopTransmission
-from pyrogram import raw
-from pyrogram._typing import PathType
+from pyrogram import StopTransmission, raw
 from pyrogram.errors import FloodPremiumWait, FloodWait
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from pyrogram._typing import PathType
 
 log = logging.getLogger(__name__)
 

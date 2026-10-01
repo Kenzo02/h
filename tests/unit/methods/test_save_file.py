@@ -21,15 +21,18 @@ from __future__ import annotations as _annotations
 import asyncio
 import contextlib
 import io
-from concurrent.futures import Executor
-from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final, cast
 
 import pytest
 
+import pyrogram
 from pyrogram import StopTransmission, raw, types
 from pyrogram.errors import FloodWait
 from pyrogram.methods.advanced.save_file import SaveFile
+
+if TYPE_CHECKING:
+    from concurrent.futures import Executor
+    from pathlib import Path
 
 _PART_SIZE: Final[int] = 512 * 1024
 
@@ -80,6 +83,12 @@ class Uploader(SaveFile):
         return self.media
 
 
+def uploader(media: Media) -> pyrogram.Client:
+    # `Uploader` subclasses only the mixin, and the `save_file` overloads pin
+    #  `self: pyrogram.Client`.
+    return cast("pyrogram.Client", Uploader(media))
+
+
 @pytest.fixture
 def three_parts(tmp_path: Path) -> str:
     path = tmp_path / "upload.bin"
@@ -92,7 +101,7 @@ def three_parts(tmp_path: Path) -> str:
 async def test_a_finished_upload_describes_every_part(three_parts: str) -> None:
     media = Media()
 
-    file = await Uploader(media).save_file(three_parts)
+    file = await uploader(media).save_file(three_parts)
 
     assert isinstance(file, raw.types.InputFile)
     assert file.parts == 3
@@ -107,7 +116,7 @@ async def test_a_part_the_server_refused_reaches_the_caller(three_parts: str) ->
     media = Media(rejects_part=1)
 
     with pytest.raises(ConnectionError):
-        await Uploader(media).save_file(three_parts)
+        await uploader(media).save_file(three_parts)
 
 
 @pytest.mark.asyncio
@@ -115,7 +124,7 @@ async def test_the_parts_around_the_refused_one_are_still_sent(three_parts: str)
     media = Media(rejects_part=1)
 
     with pytest.raises(ConnectionError):
-        await Uploader(media).save_file(three_parts)
+        await uploader(media).save_file(three_parts)
 
     # The upload is not aborted mid-way: a worker that stops consuming leaves the producer
     #  blocked on a queue of size one, so every part is offered and only the answer is remembered.
@@ -126,7 +135,11 @@ async def test_the_parts_around_the_refused_one_are_still_sent(three_parts: str)
 async def test_re_uploading_one_missing_part_answers_with_nothing(three_parts: str) -> None:
     media = Media()
 
-    file = await Uploader(media).save_file(three_parts, file_id=_FILE_ID, file_part=1)
+    file = await uploader(media).save_file(
+        three_parts,
+        file_id=_FILE_ID,
+        file_part=1,
+    )
 
     assert file is None
     assert media.saved_parts == [1]
@@ -137,12 +150,16 @@ async def test_a_missing_part_the_server_refused_reaches_the_caller_too(three_pa
     media = Media(rejects_part=1)
 
     with pytest.raises(ConnectionError):
-        await Uploader(media).save_file(three_parts, file_id=_FILE_ID, file_part=1)
+        await uploader(media).save_file(
+            three_parts,
+            file_id=_FILE_ID,
+            file_part=1,
+        )
 
 
 @pytest.mark.asyncio
 async def test_no_path_is_not_an_upload_at_all() -> None:
-    assert await Uploader(Media()).save_file(None) is None
+    assert await uploader(Media()).save_file(None) is None
 
 
 @pytest.mark.asyncio
@@ -156,7 +173,7 @@ async def test_no_path_is_not_an_upload_at_all() -> None:
 async def test_an_existing_input_file_is_returned_without_upload(file) -> None:
     media = Media()
 
-    assert await Uploader(media).save_file(file) is file
+    assert await uploader(media).save_file(file) is file
     assert media.saved_parts == []
 
 
@@ -226,7 +243,7 @@ async def test_a_long_flood_wait_retries_when_the_upload_is_not_cancelled(monkey
     monkeypatch.setattr("pyrogram.methods.advanced.save_file.asyncio.sleep", skip_wait)
     monkeypatch.setattr("builtins.open", lambda *args, **kwargs: tracked_file)
 
-    file = await Uploader(media).save_file("upload.bin")
+    file = await uploader(media).save_file("upload.bin")
 
     assert isinstance(file, raw.types.InputFile)
     assert waits == [3600]
@@ -257,7 +274,7 @@ async def test_cancelling_a_long_flood_wait_stops_the_worker_and_closes_the_file
     monkeypatch.setattr("pyrogram.methods.advanced.save_file.asyncio.sleep", held_sleep)
     monkeypatch.setattr("builtins.open", lambda *args, **kwargs: tracked_file)
 
-    upload = asyncio.create_task(Uploader(media).save_file("upload.bin"))
+    upload = asyncio.create_task(uploader(media).save_file("upload.bin"))
 
     await sleep_started.wait()
     upload.cancel()
@@ -281,7 +298,7 @@ async def test_cancelling_an_active_rpc_keeps_the_caller_file_open() -> None:
     media = BlockingMedia()
     tracked_file = TrackedFile(b"x")
 
-    upload = asyncio.create_task(Uploader(media).save_file(tracked_file))
+    upload = asyncio.create_task(uploader(media).save_file(tracked_file))
 
     await media.workers_started.wait()
     upload.cancel()
@@ -313,8 +330,46 @@ async def test_stop_transmission_cancels_every_active_upload_worker(monkeypatch)
             raise StopTransmission
 
     with pytest.raises(StopTransmission):
-        await Uploader(media).save_file("upload.bin", progress=stop_after_every_worker_is_active)
+        await uploader(media).save_file("upload.bin", progress=stop_after_every_worker_is_active)
 
     assert len(media.sent_parts) == 4
     assert media.workers_cancelled.is_set()
     assert tracked_file.closed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "asynchronous",
+    [
+        pytest.param(True, id="async-callback"),
+        pytest.param(False, id="sync-callback-via-executor"),
+    ],
+)
+async def test_stop_transmission_from_a_progress_callback_ends_the_upload(
+    three_parts: str,
+    *,
+    asynchronous: bool,
+) -> None:
+    media = Media()
+    calls: list[int] = []
+
+    def cancel_on_second_part(current: int, total: int) -> None:
+        calls.append(current)
+
+        if len(calls) == 2:
+            raise StopTransmission
+
+    async def asynchronous_cancel(current: int, total: int) -> None:
+        cancel_on_second_part(current, total)
+
+    progress = asynchronous_cancel if asynchronous else cancel_on_second_part
+
+    with pytest.raises(StopTransmission):
+        await uploader(media).save_file(three_parts, progress=progress)
+
+    # Cancellation also stops a produced part that has not entered its RPC yet.
+    # The third part is never produced, and no worker sends after the abort returns.
+    assert media.saved_parts in ([0], [0, 1])
+    saved_parts = media.saved_parts.copy()
+    await asyncio.sleep(0)
+    assert media.saved_parts == saved_parts

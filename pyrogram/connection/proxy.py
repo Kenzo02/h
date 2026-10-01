@@ -22,8 +22,8 @@ import base64
 import ipaddress
 import re
 from dataclasses import dataclass
-from typing import ClassVar, Final, Literal, NamedTuple, TypedDict
 from re import Pattern
+from typing import ClassVar, Final, Literal, TypedDict
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from pyrogram.enums import ProxyScheme
@@ -100,7 +100,8 @@ class WebProxy:
 Proxy = SOCKS4Proxy | SOCKS5Proxy | HTTPProxy | MTProxy | WebProxy
 
 
-class ProxyAddress(NamedTuple):
+@dataclass(frozen=True)
+class ProxyAddress:
     hostname: str
     port: int
 
@@ -136,7 +137,13 @@ def uses_random_padding(proxy: Proxy | None) -> bool:
     return len(proxy.secret) == MARKED_SECRET_SIZE
 
 
-_PROXY_TYPES: Final[tuple[type, ...]] = (SOCKS4Proxy, SOCKS5Proxy, HTTPProxy, MTProxy, WebProxy)
+_PROXY_TYPES: Final[tuple[type[Proxy], ...]] = (
+    SOCKS4Proxy,
+    SOCKS5Proxy,
+    HTTPProxy,
+    MTProxy,
+    WebProxy,
+)
 
 # Schemes python_socks dials for us; the rest need a transport of their own.
 _DIALED_PROXY_TYPES: Final[dict[ProxyScheme, type[SOCKS4Proxy | SOCKS5Proxy | HTTPProxy]]] = {
@@ -258,7 +265,8 @@ _WEB_FAKE_TLS_REJECTION: Final[str] = (
 )
 
 
-class _DecodedSecret(NamedTuple):
+@dataclass(frozen=True)
+class _DecodedSecret:
     secret: bytes  # bare 16 bytes, or 17 with the dd marker kept
     sni_hostname: str | None  # the domain an ee secret appends, else None
 

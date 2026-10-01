@@ -18,10 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 class GetForumTopics:
@@ -83,7 +86,8 @@ class GetForumTopics:
             topics = []
 
             for topic in r.topics:
-                topics.append(await types.ForumTopic._parse(self, topic, messages, users, chats))
+                parsed_topic = await types.ForumTopic._parse(self, topic, messages, users, chats)
+                topics.append(utils.require_parsed(parsed_topic))
 
             if not topics:
                 return

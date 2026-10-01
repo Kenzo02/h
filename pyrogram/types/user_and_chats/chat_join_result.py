@@ -41,7 +41,7 @@ class ChatJoinResult(Object):
     @staticmethod
     async def _parse(
         client: pyrogram.Client, result: raw.base.messages.ChatInviteJoinResult
-    ) -> ChatJoinResult:
+    ) -> ChatJoinResult | None:
         if isinstance(result, raw.types.messages.ChatInviteJoinResultOk):
             result = result.updates
 

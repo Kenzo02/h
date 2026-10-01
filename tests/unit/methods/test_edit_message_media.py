@@ -10,7 +10,11 @@ class Client(EditMessageMedia):
 
     async def invoke(self, *args, **kwargs):
         return raw.types.Updates(
-            updates=[],
+            updates=[
+                raw.types.UpdateEditMessage(
+                    message=raw.types.MessageEmpty(id=1), pts=1, pts_count=1
+                )
+            ],
             users=[],
             chats=[],
             date=0,

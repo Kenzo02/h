@@ -18,10 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-import asyncio
+from typing import TYPE_CHECKING
 
-import pyrogram
 from pyrogram.methods.utilities.idle import idle
+from pyrogram.utils import loops
+
+if TYPE_CHECKING:
+    import pyrogram
 
 
 class Run:
@@ -70,4 +73,4 @@ class Run:
             await idle()
             await self.stop()
 
-        asyncio.run(start_idle_and_stop())
+        loops.run(start_idle_and_stop())

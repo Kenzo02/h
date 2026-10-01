@@ -20,13 +20,16 @@ from __future__ import annotations as _annotations
 
 import html
 import logging
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import enums, raw, types, utils
 
 from ..object import Object
 from ..update import Update
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ class Link(str):
         self.style = style
 
     @staticmethod
-    def format(url: str, text: str, style: enums.ParseMode):
+    def _format(url: str, text: str, style: enums.ParseMode) -> str:
         if style == enums.ParseMode.MARKDOWN:
             fmt = Link.MARKDOWN
         else:
@@ -55,13 +58,21 @@ class Link(str):
 
     # noinspection PyArgumentList
     def __new__(cls, url, text, style):
-        return str.__new__(cls, Link.format(url, text, style))
+        return str.__new__(cls, Link._format(url, text, style))
+
+    # `copy` and `pickle` rebuild the value with `cls.__new__(cls, *args)`, which raised
+    #  `Link.__new__() missing 2 required positional arguments: 'text' and 'style'`. The
+    #  `__slots__` come back through the default state restore, so no `__reduce__` is needed.
+    #  Three values instead of `str`'s one is the point, so the override is deliberate.
+    #  https://docs.python.org/3/library/pickle.html#object.__getnewargs__
+    def __getnewargs__(self) -> tuple[str, str, enums.ParseMode]:  # ty: ignore[invalid-method-override]
+        return self.url, self.text, self.style
 
     def __call__(self, other: str | None = None, *, style: str | None = None):
-        return Link.format(self.url, other or self.text, style or self.style)
+        return Link._format(self.url, other or self.text, style or self.style)
 
     def __str__(self):
-        return Link.format(self.url, self.text, self.style)
+        return Link._format(self.url, self.text, self.style)
 
 
 class User(Object, Update):
@@ -409,11 +420,11 @@ class User(Object, Update):
             True, if the bot supports join request queries and can be assigned to process them.
             Returned only in :meth:`~pyrogram.Client.get_me`
 
-        community_id (``int``, *optional*)
+        community_id (``int``, *optional*):
             The identifier to which chat with the bot was added.
             For bots only.
 
-        community (:obj:`~pyrogram.types.Community`, *optional*)
+        community (:obj:`~pyrogram.types.Community`, *optional*):
             The :obj:`~pyrogram.types.Community` to which chat with the bot was added.
             For bots only.
 

@@ -21,9 +21,12 @@ from __future__ import annotations as _annotations
 import logging
 import os
 from struct import pack, unpack
+from typing import TYPE_CHECKING
 
-from pyrogram.connection.proxy import Proxy
 from pyrogram.connection.transport.tcp.tcp import INTERMEDIATE_PADDED_OBFUSCATE_TAG, TCP
+
+if TYPE_CHECKING:
+    from pyrogram.connection.proxy import Proxy
 
 log = logging.getLogger(__name__)
 
@@ -53,9 +56,9 @@ class TCPIntermediatePadded(TCP):
             await super().send(INTERMEDIATE_PADDED_OBFUSCATE_TAG, wait_for_marker=False)
         self.marker_event.set()
 
-    async def send(self, data: bytes, *args) -> None:
+    async def send(self, data: bytes, wait_for_marker: bool = True) -> None:
         padding = os.urandom(os.urandom(1)[0] & 0x0F)
-        await super().send(pack("<i", len(data) + len(padding)) + data + padding)
+        await super().send(pack("<i", len(data) + len(padding)) + data + padding, wait_for_marker)
 
     async def recv(self, length: int = 0) -> bytes | None:
         length = await super().recv(4)

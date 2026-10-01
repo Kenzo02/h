@@ -18,10 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 class GetDirectMessagesTopics:
@@ -91,11 +94,14 @@ class GetDirectMessagesTopics:
             topics = []
 
             for topic in r.dialogs:
-                topics.append(
-                    await types.DirectMessagesTopic._parse(
-                        client=self, topic=topic, messages=messages, users=users, chats=chats
-                    )
+                parsed_topic = await types.DirectMessagesTopic._parse(
+                    client=self,
+                    topic=topic,
+                    messages=messages,
+                    users=users,
+                    chats=chats,
                 )
+                topics.append(utils.require_parsed(parsed_topic))
 
             if not topics:
                 return

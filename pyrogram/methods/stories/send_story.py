@@ -20,13 +20,16 @@ from __future__ import annotations as _annotations
 
 import os
 from pathlib import Path
-from typing import BinaryIO
-from collections.abc import Callable
+from typing import TYPE_CHECKING, BinaryIO
 
 import pyrogram
 from pyrogram import StopTransmission, enums, raw, types, utils
-from pyrogram._typing import PathType
 from pyrogram.errors import FilePartMissing
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from pyrogram._typing import PathType
 
 
 class SendStory:
@@ -126,7 +129,7 @@ class SendStory:
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
 
-            caption_entities (List of :obj:`~pyrogram.types.MessageEntity`):
+            caption_entities (List of :obj:`~pyrogram.types.MessageEntity`, *optional*):
                 List of special entities that appear in the caption, which can be specified instead of *parse_mode*.
 
             progress (``Callable``, *optional*):
@@ -287,6 +290,10 @@ class SendStory:
                         )
                     )
                 except FilePartMissing as e:
+                    # The error names the missing part; without it there is nothing to resave.
+                    if e.file_part is None:
+                        raise
+
                     await self.save_file(media, file_id=file.id, file_part=e.file_part)
                 else:
                     for i in r.updates:

@@ -20,7 +20,7 @@ from .block_list import BlockList
 from .business_schedule import BusinessSchedule
 from .button_style import ButtonStyle
 from .chat_action import ChatAction
-from .chat_event_action import ChatEventAction
+from .chat_event_action_type import ChatEventActionType
 from .chat_join_request_query_result import ChatJoinRequestQueryResult
 from .chat_join_type import ChatJoinType
 from .chat_member_status import ChatMemberStatus
@@ -59,13 +59,15 @@ from .suggested_post_state import SuggestedPostState
 from .top_chat_category import TopChatCategory
 from .upgraded_gift_origin import UpgradedGiftOrigin
 from .user_status import UserStatus
+from .sticker_format import StickerFormat
 
 __all__ = [
     "BlockList",
+    "StickerFormat",
     "BusinessSchedule",
     "ButtonStyle",
     "ChatAction",
-    "ChatEventAction",
+    "ChatEventActionType",
     "ChatJoinRequestQueryResult",
     "ChatJoinType",
     "ChatMemberStatus",

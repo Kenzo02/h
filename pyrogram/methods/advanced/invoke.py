@@ -19,16 +19,16 @@
 from __future__ import annotations as _annotations
 
 import logging
-from typing import TypeVar
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import raw
-from pyrogram.raw.core import TLObject
 from pyrogram.session import Session
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from pyrogram.raw.core import ReturnType, TLObject
 
-ReturnType = TypeVar("ReturnType")
+log = logging.getLogger(__name__)
 
 
 class Invoke:

@@ -50,7 +50,7 @@ class EditStoryCaption:
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
 
-            caption_entities (List of :obj:`~pyrogram.types.MessageEntity`):
+            caption_entities (List of :obj:`~pyrogram.types.MessageEntity`, *optional*):
                 List of special entities that appear in the caption, which can be specified instead of *parse_mode*.
 
         Returns:
@@ -80,3 +80,5 @@ class EditStoryCaption:
                 return await types.Story._parse(
                     self, i.story, i.peer, {i.id: i for i in r.users}, {i.id: i for i in r.chats}
                 )
+
+        raise ValueError("The response contains no story update")

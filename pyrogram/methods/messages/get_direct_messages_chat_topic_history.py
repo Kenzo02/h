@@ -18,11 +18,14 @@
 
 from __future__ import annotations as _annotations
 
-from datetime import datetime
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from datetime import datetime, timedelta
 
 
 async def get_chunk(
@@ -33,7 +36,7 @@ async def get_chunk(
     limit: int = 0,
     offset: int = 0,
     from_message_id: int = 0,
-    from_date: datetime | None = None,
+    from_date: datetime | timedelta | None = None,
     min_id: int = 0,
     max_id: int = 0,
     reverse: bool = False,
@@ -71,7 +74,7 @@ class GetDirectMessagesChatTopicHistory:
         limit: int = 0,
         offset: int = 0,
         offset_id: int = 0,
-        offset_date: datetime | None = None,
+        offset_date: datetime | timedelta | None = None,
         min_id: int = 0,
         max_id: int = 0,
         reverse: bool = False,
@@ -100,8 +103,9 @@ class GetDirectMessagesChatTopicHistory:
             offset_id (``int``, *optional*):
                 Identifier of the first message to be returned.
 
-            offset_date (:py:obj:`~datetime.datetime`, *optional*):
+            offset_date (:py:obj:`~datetime.datetime` | :py:obj:`~datetime.timedelta`, *optional*):
                 Pass a date as offset to retrieve only older messages starting from that date.
+                A :py:obj:`~datetime.timedelta` is counted from now.
 
             min_id (``int``, *optional*):
                 If a positive value was provided, the method will return only messages with IDs more than min_id.

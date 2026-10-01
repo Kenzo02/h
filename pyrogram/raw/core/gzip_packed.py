@@ -20,7 +20,7 @@ from __future__ import annotations as _annotations
 
 from gzip import compress, decompress
 from io import BytesIO
-from typing import cast, Any
+from typing import Any, cast
 
 from .primitives.bytes import Bytes
 from .primitives.int import Int
@@ -37,10 +37,10 @@ class GzipPacked(TLObject):
     def __init__(self, packed_data: TLObject):
         self.packed_data = packed_data
 
-    @staticmethod
-    def read(data: BytesIO, *args: Any) -> GzipPacked:
+    @classmethod
+    def read(cls, data: BytesIO, *args: Any) -> GzipPacked:
         # Return the Object itself instead of a GzipPacked wrapping it
-        return cast(GzipPacked, TLObject.read(BytesIO(decompress(Bytes.read(data)))))
+        return cast("GzipPacked", TLObject.read(BytesIO(decompress(Bytes.read(data)))))
 
     def write(self, *args: Any) -> bytes:
         b = BytesIO()

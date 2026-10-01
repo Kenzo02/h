@@ -18,15 +18,18 @@
 
 from __future__ import annotations as _annotations
 
-import pyrogram
+from typing import TYPE_CHECKING
 
 from ..object import Object
+
+if TYPE_CHECKING:
+    import pyrogram
 
 
 class InputMessageContent(Object):
     """Content of a message to be sent as a result of an inline query.
 
-    Pyrogram currently supports the following types:
+    Kurigram currently supports the following types:
 
     - :obj:`~pyrogram.types.InputTextMessageContent`
     - :obj:`~pyrogram.types.InputRichMessageContent`

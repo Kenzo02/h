@@ -21,9 +21,11 @@ from __future__ import annotations as _annotations
 import json
 import re
 import shutil
-from functools import partial
 from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, Final, NamedTuple
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # from autoflake import fix_code
 # from black import format_str, FileMode
@@ -43,6 +45,16 @@ INT_RE = re.compile(r"int(\d+)")
 
 CORE_TYPES = ["int", "long", "int128", "int256", "double", "bytes", "string", "Bool", "true"]
 
+# The TL core return types have no module under `raw.base`: `Bool`, `int` and `long` decode
+#  to Python builtins, and `future_salts` is hand-written in `pyrogram/raw/core` because its
+#  constructor is parsed manually (see `source/sys_msgs.tl`).
+CORE_RETURN_TYPE_HINTS: Final[Mapping[str, str]] = {
+    "Bool": "bool",
+    "int": "int",
+    "long": "int",
+    "FutureSalts": "raw.core.FutureSalts",
+}
+
 WARNING = """
 # # # # # # # # # # # # # # # # # # # # # # # #
 #               !!! WARNING !!!               #
@@ -50,9 +62,6 @@ WARNING = """
 # All changes made in this file will be lost! #
 # # # # # # # # # # # # # # # # # # # # # # # #
 """.strip()
-
-# noinspection PyShadowingBuiltins
-open = partial(open, encoding="utf-8")
 
 types_to_constructors = {}
 types_to_functions = {}
@@ -62,7 +71,7 @@ namespaces_to_constructors = {}
 namespaces_to_functions = {}
 
 try:
-    with open("docs.json") as f:
+    with open("docs.json", encoding="utf-8") as f:
         docs = json.load(f)
 except FileNotFoundError:
     docs = {"type": {}, "constructor": {}, "method": {}}
@@ -103,14 +112,24 @@ def qualified_name(qualtype: str) -> str:
     return ".".join([namespace, name]).strip(".")
 
 
+def resolved_return_type(name: str) -> str:
+    """`raw.base.<Type>` for a schema type, the real Python type for a TL core one"""
+    return CORE_RETURN_TYPE_HINTS.get(name, f"raw.base.{qualified_name(name)}")
+
+
 # noinspection PyShadowingBuiltins, PyShadowingNames
 def get_return_type_hint(qualtype: str) -> str:
     """Get return type hint for generic TLObject"""
+    # `X` is the schema's own type variable, declared `{X:Type}` and bound by the `!X` argument:
+    #  the function returns whatever the query it wraps returns. `ReturnType` names a real object
+    #  the generated module imports, so unlike the branches below it is not quoted.
+    if qualtype == "X":
+        return "ReturnType"
+
     if qualtype.startswith("Vector"):
-        element = qualified_name(vector_element(qualtype))
-        hint = f"list[raw.base.{element}]"
+        hint = f"list[{resolved_return_type(vector_element(qualtype))}]"
     else:
-        hint = f"raw.base.{qualified_name(qualtype)}"
+        hint = resolved_return_type(qualtype)
 
     # This goes in `class X(TLObject[...])`, a base-class subscript, not an annotation, so
     #  the future import does not defer it: unquoted, `raw` is `TYPE_CHECKING`-only and it
@@ -140,8 +159,13 @@ def get_type_hint(type: str) -> str:
         else:  # bytes and object
             type = "bytes"
 
-    if type in ["Object", "!X"]:
+    if type == "Object":
         return "TLObject"
+
+    # The query a schema-generic function wraps. Carrying the variable here is what binds it,
+    #  so `InvokeWithoutUpdates(query=GetHistory(...))` is a `TLObject` of the query's own type.
+    if type == "!X":
+        return "TLObject[ReturnType]"
 
     if re.match("^vector", type, re.I):
         is_core = True
@@ -240,15 +264,15 @@ def start(format: bool = False):
     shutil.rmtree(DESTINATION_PATH / "base", ignore_errors=True)
 
     with (
-        open(HOME_PATH / "source/auth_key.tl") as f1,
-        open(HOME_PATH / "source/sys_msgs.tl") as f2,
-        open(HOME_PATH / "source/main_api.tl") as f3,
+        open(HOME_PATH / "source/auth_key.tl", encoding="utf-8") as f1,
+        open(HOME_PATH / "source/sys_msgs.tl", encoding="utf-8") as f2,
+        open(HOME_PATH / "source/main_api.tl", encoding="utf-8") as f3,
     ):
         schema = (f1.read() + f2.read() + f3.read()).splitlines()
 
     with (
-        open(HOME_PATH / "template/type.txt") as f1,
-        open(HOME_PATH / "template/combinator.txt") as f2,
+        open(HOME_PATH / "template/type.txt", encoding="utf-8") as f1,
+        open(HOME_PATH / "template/combinator.txt", encoding="utf-8") as f2,
     ):
         type_tmpl = f1.read()
         combinator_tmpl = f2.read()
@@ -396,7 +420,7 @@ def start(format: bool = False):
                 f"            " + references
             )
 
-        with open(dir_path / f"{snake(module)}.py", "w") as f:
+        with open(dir_path / f"{snake(module)}.py", "w", encoding="utf-8") as f:
             f.write(
                 type_tmpl.format(
                     notice=notice,
@@ -623,6 +647,9 @@ def start(format: bool = False):
         else:
             generic_type = ""
 
+        # Only a schema-generic function writes `ReturnType`, so only its module imports it.
+        return_type_import = ", ReturnType" if c.qualtype == "X" else ""
+
         compiled_combinator = combinator_tmpl.format(
             notice=notice,
             warning=WARNING,
@@ -637,6 +664,7 @@ def start(format: bool = False):
             write_types=write_types,
             return_arguments=return_arguments,
             generic_type=generic_type,
+            return_type_import=return_type_import,
         )
 
         directory = "types" if c.section == "types" else c.section
@@ -650,7 +678,7 @@ def start(format: bool = False):
         if module == "Updates":
             module = "UpdatesT"
 
-        with open(dir_path / f"{snake(module)}.py", "w") as f:
+        with open(dir_path / f"{snake(module)}.py", "w", encoding="utf-8") as f:
             f.write(compiled_combinator)
 
         d = namespaces_to_constructors if c.section == "types" else namespaces_to_functions
@@ -661,7 +689,9 @@ def start(format: bool = False):
         d[c.namespace].append(c.name)
 
     for namespace, types in namespaces_to_types.items():
-        with open(DESTINATION_PATH / "base" / namespace / "__init__.py", "w") as f:
+        with open(
+            DESTINATION_PATH / "base" / namespace / "__init__.py", "w", encoding="utf-8"
+        ) as f:
             f.write(f"{notice}\n\n")
             f.write(f"{WARNING}\n\n")
 
@@ -677,7 +707,9 @@ def start(format: bool = False):
                 f.write(f"from . import {', '.join(filter(bool, namespaces_to_types))}")
 
     for namespace, types in namespaces_to_constructors.items():
-        with open(DESTINATION_PATH / "types" / namespace / "__init__.py", "w") as f:
+        with open(
+            DESTINATION_PATH / "types" / namespace / "__init__.py", "w", encoding="utf-8"
+        ) as f:
             f.write(f"{notice}\n\n")
             f.write(f"{WARNING}\n\n")
 
@@ -693,7 +725,9 @@ def start(format: bool = False):
                 f.write(f"from . import {', '.join(filter(bool, namespaces_to_constructors))}\n")
 
     for namespace, types in namespaces_to_functions.items():
-        with open(DESTINATION_PATH / "functions" / namespace / "__init__.py", "w") as f:
+        with open(
+            DESTINATION_PATH / "functions" / namespace / "__init__.py", "w", encoding="utf-8"
+        ) as f:
             f.write(f"{notice}\n\n")
             f.write(f"{WARNING}\n\n")
 

@@ -15,7 +15,17 @@ class MessageClient(EditMessageText):
 
     async def invoke(self, query, **kwargs):
         self.query = query
-        return raw.types.Updates(updates=[], users=[], chats=[], date=0, seq=0)
+        return raw.types.Updates(
+            updates=[
+                raw.types.UpdateEditMessage(
+                    message=raw.types.MessageEmpty(id=1), pts=1, pts_count=1
+                )
+            ],
+            users=[],
+            chats=[],
+            date=0,
+            seq=0,
+        )
 
 
 class InlineSession:

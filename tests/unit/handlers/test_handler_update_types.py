@@ -29,12 +29,13 @@ import inspect
 import re
 import sys
 import typing
-from typing import Final
+from collections.abc import Callable, Iterator
 from re import Pattern
-from collections.abc import Iterator
+from typing import Final
 
 import pyrogram
 from pyrogram import handlers, types
+from pyrogram.filters import Filter
 from pyrogram.types import Update
 
 # The `Other parameters:` block of a handler docstring names the type the callback is
@@ -81,12 +82,13 @@ def handed_to(handler: type[handlers.Handler]) -> str | None:
     nor `stop_propagation()`: a separate shape, and a separate decision.
     """
     # Every module carries `from __future__ import annotations`, so the signature is a set
-    #  of strings until something evaluates them. A handler module imports `types` under
-    #  `TYPE_CHECKING` only, so its own globals cannot resolve that name: hand it in.
+    #  of strings until something evaluates them. A handler module imports `pyrogram`/`types`
+    #  and, where the callback signature names it, `Callable`/`Filter`, under `TYPE_CHECKING`
+    #  only, so its own globals cannot resolve those names: hand them in.
     signature = inspect.signature(
         handler.__init__,
         globals=vars(sys.modules[handler.__module__]),
-        locals={"pyrogram": pyrogram, "types": types},
+        locals={"pyrogram": pyrogram, "types": types, "Callable": Callable, "Filter": Filter},
         eval_str=True,
     )
 
@@ -112,11 +114,22 @@ def documented_by(handler: type[handlers.Handler]) -> set[str]:
 
 
 def handlers_with_an_update() -> list[tuple[str, str]]:
-    return [
-        (handler.__name__, handed_to(handler))
-        for handler in handler_classes()
-        if handler.__name__ not in _TAKES_NO_PARSED_UPDATE
-    ]
+    pairs: list[tuple[str, str]] = []
+
+    for handler in handler_classes():
+        if handler.__name__ in _TAKES_NO_PARSED_UPDATE:
+            continue
+
+        handed = handed_to(handler)
+
+        # `_TAKES_NO_PARSED_UPDATE` lists exactly the handlers `handed_to` has nothing for.
+        if handed is None:
+            msg = f"{handler.__name__} hands its callback no update"
+            raise ValueError(msg)
+
+        pairs.append((handler.__name__, handed))
+
+    return pairs
 
 
 def test_every_handler_is_handed_an_update() -> None:

@@ -18,10 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from datetime import datetime, timedelta
 
 
 class EditMessageMedia:
@@ -31,7 +34,7 @@ class EditMessageMedia:
         message_id: int,
         media: types.InputMedia,
         show_caption_above_media: bool | None = None,
-        schedule_date: datetime | None = None,
+        schedule_date: datetime | timedelta | None = None,
         business_connection_id: str | None = None,
         reply_markup: types.InlineKeyboardMarkup | None = None,
         file_name: str | None = None,
@@ -62,8 +65,9 @@ class EditMessageMedia:
             show_caption_above_media (``bool``, *optional*):
                 Pass True, if the caption must be shown above the message media.
 
-            schedule_date (:py:obj:`~datetime.datetime`, *optional*):
+            schedule_date (:py:obj:`~datetime.datetime` | :py:obj:`~datetime.timedelta`, *optional*):
                 Date when the message will be automatically sent.
+                A :py:obj:`~datetime.timedelta` is counted from now.
 
             business_connection_id (``str``, *optional*):
                 Unique identifier of the business connection on behalf of which the message will be sent.
@@ -73,7 +77,7 @@ class EditMessageMedia:
 
             file_name (``str``, *optional*):
                 File name of the media to be sent. Not applicable to photos.
-                Defaults to file's path basename.
+                Defaults to the media's file name.
 
         Returns:
             :obj:`~pyrogram.types.Message`: On success, the edited message is returned.
@@ -135,8 +139,4 @@ class EditMessageMedia:
             business_connection_id=business_connection_id,
         )
 
-        for i in r.updates:
-            if isinstance(i, (raw.types.UpdateEditMessage, raw.types.UpdateEditChannelMessage)):
-                return await types.Message._parse(
-                    self, i.message, {i.id: i for i in r.users}, {i.id: i for i in r.chats}
-                )
+        return await utils.parse_edited_message(self, r, message_id)

@@ -19,8 +19,10 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
-import pyrogram
+if TYPE_CHECKING:
+    import pyrogram
 
 
 class Connect:
@@ -45,8 +47,15 @@ class Connect:
 
         await self.load_session()
 
+        server_address = await self.storage.server_address()
+
+        # `load_session` fills the address only for a fresh session; a stored one
+        #  missing it is corrupt, and `":" in None` would raise a bare `TypeError`.
+        if server_address is None:
+            raise ValueError("The session storage holds no server address")
+
         self.session = await self.get_session(
-            server_address=await self.storage.server_address(),
+            server_address=server_address,
             port=await self.storage.port(),
             export_authorization=False,
             temporary=True,
@@ -54,7 +63,7 @@ class Connect:
         )
         self.is_connected = True
 
-        is_ipv6_session = ":" in await self.storage.server_address()
+        is_ipv6_session: bool = ":" in server_address
 
         if (self.ipv6 and not is_ipv6_session) or (not self.ipv6 and is_ipv6_session):
             await self.set_dc(dc_id=await self.storage.dc_id())

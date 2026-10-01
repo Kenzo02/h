@@ -19,8 +19,7 @@
 from __future__ import annotations as _annotations
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types
 
 
 class GetChatMenuButton:
@@ -33,7 +32,7 @@ class GetChatMenuButton:
         .. include:: /_includes/usable-by/bots.rst
 
         Parameters:
-            chat_id (``int`` | ``str``):
+            chat_id (``int`` | ``str``, *optional*):
                 Unique identifier (int) or username (str) of the target chat.
                 If not specified, default bot's menu button will be returned.
         """
@@ -57,3 +56,5 @@ class GetChatMenuButton:
 
         if isinstance(r, raw.types.BotMenuButton):
             return types.MenuButtonWebApp(text=r.text, web_app=types.WebAppInfo(url=r.url))
+
+        raise TypeError(f"Unknown menu button type {r.__class__.__name__}")

@@ -28,7 +28,6 @@ import re
 import shutil
 import sys
 import time
-from collections import OrderedDict
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -36,13 +35,10 @@ from importlib import import_module
 from io import BytesIO
 from mimetypes import MimeTypes
 from pathlib import Path
-from typing import Any
-from collections.abc import AsyncGenerator, Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 import pyrogram
 from pyrogram import __license__, __version__, enums, raw, utils
-from pyrogram._typing import PathType
-from pyrogram.connection import Proxy
 from pyrogram.connection.proxy import ProxyDict, normalize_proxy
 from pyrogram.crypto import aes
 from pyrogram.dc_options import (
@@ -82,6 +78,12 @@ from .file_id import FileId, FileType, ThumbnailSource
 from .parser import Parser
 from .session.internals import MsgId
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable, Sequence
+
+    from pyrogram._typing import PathType
+    from pyrogram.connection import Proxy
+
 log = logging.getLogger(__name__)
 
 
@@ -98,7 +100,7 @@ def _plugin_handlers(target: Any) -> Sequence[tuple[Handler, int]] | None:
 
 
 class Client(Methods):
-    """Pyrogram Client, the main means for interacting with Telegram.
+    """Kurigram Client, the main means for interacting with Telegram.
 
     Parameters:
         name (``str``):
@@ -114,7 +116,7 @@ class Client(Methods):
 
         app_version (``str``, *optional*):
             Application version.
-            Defaults to "Pyrogram x.y.z".
+            Defaults to "Kurigram x.y.z".
 
         device_model (``str``, *optional*):
             Device model.
@@ -197,7 +199,7 @@ class Client(Methods):
 
         workdir (``str`` | ``os.PathLike``, *optional*):
             Define a custom working directory.
-            The working directory is the location in the filesystem where Pyrogram will store the session files.
+            The working directory is the location in the filesystem where Kurigram will store the session files.
             Defaults to the parent directory of the main script.
 
         plugins (``dict``, *optional*):
@@ -249,6 +251,10 @@ class Client(Methods):
             Set the maximum size of the topic cache.
             Defaults to 1000.
 
+        max_sticker_set_name_cache_size (``int``, *optional*):
+            Set the maximum size of the sticker set name cache.
+            Defaults to 250.
+
         storage_engine (:obj:`~pyrogram.storage.Storage`, *optional*):
             Pass an instance of your own implementation of session storage engine.
             Useful when you want to store your session in databases like Mongo, Redis, etc.
@@ -282,7 +288,7 @@ class Client(Methods):
             A dict is converted on connect; an already built JSONValue is sent as it is.
     """
 
-    APP_VERSION = f"Pyrogram {__version__}"
+    APP_VERSION = f"Kurigram {__version__}"
     DEVICE_MODEL = f"{platform.python_implementation()} {platform.python_version()}"
     SYSTEM_VERSION = f"{platform.system()} {platform.release()}"
 
@@ -314,6 +320,7 @@ class Client(Methods):
     MAX_CONCURRENT_TRANSMISSIONS = 1
     MAX_MESSAGE_CACHE_SIZE = 1000
     MAX_TOPIC_CACHE_SIZE = 1000
+    MAX_STICKER_SET_NAME_CACHE_SIZE = 250
 
     mimetypes = MimeTypes()
     with (Path(__file__).parent / "mime_types.txt").open(encoding="utf-8") as mime_types:
@@ -361,6 +368,7 @@ class Client(Methods):
         init_connection_params: dict | raw.base.JSONValue | None = None,
         connection_factory: type[Connection] = Connection,
         protocol_factory: type[TCP] = TCPAbridged,
+        max_sticker_set_name_cache_size: int = MAX_STICKER_SET_NAME_CACHE_SIZE,
     ):
         super().__init__()
 
@@ -394,6 +402,7 @@ class Client(Methods):
         self.max_concurrent_transmissions = max_concurrent_transmissions
         self.max_message_cache_size = max_message_cache_size
         self.max_topic_cache_size = max_topic_cache_size
+        self.max_sticker_set_name_cache_size = max_sticker_set_name_cache_size
         self.client_platform = client_platform
         self.link_preview_options = link_preview_options
         self.fetch_replies = fetch_replies
@@ -452,8 +461,9 @@ class Client(Methods):
 
         self.message_split_ranges: list[raw.base.MessageRange] | None = None
 
-        self.message_cache = Cache(self.max_message_cache_size)
-        self.topic_cache = Cache(self.max_topic_cache_size)
+        self.message_cache = utils.Cache(self.max_message_cache_size)
+        self.topic_cache = utils.Cache(self.max_topic_cache_size)
+        self.sticker_set_name_cache = utils.Cache(self.max_sticker_set_name_cache_size)
 
         # Sometimes, for some reason, the server will stop sending updates and will only respond to pings.
         # This watchdog will invoke updates.GetState in order to wake up the server and enable it sending updates again
@@ -467,7 +477,8 @@ class Client(Methods):
         #  through `run_coroutine_threadsafe`, which takes the loop as an argument.
         self._loop: asyncio.AbstractEventLoop | None = None
 
-        self.__config: raw.types.Config = None
+        self._app_config: raw.types.help.AppConfig | None = None
+        self.__config: raw.types.Config | None = None
 
     def __enter__(self):
         return self.start()
@@ -506,6 +517,7 @@ class Client(Methods):
 
         self.message_cache.reset_lock()
         self.topic_cache.reset_lock()
+        self.sticker_set_name_cache.reset_lock()
 
     async def updates_watchdog(self):
         while True:
@@ -530,9 +542,9 @@ class Client(Methods):
         if self.bot_token:
             return await self.sign_in_bot(self.bot_token)
 
-        print(f"Welcome to Pyrogram (version {__version__})")
+        print(f"Welcome to Kurigram (version {__version__})")
         print(
-            f"Pyrogram is free software and comes with ABSOLUTELY NO WARRANTY. Licensed\n"
+            f"Kurigram is free software and comes with ABSOLUTELY NO WARRANTY. Licensed\n"
             f"under the terms of the {__license__}.\n"
         )
 
@@ -609,7 +621,7 @@ class Client(Methods):
                             # TODO: raw.functions.auth.CheckPaidAuth
                             raise Unauthorized(
                                 f"You need to pay {email_sent_code.sent_code.amount}{email_sent_code.sent_code.currency} or purchase premium to continue authorization "
-                                "process, which is currently not supported by Pyrogram."
+                                "process, which is currently not supported by Kurigram."
                             )
                 except BadRequest as e:
                     print(e.MESSAGE)
@@ -721,8 +733,8 @@ class Client(Methods):
             try:
                 print(
                     "\x1b[2J\n"
-                    f"Welcome to Pyrogram (version {__version__})\n"
-                    "Pyrogram is free software and comes with ABSOLUTELY NO WARRANTY. Licensed\n"
+                    f"Welcome to Kurigram (version {__version__})\n"
+                    "Kurigram is free software and comes with ABSOLUTELY NO WARRANTY. Licensed\n"
                     f"under the terms of the {__license__}.\n"
                     "Scan the QR code below to login\n"
                     "Settings -> Privacy and Security -> Active Sessions -> Scan QR Code.",
@@ -784,6 +796,8 @@ class Client(Methods):
                         self.password = None
             else:
                 break
+
+        raise ValueError("QR login finished without a signed-in user")
 
     def set_parse_mode(self, parse_mode: enums.ParseMode | None):
         """Set the parse mode to be used globally by the client.
@@ -1534,6 +1548,10 @@ class Client(Methods):
             temporary (``bool``, *optional*):
                 Create temporary session instead of getting from storage.
                 Used only when uploading/downloading and don't forget to stop it.
+
+            order_fallback_endpoints (``bool``, *optional*):
+                Order a stored endpoint with the fork's same-DC fallback candidates.
+                Explicit custom endpoints otherwise keep their original selection.
         """
         if not dc_id:
             dc_id = await self.storage.dc_id()
@@ -1561,6 +1579,10 @@ class Client(Methods):
         is_current_dc = await self.storage.dc_id() == dc_id
 
         if not temporary and is_current_dc and not is_media:
+            # Only reachable on a connected client, where `session` is set.
+            if self.session is None:
+                raise ConnectionError("Client is not connected")
+
             return self.session
 
         sessions = self.media_sessions if is_media else self.sessions
@@ -1839,44 +1861,5 @@ class Client(Methods):
         return self.mimetypes.guess_extension(mime_type)
 
 
-class Cache:
-    def __init__(self, capacity: int):
-        if capacity < 0:
-            raise ValueError("capacity must be non-negative")
-
-        self.capacity = capacity
-        self._cache: OrderedDict[Any, Any] = OrderedDict()
-        self._lock = asyncio.Lock()
-
-    # Rebuilds the lock and keeps what is cached. Why it has to be rebuilt at all is on
-    #  `Client._rebuild_loop_bound_state`.
-    def reset_lock(self) -> None:
-        self._lock = asyncio.Lock()
-
-    def __len__(self) -> int:
-        return len(self._cache)
-
-    def __contains__(self, key: Any) -> bool:
-        return key in self._cache
-
-    def __bool__(self) -> bool:
-        return bool(self._cache)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(capacity={self.capacity}, size={len(self)})"
-
-    async def get(self, key: Any, default: Any = None) -> Any:
-        async with self._lock:
-            if key not in self._cache:
-                return default
-
-            self._cache.move_to_end(key)
-            return self._cache[key]
-
-    async def set(self, key: Any, value: Any) -> None:
-        async with self._lock:
-            self._cache[key] = value
-            self._cache.move_to_end(key)
-
-            if len(self._cache) > self.capacity:
-                self._cache.popitem(last=False)
+# Preserve the historical import path for downstream callers and cached objects.
+Cache = utils.Cache

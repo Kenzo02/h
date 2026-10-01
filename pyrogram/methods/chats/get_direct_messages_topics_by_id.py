@@ -19,11 +19,13 @@
 from __future__ import annotations as _annotations
 
 import logging
-from typing import overload
-from collections.abc import Iterable
+from typing import TYPE_CHECKING, overload
 
 import pyrogram
 from pyrogram import raw, types
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class GetDirectMessagesTopicsByID:
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
 
-            topic_ids (``int`` | Iterable of ``int``, *optional*):
+            topic_ids (``int`` | Iterable of ``int``):
                 Pass a single topic identifier or an iterable of topic ids (as integers) to get the information of the
                 topic themselves.
 

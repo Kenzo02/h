@@ -18,11 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class DeleteStories:
@@ -40,7 +42,7 @@ class DeleteStories:
                 Unique identifier (int) or username (str) of the target chat.
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
 
-            story_ids (``int`` | Iterable of ``int``, *optional*):
+            story_ids (``int`` | Iterable of ``int``):
                 Unique identifier (int) or list of unique identifiers (list of int) for the target stories.
 
         Returns:

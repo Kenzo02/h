@@ -19,8 +19,7 @@
 from __future__ import annotations as _annotations
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types, utils
 
 
 class CreateGroup:
@@ -61,4 +60,4 @@ class CreateGroup:
             )
         )
 
-        return await types.Chat._parse_chat(self, r.updates.chats[0])
+        return utils.require_parsed(await types.Chat._parse_chat(self, r.updates.chats[0]))

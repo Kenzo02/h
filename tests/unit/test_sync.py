@@ -35,16 +35,18 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import AsyncGenerator, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Final, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 
 import pytest
 
 import pyrogram
 from pyrogram import Client, sync, types
 from pyrogram.sync import _bridge_loop, async_to_sync
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Iterator
 
 _HANDLED_SIGNALS: Final[tuple[signal.Signals, ...]] = (
     signal.SIGINT,
@@ -69,8 +71,9 @@ class Api:
         for _ in range(count):
             yield asyncio.get_running_loop()
 
-    # `shout` and `spell` reach their own loop the way `Session.send` does
-    #  (`pyrogram/session/session.py:349`), so running them anywhere else raises.
+    # `shout` and `spell` await through the stored `_loop`, so running them on any other
+    #  loop raises. A real client's coroutines are loop-bound the same way, through the
+    #  `asyncio` primitives that `Client._rebuild_loop_bound_state` rebuilds.
     async def shout(self, text: str) -> str:
         return await self._loop.run_in_executor(self.executor, str.upper, text)
 

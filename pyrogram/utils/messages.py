@@ -77,7 +77,10 @@ async def parse_messages(
             if messages_with_replies:
                 # We need a chat id, but some messages might be empty (no chat attribute available)
                 # Scan until we find a message with a chat available (there must be one, because we are fetching replies)
-                chat_id = next((m.chat.id for m in parsed_messages if m.chat), 0)
+                chat_id = next(
+                    (m.chat.id for m in parsed_messages if m.chat and m.chat.id is not None),
+                    0,
+                )
 
                 is_all_replies_in_same_chat = not any(
                     m.reply_to_peer_id for m in messages_with_replies.values()
@@ -141,6 +144,35 @@ async def parse_messages(
                 )
 
     return types.List(parsed_messages)
+
+
+async def parse_edited_message(
+    client: pyrogram.Client, updates: raw.base.Updates, message_id: int
+) -> types.Message:
+    """Return the requested edit, not an unrelated message in the same response."""
+    users = {user.id: user for user in getattr(updates, "users", [])}
+    chats = {chat.id: chat for chat in getattr(updates, "chats", [])}
+    for update in getattr(updates, "updates", []):
+        if (
+            isinstance(
+                update,
+                (
+                    raw.types.UpdateEditMessage,
+                    raw.types.UpdateEditChannelMessage,
+                    raw.types.UpdateEditEphemeralMessage,
+                ),
+            )
+            and update.message.id == message_id
+        ):
+            return await types.Message._parse(
+                client,
+                update.message,
+                users,
+                chats,
+                business_connection_id=getattr(update, "connection_id", None),
+                raw_reply_to_message=getattr(update, "reply_to_message", None),
+            )
+    raise ValueError("The response contains no edited message")
 
 
 async def parse_deleted_messages(client, update, users, chats) -> list[types.Message]:

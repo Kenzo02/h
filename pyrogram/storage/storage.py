@@ -24,9 +24,10 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
-from collections.abc import Iterable
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pyrogram import raw
 
 
@@ -247,7 +248,7 @@ class Storage(ABC):
         if isinstance(update_state, int):
             return await self.delete_update_state(update_state)
 
-        return await self.set_update_state(UpdateState(*cast(_LegacyUpdateState, update_state)))
+        return await self.set_update_state(UpdateState(*cast("_LegacyUpdateState", update_state)))
 
     @abstractmethod
     async def get_peer_by_id(self, peer_id: int) -> raw.base.InputPeer | None:
@@ -288,8 +289,11 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
+    # `object` (the class itself) is the not-specified sentinel on every accessor
+    #  below: `None` is a real value both stored (`user_id(None)` on logout) and
+    #  returned (a fresh session has no row yet), so it cannot mean "read".
     @abstractmethod
-    async def dc_id(self, value: int | None = None) -> int:
+    async def dc_id(self, value: int | None | type[object] = object) -> int | None:
         """Get or set the DC ID of the current session.
 
         Parameters:
@@ -299,7 +303,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def api_id(self, value: int | None = None) -> int:
+    async def api_id(self, value: int | None | type[object] = object) -> int | None:
         """Get or set the API ID of the current session.
 
         Parameters:
@@ -309,7 +313,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def server_address(self, value: str | None = None) -> str:
+    async def server_address(self, value: str | None | type[object] = object) -> str | None:
         """Get or set the server address of the current session.
 
         Parameters:
@@ -319,7 +323,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def port(self, value: int | None = None) -> int:
+    async def port(self, value: int | None | type[object] = object) -> int | None:
         """Get or set the server port of the current session.
 
         Parameters:
@@ -329,7 +333,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def test_mode(self, value: bool | None = None) -> bool:
+    async def test_mode(self, value: bool | None | type[object] = object) -> bool | None:
         """Get or set the test mode of the current session.
 
         Parameters:
@@ -339,7 +343,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def auth_key(self, value: bytes | None = None) -> bytes:
+    async def auth_key(self, value: bytes | None | type[object] = object) -> bytes | None:
         """Get or set the authorization key of the current session.
 
         Parameters:
@@ -349,7 +353,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def date(self, value: int | None = None) -> int:
+    async def date(self, value: int | None | type[object] = object) -> int | None:
         """Get or set the date of the current session.
 
         Parameters:
@@ -359,7 +363,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def user_id(self, value: int | None = None) -> int:
+    async def user_id(self, value: int | None | type[object] = object) -> int | None:
         """Get or set the user ID of the current session.
 
         Parameters:
@@ -369,7 +373,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def is_bot(self, value: bool | None = None) -> bool:
+    async def is_bot(self, value: bool | None | type[object] = object) -> bool | None:
         """Get or set the bot flag of the current session.
 
         Parameters:

@@ -33,8 +33,10 @@ import hmac
 import secrets
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Final, NamedTuple
-from collections.abc import Sequence
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # GREASE values are drawn once per greeting and referenced by index, because the
 #  same value has to appear in more than one extension.
@@ -440,7 +442,8 @@ class _HelloWriter:
         self._write(_end_scope())
 
 
-class FakeTlsHello(NamedTuple):
+@dataclass(frozen=True)
+class FakeTlsHello:
     record: bytes  # the ClientHello TLS record, ready to go on the wire
     random: bytes  # its random field, which the server's reply is checked against
 

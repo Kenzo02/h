@@ -18,10 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import enums, raw, types
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 class SearchGiftsForResale:
@@ -43,7 +46,7 @@ class SearchGiftsForResale:
             gift_id (``int``):
                 Identifier of the regular gift that was upgraded to a unique gift.
 
-            order (:obj:`~pyrogram.enums.GiftForResaleOrder`):
+            order (:obj:`~pyrogram.enums.GiftForResaleOrder`, *optional*):
                 Order in which the results will be sorted.
 
             for_crafting (``bool``, *optional*):

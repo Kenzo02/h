@@ -18,9 +18,12 @@
 
 from __future__ import annotations as _annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
-from pyrogram import types
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from pyrogram import types
 
 from .chat_joiner import ChatJoiner
 

@@ -31,15 +31,18 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, NamedTuple
-from collections.abc import AsyncGenerator, AsyncIterator
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
 from pyrogram import Client
 from pyrogram.connection.connection import transport_class_for
 from pyrogram.connection.proxy import MTProxy, Proxy, WebProxy, normalize_proxy
-from pyrogram.connection.transport.tcp import TCP
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, AsyncIterator
+
+    from pyrogram.connection.transport.tcp import TCP
 
 # Every integration test shares one session name, so a stray session file left
 #  behind by a crashed run is always the same one.
@@ -90,7 +93,8 @@ def relay_transport_class(relay_proxy: WebProxy) -> type[TCP]:
     return transport_class_for(relay_proxy)
 
 
-class _LinkParams(NamedTuple):
+@dataclass(frozen=True)
+class _LinkParams:
     links: list[str | None]
     ids: list[str]
 
@@ -103,20 +107,27 @@ def _mtproxy_link_parameters() -> _LinkParams:
     but with pytest's own "got empty parameter set", which names no variable to
     go and set.
     """
-    links = os.environ.get("MTPROXY_TEST_LINKS", "").split()
+    configured_links = os.environ.get("MTPROXY_TEST_LINKS", "").split()
 
-    if not links:
-        return _LinkParams(links=[None], ids=["unset"])
+    if not configured_links:
+        return _LinkParams(
+            links=[None],
+            ids=["unset"],
+        )
 
-    parameters = _LinkParams(links=[], ids=[])
+    links: list[str | None] = []
+    ids: list[str] = []
 
-    for link in links:
+    for link in configured_links:
         proxy = normalize_proxy(link)
-        parameters.links.append(link)
+        links.append(link)
         # The link carries the secret, so the id names the address alone.
-        parameters.ids.append(f"{proxy.hostname}:{proxy.port}")
+        ids.append(f"{proxy.hostname}:{proxy.port}")
 
-    return parameters
+    return _LinkParams(
+        links=links,
+        ids=ids,
+    )
 
 
 # One variable rather than three per proxy, because a proxy is shared as a link

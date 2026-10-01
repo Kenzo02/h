@@ -18,11 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 class GetChatInviteLinkJoiners:
@@ -38,7 +40,7 @@ class GetChatInviteLinkJoiners:
                 Unique identifier for the target chat or username of the target channel/supergroup
                 (in the format @username).
 
-            invite_link (str):
+            invite_link (``str``):
                 The invite link.
 
             limit (``int``, *optional*):

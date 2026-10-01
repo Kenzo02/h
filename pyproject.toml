@@ -98,7 +98,6 @@ qrcode = [
 #  ask for that group alone.
 dev = [
     { include-group = "lint" },
-    { include-group = "release" },
     { include-group = "test" },
 ]
 
@@ -151,6 +150,24 @@ markers = [
     "guard: asserts a property of the repository rather than the behaviour of one module",
     "integration: opens a real socket or talks to a real service",
 ]
+
+# So the number describes what somebody wrote, the same paths `[tool.ruff] extend-exclude` names
+#  are dropped here too, in the glob form `coverage` matches files with. `[tool.ty.src].exclude`
+#  below carries the reasoning for the list and for the split, and both blocks defer to it.
+[tool.coverage.run]
+source = ["pyrogram"]
+omit = [
+    "pyrogram/raw/base/*",
+    "pyrogram/raw/functions/*",
+    "pyrogram/raw/types/*",
+    "pyrogram/raw/all.py",
+    "pyrogram/errors/exceptions/*",
+]
+
+[tool.coverage.report]
+# No threshold, deliberately. The offline suite covers 55% of 24444 statements as of 2026-09-24,
+#  and a gate set at a number nobody has agreed to is raised until it stops firing, so `fail_under`
+#  waits for a number somebody has looked at and chosen.
 
 [tool.hatch.version]
 path = "pyrogram/__init__.py"
@@ -234,6 +251,7 @@ select = [
     "RUF013", # Implicit `Optional`, e.g. `def method(chat_id: int = None)`.
     "SLOT",   # flake8-slots: an immutable-builtin subclass missing `__slots__`.
     "T10",    # flake8-debugger: a leftover `breakpoint()`/`pdb.set_trace()`.
+    "TC",     # flake8-type-checking: an import needed only for annotations.
     "UP",     # pyupgrade: outdated typing syntax, and `.format()` calls an f-string replaces.
     "W",      # pycodestyle warnings: an invalid escape sequence, and whitespace the
               #  formatter already normalizes.
@@ -259,7 +277,4 @@ exclude = [
 #  meant to shrink one rule at a time, the same pattern `[tool.ruff.lint].select` uses.
 invalid-argument-type = "ignore"
 invalid-assignment = "ignore"
-invalid-method-override = "ignore"
-invalid-return-type = "ignore"
-no-matching-overload = "ignore"
 unresolved-attribute = "ignore"

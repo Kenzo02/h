@@ -19,11 +19,13 @@
 from __future__ import annotations as _annotations
 
 import logging
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 import pyrogram
 from pyrogram import raw, types
-from pyrogram._typing import PathType
+
+if TYPE_CHECKING:
+    from pyrogram._typing import PathType
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +48,11 @@ class SetProfilePhoto:
 
             is_public (``bool``, *optional*):
                 Pass True to set the public photo, which will be visible even if the main photo is hidden by privacy settings.
+
+            video (``str`` | ``BinaryIO``, *optional*):
+                Profile video to set.
+                This parameter is deprecated and should not be used.
+                Use `photo` instead.
 
         Returns:
             ``bool``: True on success.

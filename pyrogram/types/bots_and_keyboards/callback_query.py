@@ -19,7 +19,7 @@
 from __future__ import annotations as _annotations
 
 import logging
-from re import Match
+from typing import TYPE_CHECKING
 
 import pyrogram
 from pyrogram import enums, raw, types
@@ -28,6 +28,9 @@ from pyrogram.errors import ChannelPrivate
 from ... import utils
 from ..object import Object
 from ..update import Update
+
+if TYPE_CHECKING:
+    from re import Match
 
 log = logging.getLogger(__name__)
 
@@ -243,6 +246,11 @@ class CallbackQuery(Object, Update):
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup`, *optional*):
                 An InlineKeyboardMarkup object.
 
+            disable_web_page_preview (``bool``, *optional*):
+                Disables link previews for links in this message.
+                This parameter is deprecated and should not be used.
+                Use `link_preview_options` instead.
+
         Returns:
             :obj:`~pyrogram.types.Message` | ``bool``: On success, if the edited message was sent by the bot, the edited
             message is returned, otherwise True is returned (message sent via the bot, as inline query result).
@@ -347,7 +355,7 @@ class CallbackQuery(Object, Update):
         Bound method *edit_message_reply_markup* of :obj:`~pyrogram.types.CallbackQuery`.
 
         Parameters:
-            reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup`):
+            reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup`, *optional*):
                 An InlineKeyboardMarkup object.
 
         Returns:

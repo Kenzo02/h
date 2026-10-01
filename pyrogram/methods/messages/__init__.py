@@ -44,7 +44,6 @@ from .forward_messages import ForwardMessages
 from .get_available_effects import GetAvailableEffects
 from .get_chat_history import GetChatHistory
 from .get_chat_history_count import GetChatHistoryCount
-from .get_custom_emoji_stickers import GetCustomEmojiStickers
 from .get_direct_messages_chat_topic_history import GetDirectMessagesChatTopicHistory
 from .get_discussion_message import GetDiscussionMessage
 from .get_discussion_replies import GetDiscussionReplies
@@ -197,7 +196,6 @@ class Messages(
     SummarizeMessage,
     TranslateMessageText,
     TranslateText,
-    GetCustomEmojiStickers,
     GetDirectMessagesChatTopicHistory,
 ):
     pass

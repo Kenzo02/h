@@ -18,12 +18,13 @@
 
 from __future__ import annotations as _annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
-from pyrogram import utils
+from pyrogram import raw, types, utils
+
+if TYPE_CHECKING:
+    from datetime import datetime, timedelta
 
 
 class EditMessageReplyMarkup:
@@ -31,7 +32,7 @@ class EditMessageReplyMarkup:
         self: pyrogram.Client,
         chat_id: int | str,
         message_id: int,
-        schedule_date: datetime | None = None,
+        schedule_date: datetime | timedelta | None = None,
         reply_markup: types.InlineKeyboardMarkup | None = None,
     ) -> types.Message:
         """Edit only the reply markup of messages sent by the bot.
@@ -47,8 +48,9 @@ class EditMessageReplyMarkup:
             message_id (``int``):
                 Message identifier in the chat specified in chat_id.
 
-            schedule_date (:py:obj:`~datetime.datetime`, *optional*):
+            schedule_date (:py:obj:`~datetime.datetime` | :py:obj:`~datetime.timedelta`, *optional*):
                 Date when the message will be automatically sent.
+                A :py:obj:`~datetime.timedelta` is counted from now.
 
             reply_markup (:obj:`~pyrogram.types.InlineKeyboardMarkup`, *optional*):
                 An InlineKeyboardMarkup object.
@@ -76,8 +78,4 @@ class EditMessageReplyMarkup:
             )
         )
 
-        for i in r.updates:
-            if isinstance(i, (raw.types.UpdateEditMessage, raw.types.UpdateEditChannelMessage)):
-                return await types.Message._parse(
-                    self, i.message, {i.id: i for i in r.users}, {i.id: i for i in r.chats}
-                )
+        return await utils.parse_edited_message(self, r, message_id)

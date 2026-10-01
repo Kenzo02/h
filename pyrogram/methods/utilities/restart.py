@@ -19,13 +19,12 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
-import pyrogram
-import logging
 from ...helpers import log_task_exception
 
-
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    import pyrogram
 
 
 class Restart:

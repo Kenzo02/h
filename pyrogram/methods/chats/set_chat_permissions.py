@@ -19,8 +19,7 @@
 from __future__ import annotations as _annotations
 
 import pyrogram
-from pyrogram import raw
-from pyrogram import types
+from pyrogram import raw, types, utils
 
 
 class SetChatPermissions:
@@ -38,7 +37,7 @@ class SetChatPermissions:
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
 
-            permissions (:obj:`~pyrogram.types.ChatPermissions`):
+            permissions (:obj:`~pyrogram.types.ChatPermissions`, *optional*):
                 New default chat permissions.
 
         Returns:
@@ -70,4 +69,4 @@ class SetChatPermissions:
             )
         )
 
-        return await types.Chat._parse_chat(self, r.chats[0])
+        return utils.require_parsed(await types.Chat._parse_chat(self, r.chats[0]))

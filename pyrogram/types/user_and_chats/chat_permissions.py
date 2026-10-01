@@ -19,11 +19,14 @@
 from __future__ import annotations as _annotations
 
 import logging
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pyrogram import raw, utils
 
 from ..object import Object
+
+if TYPE_CHECKING:
+    from datetime import datetime, timedelta
 
 log = logging.getLogger(__name__)
 
@@ -165,7 +168,7 @@ class ChatPermissions(Object):
                 can_manage_topics=not denied_permissions.manage_topics,
             )
 
-    def write(self, until_date: datetime | None = None) -> raw.types.ChatBannedRights:
+    def write(self, until_date: datetime | timedelta | None = None) -> raw.types.ChatBannedRights:
         until_date = until_date or utils.zero_datetime()
 
         send_messages = not self.can_send_messages
