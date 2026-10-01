@@ -67,6 +67,7 @@ from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
 from pyrogram.qrlogin import QRLogin
 from pyrogram.session import Auth, Session
+from pyrogram.session.session import _finish_cleanup, _log_lifecycle
 from pyrogram.storage import SQLiteStorage, Storage, UpdateState
 from pyrogram.types import LinkPreviewOptions, TermsOfService, User
 from pyrogram.utils import ainput
@@ -1590,114 +1591,183 @@ class Client(Methods):
         if not temporary and sessions.get(dc_id):
             return sessions[dc_id]
 
-        if not server_address or not port:
-            dc_option = await self.get_dc_option(
-                dc_id, is_media=is_media, ipv6=self.ipv6, is_cdn=is_cdn
+        session = None
+        auth = None
+        phase = "prerequisites"
+        attempt = 1
+        try:
+            phase = "endpoint"
+            if not server_address or not port:
+                dc_option = await self.get_dc_option(
+                    dc_id, is_media=is_media, ipv6=self.ipv6, is_cdn=is_cdn
+                )
+
+                server_address = server_address or dc_option.ip_address
+                port = port or dc_option.port
+
+            fallback_endpoints = None
+            fallback_cache_key = None
+
+            if (
+                not is_media
+                and not is_cdn
+                and not self.ipv6
+                and not await self.storage.test_mode()
+                and (not explicit_endpoint or order_fallback_endpoints)
+            ):
+                try:
+                    static_endpoints = get_dc_endpoints(dc_id, False)
+                except KeyError:
+                    static_endpoints = ()
+
+                is_known_static_endpoint = (server_address, port) in static_endpoints
+
+                if explicit_endpoint and not is_known_static_endpoint:
+                    static_endpoints = ()
+
+                if not self.proxy and is_known_static_endpoint:
+                    fallback_cache_key = endpoint_cache_key(dc_id, False, False, False, False)
+
+                fallback_endpoints = tuple(
+                    dict.fromkeys(((server_address, port),) + static_endpoints)
+                )
+
+                if is_known_static_endpoint:
+                    fallback_endpoints = await order_dc_endpoints(
+                        dc_id,
+                        fallback_endpoints,
+                        proxy=self.proxy,
+                        preferred_endpoint=(server_address, port),
+                        cache_key=fallback_cache_key,
+                    )
+                else:
+                    fallback_endpoints = reorder_with_cached_endpoint(None, fallback_endpoints)
+
+                server_address, port = fallback_endpoints[0]
+
+            phase = "auth-key"
+            if is_media:
+                auth_key = (await self.get_session(dc_id)).auth_key
+            else:
+                if not is_current_dc:
+                    auth = Auth(
+                        self,
+                        dc_id,
+                        server_address,
+                        port,
+                        await self.storage.test_mode(),
+                        fallback_endpoints=fallback_endpoints,
+                    )
+                    auth_key = await auth.create()
+                    auth = None
+                else:
+                    auth_key = await self.storage.auth_key()
+
+            test_mode = await self.storage.test_mode()
+            # Prerequisites yield: another creator may have published meanwhile.
+            # Reuse its owned session instead of replacing a live generation.
+            if not temporary and sessions.get(dc_id):
+                return sessions[dc_id]
+
+            session = Session(
+                self,
+                dc_id,
+                server_address,
+                port,
+                auth_key,
+                test_mode,
+                is_media=is_media,
+                is_cdn=is_cdn,
+                fallback_endpoints=fallback_endpoints,
             )
 
-            server_address = server_address or dc_option.ip_address
-            port = port or dc_option.port
+            # Publish before `start`: connect callbacks can reenter `get_session`,
+            # including through another task. Only this creator owns rollback/cleanup.
+            if not temporary:
+                sessions[dc_id] = session
 
-        fallback_endpoints = None
-        fallback_cache_key = None
-
-        if (
-            not is_media
-            and not is_cdn
-            and not self.ipv6
-            and not await self.storage.test_mode()
-            and (not explicit_endpoint or order_fallback_endpoints)
-        ):
+            phase = "initial-start"
+            session._initial_start_owner = asyncio.current_task()
             try:
-                static_endpoints = get_dc_endpoints(dc_id, False)
-            except KeyError:
-                static_endpoints = ()
+                await session.start()
+            finally:
+                session._initial_start_owner = None
 
-            is_known_static_endpoint = (server_address, port) in static_endpoints
+            update_endpoint_cache(
+                fallback_cache_key,
+                (session.server_address, session.port),
+            )
 
-            if explicit_endpoint and not is_known_static_endpoint:
-                static_endpoints = ()
+            phase = "storage"
+            if temporary and is_current_dc and not is_media and not is_cdn:
+                await self.storage.server_address(session.server_address)
+                await self.storage.port(session.port)
 
-            if not self.proxy and is_known_static_endpoint:
-                fallback_cache_key = endpoint_cache_key(dc_id, False, False, False, False)
+            if not is_current_dc and export_authorization:
+                for _ in range(3):
+                    attempt = _ + 1
+                    phase = "export-authorization"
+                    exported_auth = await self.invoke(
+                        raw.functions.auth.ExportAuthorization(dc_id=dc_id)
+                    )
 
-            fallback_endpoints = tuple(dict.fromkeys(((server_address, port),) + static_endpoints))
+                    phase = "import-authorization"
+                    try:
+                        await session.invoke(
+                            raw.functions.auth.ImportAuthorization(
+                                id=exported_auth.id, bytes=exported_auth.bytes
+                            )
+                        )
+                    except AuthBytesInvalid:
+                        continue
+                    else:
+                        break
+                else:
+                    raise AuthBytesInvalid
 
-            if is_known_static_endpoint:
-                fallback_endpoints = await order_dc_endpoints(
-                    dc_id,
-                    fallback_endpoints,
-                    proxy=self.proxy,
-                    preferred_endpoint=(server_address, port),
-                    cache_key=fallback_cache_key,
-                )
-            else:
-                fallback_endpoints = reorder_with_cached_endpoint(None, fallback_endpoints)
+            return session
+        except BaseException as error:
+            # A failed older creator must not remove a newer cache generation.
+            if session is not None and not temporary and sessions.get(dc_id) is session:
+                del sessions[dc_id]
+            _log_lifecycle(
+                log,
+                self,
+                dc_id,
+                is_media,
+                is_cdn,
+                session.state.name if session is not None else "UNCREATED",
+                phase,
+                attempt,
+                error,
+                bool(session and session.restart_task and not session.restart_task.done()),
+            )
 
-            server_address, port = fallback_endpoints[0]
+            async def cleanup():
+                if session is not None:
+                    await session.stop()
+                elif auth is not None and auth.connection is not None:
+                    # `Auth.create` has a `finally` close, but cancellation can
+                    # interrupt that await too. Do not stop borrowed DC sessions.
+                    await auth.connection.close()
 
-        if is_media:
-            auth_key = (await self.get_session(dc_id)).auth_key
-        else:
-            if not is_current_dc:
-                auth_key = await Auth(
+            try:
+                await _finish_cleanup(cleanup())
+            except asyncio.CancelledError:
+                pass
+            except Exception as cleanup_error:
+                _log_lifecycle(
+                    log,
                     self,
                     dc_id,
-                    server_address,
-                    port,
-                    await self.storage.test_mode(),
-                    fallback_endpoints=fallback_endpoints,
-                ).create()
-            else:
-                auth_key = await self.storage.auth_key()
-
-        session = Session(
-            self,
-            dc_id,
-            server_address,
-            port,
-            auth_key,
-            await self.storage.test_mode(),
-            is_media=is_media,
-            is_cdn=is_cdn,
-            fallback_endpoints=fallback_endpoints,
-        )
-
-        if not temporary:
-            sessions[dc_id] = session
-
-        await session.start()
-
-        update_endpoint_cache(
-            fallback_cache_key,
-            (session.server_address, session.port),
-        )
-
-        if temporary and is_current_dc and not is_media and not is_cdn:
-            await self.storage.server_address(session.server_address)
-            await self.storage.port(session.port)
-
-        if not is_current_dc and export_authorization:
-            for _ in range(3):
-                exported_auth = await self.invoke(
-                    raw.functions.auth.ExportAuthorization(dc_id=dc_id)
+                    is_media,
+                    is_cdn,
+                    session.state.name if session is not None else "UNCREATED",
+                    "cleanup",
+                    attempt,
+                    cleanup_error,
                 )
-
-                try:
-                    await session.invoke(
-                        raw.functions.auth.ImportAuthorization(
-                            id=exported_auth.id, bytes=exported_auth.bytes
-                        )
-                    )
-                except AuthBytesInvalid:
-                    continue
-                else:
-                    break
-            else:
-                await session.stop()
-                raise AuthBytesInvalid
-
-        return session
+            raise
 
     async def get_dc_option(
         self,

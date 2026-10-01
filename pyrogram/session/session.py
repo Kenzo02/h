@@ -24,7 +24,7 @@ import logging
 import os
 import time
 from enum import Enum, auto
-from hashlib import sha1
+from hashlib import sha1, sha256
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
@@ -56,11 +56,91 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+async def _finish_cleanup(coroutine: Coroutine[Any, Any, Any] | asyncio.Task) -> None:
+    # Keep a strong reference and drain even if the owner is cancelled repeatedly.
+    # Only cleanup runs separately; startup stays in its original caller task.
+    task = asyncio.ensure_future(coroutine)
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            cancelled = True
+        except Exception:
+            break
+    if cancelled:
+        if not task.cancelled():
+            task.exception()
+        raise asyncio.CancelledError
+    task.result()
+
+
+def _safe_error_detail(error: BaseException | None) -> str:
+    # Arbitrary exception text can contain TL data, auth bytes or credential URLs.
+    # Allow only details derived from known system codes, not the supplied text.
+    if error is None:
+        return "none"
+    if isinstance(error, asyncio.CancelledError):
+        return "cancelled"
+    if isinstance(error, TimeoutError):
+        return "timed out"
+    cause = error.__cause__ if error.__cause__ is not None else error
+    if isinstance(cause, OSError) and isinstance(cause.errno, int) and 0 < cause.errno < 256:
+        return os.strerror(cause.errno)[:120]
+    return "omitted"
+
+
+def _log_lifecycle(
+    logger: logging.Logger,
+    client: pyrogram.Client,
+    dc_id: int,
+    is_media: bool,
+    is_cdn: bool,
+    state: str,
+    phase: str,
+    attempt: int,
+    error: BaseException | None = None,
+    restart_active: bool = False,
+    retry_delay: float | None = None,
+    level: int | None = None,
+    trigger: str = "none",
+    trigger_code: int | None = None,
+) -> None:
+    # Names can contain phone numbers. Use a stable label, never the raw name.
+    label = sha256(str(getattr(client, "name", "")).encode()).hexdigest()[:12]
+    logger.log(
+        level if level is not None else (logging.ERROR if error is not None else logging.INFO),
+        "Session lifecycle client=%s dc=%s media=%s cdn=%s state=%s phase=%s "
+        "attempt=%s restart_active=%s error=%s detail=%s retry_delay=%s "
+        "trigger=%s trigger_code=%s",
+        label,
+        dc_id,
+        is_media,
+        is_cdn,
+        state,
+        phase,
+        attempt,
+        restart_active,
+        type(error).__name__[:64] if error is not None else "none",
+        _safe_error_detail(error),
+        retry_delay,
+        trigger,
+        trigger_code,
+    )
+
+
 class SessionState(Enum):
     STARTING = auto()
     STARTED = auto()
     STOPPING = auto()
     STOPPED = auto()
+    STOP_FAILED = auto()
+
+
+class SessionCleanupError(RuntimeError):
+    def __init__(self, failures: list[tuple[str, BaseException]]):
+        self.failures = tuple(failures)
+        super().__init__("Session cleanup failed; see sanitized lifecycle diagnostics")
 
 
 class TransportError(Exception):
@@ -142,6 +222,10 @@ class Session:
 
         self._state = SessionState.STOPPED
         self._state_lock = asyncio.Lock()
+        self._startup_phase = "idle"
+        self._startup_attempt = 0
+        self._stop_task: asyncio.Task | None = None
+        self._initial_start_owner: asyncio.Task | None = None
 
         self.auth_key_id = sha1(auth_key).digest()[-8:]
 
@@ -205,24 +289,66 @@ class Session:
 
         return task
 
-    async def _wait_pending_tasks(self) -> None:
-        # A tracked `handle_packet` spawns a tracked `handle_updates`, so one round can
-        #  leave a task behind. Every level is already running, so the loop ends.
-        while self.pending_tasks:
-            round_tasks = set(self.pending_tasks)
+    async def _wait_pending_tasks(self, exclude: asyncio.Task | None = None) -> None:
+        # A tracked `handle_packet` spawns a tracked `handle_updates`, so drain
+        # successive generations. The worker requesting stop cannot join itself.
+        while round_tasks := self.pending_tasks - {exclude}:
+            round_tasks = set(round_tasks)
             _, running = await asyncio.wait(round_tasks, timeout=self.STOP_TIMEOUT)
-
-            # Both waits inside `invoke` run for `WAIT_TIMEOUT`: for `is_started`, which
-            #  stopping has just cleared, and for an answer that is not coming. So a task
-            #  caught mid-request would hold the shutdown that long.
             for task in running:
                 task.cancel()
-
             for result in await asyncio.gather(*round_tasks, return_exceptions=True):
                 if isinstance(result, Exception):
-                    log.error("Task failed while the session was stopping", exc_info=result)
+                    # Finished worker faults are diagnostic, not teardown failures.
+                    self._log_lifecycle("cleanup-pending", self._startup_attempt, result)
+
+    def _log_lifecycle(
+        self,
+        phase: str,
+        attempt: int,
+        error: BaseException | None = None,
+        restart_active: bool | None = None,
+        retry_delay: float | None = None,
+        level: int | None = None,
+        trigger: str = "none",
+        trigger_code: int | None = None,
+    ) -> None:
+        _log_lifecycle(
+            log,
+            self.client,
+            self.dc_id,
+            self.is_media,
+            self.is_cdn,
+            self.state.name,
+            phase,
+            attempt,
+            error,
+            bool(self.restart_task and not self.restart_task.done())
+            if restart_active is None
+            else restart_active,
+            retry_delay,
+            level,
+            trigger,
+            trigger_code,
+        )
 
     async def start(self):
+        try:
+            await self._start()
+        except BaseException as error:
+            if asyncio.current_task() is self._initial_start_owner:
+                self._must_stay_stopped = True
+            # Background retry owns its failure record, avoiding duplicate errors.
+            if asyncio.current_task() is not self.restart_task:
+                self._log_lifecycle(self._startup_phase, self._startup_attempt, error)
+            try:
+                await self._stop()
+            except (Exception, asyncio.CancelledError):
+                # Teardown reports its failures independently; preserve the origin.
+                pass
+            raise
+
+    async def _start(self):
         if self._state in (SessionState.STARTED, SessionState.STARTING):
             log.debug("Session already started")
             return
@@ -236,6 +362,13 @@ class Session:
                 return
 
             await self._set_state(SessionState.STARTING)
+            self._startup_phase = "connect"
+            self._startup_attempt = endpoint_index + 1
+            self._log_lifecycle(
+                self._startup_phase,
+                self._startup_attempt,
+                restart_active=bool(self.restart_task and (not self.restart_task.done())),
+            )
             self.server_address = server_address
             self.port = port
             connection = self.client.connection_factory(
@@ -265,6 +398,7 @@ class Session:
                     return
 
                 self.recv_task = asyncio.create_task(self.recv_worker())
+                self._startup_phase = "handshake"
 
                 if self._must_stay_stopped:
                     await self._stop()
@@ -306,11 +440,13 @@ class Session:
 
                 self.ping_task = asyncio.create_task(self.ping_worker())
             except (AuthKeyDuplicated, Unauthorized):
-                await self._stop()
                 raise
             except (OSError, RPCError, ConnectionError, TimeoutError) as e:
                 elapsed = time.monotonic() - started_at
-                await self._stop()
+                try:
+                    await self._stop()
+                except SessionCleanupError:
+                    raise e from None
 
                 if self._must_stay_stopped:
                     return
@@ -334,14 +470,11 @@ class Session:
                     port,
                     elapsed,
                     e.__class__.__name__,
-                    e,
+                    _safe_error_detail(e),
                     next_endpoint[0],
                     next_endpoint[1],
                 )
                 continue
-            except Exception:
-                await self._stop()
-                raise
             else:
                 self.fallback_endpoints = tuple(
                     dict.fromkeys(((server_address, port),) + self.fallback_endpoints)
@@ -362,10 +495,12 @@ class Session:
         log.info("Session started")
 
         if callable(self.client.connect_handler):
+            self._startup_phase = "connect-callback"
             try:
                 await self.client.connect_handler(self.client, self)
             except Exception as e:
-                log.exception(e)
+                self._log_lifecycle("connect-callback", self._startup_attempt, e)
+        self._startup_phase = "ready"
 
     async def stop(self):
         # `restart()` reads this, and the flag is set before the state check below so a
@@ -376,10 +511,40 @@ class Session:
         await self._stop()
 
     async def _stop(self) -> None:
-        if self._state in (SessionState.STOPPED, SessionState.STOPPING):
+        current = asyncio.current_task()
+        task = self._stop_task
+        if task is not None and not task.done():
+            # A worker being drained cannot join its own owner. Its stop request
+            # is honored, but only independent callers can wait for completion.
+            if current in self.pending_tasks or current in (self.recv_task, self.ping_task):
+                return
+            await _finish_cleanup(task)
+            return
+        if self._state is SessionState.STOP_FAILED and task is not None:
+            task.result()
+        if self._state is SessionState.STOPPED:
             log.debug("Session already stopped")
             return
 
+        # Publish the real owner before yielding, not another wrapper around stop.
+        task = self._stop_task = asyncio.create_task(self._stop_resources(current))
+        cleanup_error = None
+        try:
+            await _finish_cleanup(task)
+        except SessionCleanupError as error:
+            cleanup_error = error
+
+        # Resources settle before callbacks, so cross-task callback reentry cannot
+        # wait for the callback which is awaiting it.
+        if callable(self.client.disconnect_handler):
+            try:
+                await self.client.disconnect_handler(self.client, self)
+            except Exception as e:
+                self._log_lifecycle("disconnect-callback", self._startup_attempt, e)
+        if cleanup_error is not None:
+            raise cleanup_error
+
+    async def _stop_resources(self, origin: asyncio.Task | None) -> None:
         await self._set_state(SessionState.STOPPING)
 
         self.ignore_count = 0
@@ -403,28 +568,50 @@ class Session:
 
         self.ping_task_event.set()
 
-        if self.ping_task is not None:
-            await self.ping_task
+        failures: list[tuple[str, BaseException]] = []
 
+        async def drain(phase, awaitable, worker=None):
+            try:
+                await awaitable
+                return True
+            except (Exception, asyncio.CancelledError) as error:
+                self._log_lifecycle(f"cleanup-{phase}", self._startup_attempt, error)
+                # Only an exception from the finished worker is diagnostic. Keep
+                # cancellation, drain timeouts and provider close errors explicit.
+                if (
+                    worker is not None
+                    and worker.done()
+                    and not worker.cancelled()
+                    and worker.exception() is error
+                ):
+                    return True
+                failures.append((phase, error))
+                return False
+
+        if self.ping_task is not None and self.ping_task is not origin:
+            await drain("ping", asyncio.wait_for(self.ping_task, self.STOP_TIMEOUT), self.ping_task)
+            self.ping_task = None
         self.ping_task_event.clear()
 
-        await self.connection.close()
+        closed = self.connection is None or await drain(
+            "close", asyncio.wait_for(self.connection.close(), self.STOP_TIMEOUT)
+        )
+        if not closed:
+            # An injected provider may reject close. Do not claim the transport
+            # is closed or silently reconnect this object over it.
+            self._must_stay_stopped = True
 
-        if self.recv_task:
-            await self.recv_task
+        if self.recv_task is not None and self.recv_task is not origin:
+            if not closed and not self.recv_task.done():
+                self.recv_task.cancel()
+            await drain("recv", asyncio.wait_for(self.recv_task, self.STOP_TIMEOUT), self.recv_task)
             self.recv_task = None
 
-        await self._wait_pending_tasks()
-
-        await self._set_state(SessionState.STOPPED)
-
+        await drain("pending", self._wait_pending_tasks(origin))
+        await self._set_state(SessionState.STOPPED if closed else SessionState.STOP_FAILED)
+        if failures:
+            raise SessionCleanupError(failures)
         log.info("Session stopped")
-
-        if callable(self.client.disconnect_handler):
-            try:
-                await self.client.disconnect_handler(self.client, self)
-            except Exception as e:
-                log.exception(e)
 
     async def restart(self):
         async with self.restart_lock:
@@ -445,38 +632,64 @@ class Session:
 
     def schedule_restart(self, reason: str):
         if self.restart_task and not self.restart_task.done():
-            log.debug("Session restart already scheduled; latest reason: %s", reason)
+            log.debug("Session restart already scheduled")
             return
 
         self.restart_task = asyncio.create_task(self._restart_until_started(reason))
 
     async def _restart_until_started(self, reason: str):
         retry_delay = self.RESTART_RETRY_DELAY
+        attempt = 0
+        last_failure = None
+        trigger = reason if reason in {"recv-null", "unpack", "validation", "ping"} else "external"
+        trigger_code = None
+        if reason.startswith("recv-transport:"):
+            code = reason.removeprefix("recv-transport:")
+            if code.isdecimal() and len(code) <= 4:
+                trigger, trigger_code = "recv-transport", int(code)
 
         while getattr(self.client, "is_connected", True) and not self._must_stay_stopped:
+            attempt += 1
+            self._log_lifecycle(
+                "reconnect",
+                attempt,
+                restart_active=True,
+                trigger=trigger,
+                trigger_code=trigger_code,
+            )
             try:
                 await self.restart()
-            except (AuthKeyDuplicated, Unauthorized):
-                log.exception(
-                    "Background session restart aborted due to unrecoverable auth error: %s", reason
+            except (AuthKeyDuplicated, Unauthorized) as error:
+                self._log_lifecycle(
+                    "reconnect-aborted",
+                    attempt,
+                    error,
+                    True,
+                    trigger=trigger,
+                    trigger_code=trigger_code,
                 )
                 return
             except Exception as e:
-                log.warning(
-                    "Background session restart failed due to %s: %s; retrying in %.1fs; "
-                    "reason: %s",
-                    e.__class__.__name__,
+                cause = e.__cause__ if e.__cause__ is not None else e
+                failure = (type(e), type(cause), self._startup_phase, _safe_error_detail(e))
+                self._log_lifecycle(
+                    "reconnect-backoff",
+                    attempt,
                     e,
+                    True,
                     retry_delay,
-                    reason,
+                    level=logging.ERROR if failure != last_failure else logging.WARNING,
+                    trigger=trigger,
+                    trigger_code=trigger_code,
                 )
+                last_failure = failure
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, self.RESTART_RETRY_MAX_DELAY)
             else:
-                log.info("Background session restart completed: %s", reason)
+                self._log_lifecycle("reconnect-ready", attempt, restart_active=True)
                 return
 
-        log.info("Background session restart stopped: %s", reason)
+        self._log_lifecycle("reconnect-stopped", attempt, restart_active=True)
 
     async def handle_packet(self, packet):
         try:
@@ -491,7 +704,7 @@ class Session:
         except ValueError as e:
             log.debug(e)
             log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-            self.schedule_restart(f"{e.__class__.__name__}: {e}")
+            self.schedule_restart("unpack")
             return
 
         messages = data.body.messages if isinstance(data.body, MsgContainer) else [data]
@@ -545,7 +758,7 @@ class Session:
 
                 if self.ignore_count >= self.MAX_CONSECUTIVE_IGNORED:
                     log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-                    self.schedule_restart(f"{e.__class__.__name__}: {e}")
+                    self.schedule_restart("validation")
                     return
 
                 # A container can mix invalid messages with a fresh handshake reply.
@@ -657,7 +870,7 @@ class Session:
                 )
             except OSError as e:
                 log.info("Restarting session due to - %s - %s", e.__class__.__name__, e)
-                self.schedule_restart(f"{e.__class__.__name__}: {e}")
+                self.schedule_restart("ping")
                 break
             except RPCError:
                 pass
@@ -707,7 +920,7 @@ class Session:
                         error = "Server sent a null packet."
 
                     log.info("Restarting session due to - %s", error)
-                    self.schedule_restart(error)
+                    self.schedule_restart(f"recv-transport:{error_code}" if packet else "recv-null")
 
                 break
 

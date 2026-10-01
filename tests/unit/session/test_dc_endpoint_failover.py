@@ -1495,7 +1495,10 @@ async def test_scheduled_restart_retries_transient_connection_failure(monkeypatc
     assert restart_attempts == 2
     assert session.is_started.is_set()
     assert session.restart_task.exception() is None
-    assert "transient DC1 outage" in caplog.text
+    assert "phase=reconnect-backoff" in caplog.text
+    assert "attempt=1" in caplog.text
+    assert "error=ConnectionError detail=omitted" in caplog.text
+    assert "transient DC1 outage" not in caplog.text
 
 
 @pytest.mark.asyncio
