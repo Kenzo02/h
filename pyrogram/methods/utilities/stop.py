@@ -21,6 +21,8 @@ from __future__ import annotations as _annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from pyrogram.session.session import SessionCleanupError, _finish_cleanup
+
 if TYPE_CHECKING:
     import pyrogram
 
@@ -69,11 +71,22 @@ class Stop:
         """
 
         async def do_it():
-            await self.terminate(clear_handlers=clear_handlers)
-            await self.disconnect()
+            failures = []
+            try:
+                await self.terminate(clear_handlers=clear_handlers)
+            except SessionCleanupError as error:
+                failures.extend(error.failures)
+            try:
+                await self.disconnect()
+            except SessionCleanupError as error:
+                failures.extend((f"main-{phase}", cause) for phase, cause in error.failures)
+            if failures:
+                raise SessionCleanupError(failures)
 
         if block:
-            await do_it()
+            # Cancellation remains the caller's outcome, after independent
+            # resources have settled, even if cancellation is repeated.
+            await _finish_cleanup(do_it())
         else:
             asyncio.create_task(do_it())
 

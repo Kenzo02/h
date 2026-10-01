@@ -22,6 +22,7 @@ import logging
 
 import pyrogram
 from pyrogram import raw
+from pyrogram.session.session import SessionCleanupError
 
 log = logging.getLogger(__name__)
 
@@ -51,15 +52,21 @@ class Terminate:
         await self.storage.save()
         await self.dispatcher.stop(clear_handlers=clear_handlers)
 
-        for media_session in self.media_sessions.values():
-            await media_session.stop()
-
-        self.media_sessions.clear()
-
-        for session in self.sessions.values():
-            await session.stop()
-
-        self.sessions.clear()
+        failures = []
+        # Preserve the established media -> auxiliary -> watchdog ordering, but
+        # a rejected close must not strand independent sessions. Keep failed
+        # resources (and any originating worker) reachable for diagnostics.
+        for kind, sessions in (("media", self.media_sessions), ("auxiliary", self.sessions)):
+            for dc_id, session in list(sessions.items()):
+                try:
+                    await session.stop()
+                except SessionCleanupError as error:
+                    failures.extend(
+                        (f"{kind}-{dc_id}-{phase}", cause) for phase, cause in error.failures
+                    )
+                else:
+                    if not session._has_live_workers():
+                        sessions.pop(dc_id, None)
 
         self.updates_watchdog_event.set()
 
@@ -69,3 +76,5 @@ class Terminate:
         self.updates_watchdog_event.clear()
 
         self.is_initialized = False
+        if failures:
+            raise SessionCleanupError(failures)

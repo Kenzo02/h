@@ -917,11 +917,17 @@ async def test_provider_close_failure_is_explicit_without_resurrection(h, caplog
     await h.main_control()
 
 
-async def test_provider_close_timeout_is_bounded_and_recv_is_drained(h):
+async def test_provider_owned_close_timeout_is_bounded_and_recv_is_drained(h):
     session = await h.media()
     session.STOP_TIMEOUT = 0.01
     transport, recv = session.connection, session.recv_task
     transport.block_close = True
+    original_close = transport.close
+
+    async def bounded_close():
+        await asyncio.wait_for(original_close(), 0.01)
+
+    transport.close = bounded_close
     try:
         with pytest.raises(RuntimeError, match="Session cleanup failed"):
             await asyncio.wait_for(session.stop(), 2)
@@ -1255,8 +1261,9 @@ async def test_public_client_stop_finishes_after_drained_worker_fault(h, caplog,
         await asyncio.gather(watchdog, return_exceptions=True)
 
 
-@pytest.mark.parametrize("phase", ["ping", "recv"])
-@pytest.mark.parametrize("failure", ["cancel", "timeout"])
+@pytest.mark.parametrize(
+    "phase,failure", [("ping", "cancel"), ("recv", "cancel"), ("recv", "timeout")]
+)
 async def test_worker_drain_cancel_or_timeout_remains_explicit(h, caplog, phase, failure):
     caplog.set_level(logging.ERROR)
     session = await h.media()

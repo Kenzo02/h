@@ -20,6 +20,8 @@ from __future__ import annotations as _annotations
 
 from typing import TYPE_CHECKING
 
+from pyrogram.session.session import SessionCleanupError, SessionState
+
 if TYPE_CHECKING:
     import pyrogram
 
@@ -40,7 +42,30 @@ class Disconnect:
         if self.is_initialized:
             raise ConnectionError("Can't disconnect an initialized client")
 
-        await self.session.stop()
+        cleanup_error = None
+        try:
+            await self.session.stop()
+        except SessionCleanupError as error:
+            cleanup_error = error
+
+        sessions = [self.session, *self.media_sessions.values(), *self.sessions.values()]
+        # A stopped transport does not imply a worker requesting its own stop
+        # has returned. Storage must stay open while any such worker can use it.
+        if any(session._has_live_workers() for session in sessions):
+            failures = list(cleanup_error.failures) if cleanup_error is not None else []
+            failures.append(("workers", RuntimeError("Client workers are still running")))
+            # Retain the client/storage owner so disconnect can be retried after
+            # the originating worker has returned.
+            raise SessionCleanupError(failures)
         await self.storage.close()
+        if cleanup_error is not None:
+            raise cleanup_error
+        # A self-stopping worker kept its cache entry alive during terminate.
+        # On a safe retry, retire that stopped generation; failed closes remain
+        # owned for diagnostics instead of being silently discarded.
+        for cache in (self.media_sessions, self.sessions):
+            for dc_id, session in list(cache.items()):
+                if session.state is SessionState.STOPPED:
+                    cache.pop(dc_id, None)
         self.session = None
         self.is_connected = False

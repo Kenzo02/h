@@ -294,8 +294,11 @@ class _HttpConnection:
 
             try:
                 self._writer.close()
-                await self._writer.wait_closed()
+                await asyncio.wait_for(self._writer.wait_closed(), timeout=_CONNECT_TIMEOUT)
 
+            except asyncio.TimeoutError:
+                # Keep the writer owned and report a genuine local close failure.
+                raise
             except OSError as e:
                 log.debug("WEB proxy: closing the HTTP connection failed: %s", e)
 
@@ -339,6 +342,8 @@ class _HttpConnection:
         raise WebCarrierError(msg) from last_error
 
     def _drop_connection(self) -> None:
+        if self._writer is not None:
+            self._writer.close()
         self._writer = None
         self._reader = None
 
@@ -522,6 +527,7 @@ class WebProxyCarrier:
         self._recv_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._welcome_event = asyncio.Event()
         self._closed = False
+        self._close_task: asyncio.Task | None = None
         self._fail_exc: Exception | None = None
         self._poll_task: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
@@ -640,7 +646,7 @@ class WebProxyCarrier:
         #  `_closed` is checked because `recv()` still serves whatever the buffer
         #  holds after `close()`, and a grant task started then is never
         #  cancelled: `close()` has already walked `_background_tasks`.
-        if amount <= 0 or self._closed or self._fail_exc is not None:
+        if amount <= 0 or self._close_task is not None or self._closed or self._fail_exc is not None:
             return
 
         self._pending_grant += amount
@@ -655,9 +661,27 @@ class WebProxyCarrier:
             self._track(task)
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
+        # One owner for concurrent callers. Cancellation must not strand the
+        # HTTP pools after DELETE, nor make a second close falsely succeed.
+        if self._close_task is None:
+            self._close_task = asyncio.create_task(self._close_resources())
+        task = self._close_task
+        cancelled = None
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError as error:
+                if cancelled is None:
+                    cancelled = error
+            except Exception:
+                break
+        if cancelled is not None:
+            if not task.cancelled():
+                task.exception()
+            raise cancelled
+        task.result()
+
+    async def _close_resources(self) -> None:
 
         if self._poll_task is not None:
             await self._cancel_tracked(self._poll_task)
@@ -665,6 +689,7 @@ class WebProxyCarrier:
         for task in list(self._background_tasks):
             await self._cancel_tracked(task)
 
+        failures = []
         # §8: the session is dropped by `DELETE`; a relay that never sees it
         #  keeps the session alive until its own idle timeout expires.
         if self._session_id is not None:
@@ -673,12 +698,20 @@ class WebProxyCarrier:
 
             except WebCarrierError as e:
                 log.debug("WEB proxy: DELETE session failed during close: %s", e)
+            except (Exception, asyncio.CancelledError) as error:
+                failures.append(error)
 
-        await self._up.close()
-        await self._down.close()
+        for connection in (self._up, self._down):
+            try:
+                await connection.close()
+            except (Exception, asyncio.CancelledError) as error:
+                failures.append(error)
 
         # `None` is what `recv()` hands its caller as end-of-stream.
         self._recv_queue.put_nowait(None)
+        if failures:
+            raise failures[0]
+        self._closed = True
 
     def _track(self, task: asyncio.Task) -> None:
         self._background_tasks.add(task)

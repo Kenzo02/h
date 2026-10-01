@@ -23,6 +23,7 @@ import bisect
 import logging
 import os
 import time
+from contextvars import ContextVar
 from enum import Enum, auto
 from hashlib import sha1, sha256
 from io import BytesIO
@@ -56,22 +57,48 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+_cleanup_origin: ContextVar[tuple[asyncio.Task | None, asyncio.Task | None] | None] = ContextVar(
+    "_cleanup_origin", default=None
+)
+
+
+def _cleanup_caller() -> asyncio.Task | None:
+    current = asyncio.current_task()
+    inherited = _cleanup_origin.get()
+    # Detached tasks inherit context, but are not synchronously awaiting this
+    # cleanup. Only the helper task itself may stand in for its waiting caller.
+    return inherited[1] if inherited is not None and inherited[0] is current else current
+
+
 async def _finish_cleanup(coroutine: Coroutine[Any, Any, Any] | asyncio.Task) -> None:
     # Keep a strong reference and drain even if the owner is cancelled repeatedly.
     # Only cleanup runs separately; startup stays in its original caller task.
-    task = asyncio.ensure_future(coroutine)
-    cancelled = False
+    if isinstance(coroutine, asyncio.Task):
+        task = coroutine
+    else:
+        origin = _cleanup_caller()
+
+        async def cleanup():
+            token = _cleanup_origin.set((asyncio.current_task(), origin))
+            try:
+                return await coroutine
+            finally:
+                _cleanup_origin.reset(token)
+
+        task = asyncio.create_task(cleanup())
+    cancelled = None
     while not task.done():
         try:
             await asyncio.shield(task)
-        except asyncio.CancelledError:
-            cancelled = True
+        except asyncio.CancelledError as error:
+            if cancelled is None:
+                cancelled = error
         except Exception:
             break
-    if cancelled:
+    if cancelled is not None:
         if not task.cancelled():
             task.exception()
-        raise asyncio.CancelledError
+        raise cancelled
     task.result()
 
 
@@ -510,8 +537,17 @@ class Session:
 
         await self._stop()
 
+    def _has_live_workers(self) -> bool:
+        workers = self.pending_tasks | {
+            self.ping_task,
+            self.recv_task,
+            self.restart_task,
+            self._initial_start_owner,
+        }
+        return any(task is not None and not task.done() for task in workers)
+
     async def _stop(self) -> None:
-        current = asyncio.current_task()
+        current = _cleanup_caller()
         task = self._stop_task
         if task is not None and not task.done():
             # A worker being drained cannot join its own owner. Its stop request
@@ -589,13 +625,18 @@ class Session:
                 return False
 
         if self.ping_task is not None and self.ping_task is not origin:
-            await drain("ping", asyncio.wait_for(self.ping_task, self.STOP_TIMEOUT), self.ping_task)
+            # A send already in flight uses the transport's budget, not the
+            # update-worker grace period. Do not cancel a healthy provider send.
+            await drain("ping", self.ping_task, self.ping_task)
             self.ping_task = None
-        self.ping_task_event.clear()
+        # A ping worker requesting stop must still see the signal when its
+        # synchronous caller resumes; it cannot be joined by its own cleanup.
+        if self.ping_task is not origin:
+            self.ping_task_event.clear()
 
-        closed = self.connection is None or await drain(
-            "close", asyncio.wait_for(self.connection.close(), self.STOP_TIMEOUT)
-        )
+        # Providers own their close deadlines (WEB DELETE alone can take 20s).
+        # The shielded stop owner must let them settle before releasing workers.
+        closed = self.connection is None or await drain("close", self.connection.close())
         if not closed:
             # An injected provider may reject close. Do not claim the transport
             # is closed or silently reconnect this object over it.

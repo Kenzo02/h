@@ -51,6 +51,10 @@ class _CachedSession:
     async def stop(self) -> None:
         self.stopped = True
 
+    def _has_live_workers(self) -> bool:
+        # This fixture owns no workers; native worker safety is tested separately.
+        return False
+
 
 def test_run_drives_start_idle_and_stop_on_one_loop_of_its_own(
     offline_client: Client,

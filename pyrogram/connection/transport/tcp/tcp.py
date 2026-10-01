@@ -267,8 +267,8 @@ class TCP:
         try:
             await carrier.start()
         except WebCarrierError as e:
-            self._web_carrier = None
             await carrier.close()
+            self._web_carrier = None
             raise OSError(e) from e
 
         built = build_obfuscated2_header(
@@ -280,8 +280,8 @@ class TCP:
         try:
             await carrier.send(built.header)
         except WebCarrierError as e:
-            self._web_carrier = None
             await carrier.close()
+            self._web_carrier = None
             raise OSError(e) from e
 
         log.info("WEB proxy carrier established")
@@ -536,11 +536,10 @@ class TCP:
     async def close(self) -> None:
         async with self.lock:
             if self._web_carrier is not None:
-                carrier, self._web_carrier = self._web_carrier, None
-                try:
-                    await carrier.close()
-                except Exception as e:
-                    log.info("WEB proxy close exception: %s %s", type(e).__name__, e)
+                # Retain ownership on cancellation/failure, and do not turn a
+                # rejected close into a successful Session.stop().
+                await self._web_carrier.close()
+                self._web_carrier = None
                 return
 
             if self.writer is None or self.writer.is_closing():
@@ -589,7 +588,10 @@ class TCP:
                         data = self._records.wrap(data)
 
                     self.writer.write(data)
-                    await self.writer.drain()
+                    # Bound native backpressure at its owner. Session cleanup
+                    # waits for sends without imposing the update-worker grace
+                    # period; WEB retains its separate HTTP request budgets.
+                    await asyncio.wait_for(self.writer.drain(), timeout=TCP.TIMEOUT)
                 log.debug("Send complete")
             except Exception as e:
                 log.error("Send failed: %s %s", type(e).__name__, e)
