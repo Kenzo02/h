@@ -91,11 +91,16 @@ def get_input_media_from_file_id(
     raise ValueError(f"Unknown file id: {file_id}")
 
 
-def get_file_name(media: io.BytesIO | str, *, file_name: str = "", fallback: str = "") -> str:
+def get_file_name(
+    media: io.BytesIO | str | raw.types.InputFile | raw.types.InputFileBig,
+    *,
+    file_name: str = "",
+    fallback: str = "",
+) -> str:
     if file_name:
         return file_name
 
-    if isinstance(media, io.BytesIO):
+    if isinstance(media, (io.BytesIO, raw.types.InputFile, raw.types.InputFileBig)):
         return getattr(media, "name", fallback) or fallback
 
     return pathlib.Path(media).name or fallback

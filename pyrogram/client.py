@@ -1851,8 +1851,10 @@ class Client(Methods):
             self.message_split_ranges = await self.invoke(raw.functions.messages.GetSplitRanges())
         return self.message_split_ranges
 
-    def guess_mime_type(self, filename: PathType | BytesIO) -> str | None:
-        if isinstance(filename, BytesIO):
+    def guess_mime_type(
+        self, filename: PathType | BytesIO | raw.types.InputFile | raw.types.InputFileBig
+    ) -> str | None:
+        if isinstance(filename, (BytesIO, raw.types.InputFile, raw.types.InputFileBig)):
             return self.mimetypes.guess_type(filename.name)[0]
 
         return self.mimetypes.guess_type(filename)[0]

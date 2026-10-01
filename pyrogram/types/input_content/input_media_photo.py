@@ -44,11 +44,12 @@ class InputMediaPhoto(InputMedia):
     It is intended to be used with :obj:`~pyrogram.Client.send_media_group`.
 
     Parameters:
-        media (``str`` | ``os.PathLike`` | ``BinaryIO``):
+        media (``str`` | ``os.PathLike`` | ``BinaryIO`` | ``InputFile`` | ``InputFileBig``):
             Photo to send.
             Pass a file_id as string to send a photo that exists on the Telegram servers or
             pass a file path as string to upload a new photo that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
+            pass a previously uploaded InputFile or InputFileBig returned by save_file or
             pass an HTTP URL as a string for Telegram to get a photo from the Internet.
 
         caption (``str``, *optional*):
@@ -71,7 +72,7 @@ class InputMediaPhoto(InputMedia):
 
     def __init__(
         self,
-        media: PathType | BinaryIO,
+        media: PathType | BinaryIO | raw.types.InputFile | raw.types.InputFileBig,
         caption: str = "",
         parse_mode: enums.ParseMode | None = None,
         caption_entities: list[MessageEntity] | None = None,
@@ -96,7 +97,10 @@ class InputMediaPhoto(InputMedia):
         else:
             peer = await client.resolve_peer(chat_id)
 
-        if isinstance(self.media, io.BytesIO) or Path(self.media).is_file():
+        if (
+            isinstance(self.media, (io.BytesIO, raw.types.InputFile, raw.types.InputFileBig))
+            or Path(self.media).is_file()
+        ):
             uploaded_media = await client.invoke(
                 raw.functions.messages.UploadMedia(
                     peer=peer,

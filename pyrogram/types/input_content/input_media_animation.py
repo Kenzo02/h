@@ -43,11 +43,12 @@ class InputMediaAnimation(InputMedia):
     """An animation file (GIF or H.264/MPEG-4 AVC video without sound) to be sent inside an album.
 
     Parameters:
-        media (``str`` | ``os.PathLike`` | ``BinaryIO``):
+        media (``str`` | ``os.PathLike`` | ``BinaryIO`` | ``InputFile`` | ``InputFileBig``):
             Animation to send.
             Pass a file_id as string to send a file that exists on the Telegram servers or
             pass a file path as string to upload a new file that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
+            pass a previously uploaded InputFile or InputFileBig returned by save_file or
             pass an HTTP URL as a string for Telegram to get an animation from the Internet.
 
         thumb (``str`` | ``os.PathLike``, *optional*):
@@ -89,7 +90,7 @@ class InputMediaAnimation(InputMedia):
 
     def __init__(
         self,
-        media: PathType | BinaryIO,
+        media: PathType | BinaryIO | raw.types.InputFile | raw.types.InputFileBig,
         thumb: PathType | None = None,
         caption: str = "",
         parse_mode: enums.ParseMode | None = None,
@@ -123,7 +124,10 @@ class InputMediaAnimation(InputMedia):
         else:
             peer = await client.resolve_peer(chat_id)
 
-        if isinstance(self.media, io.BytesIO) or Path(self.media).is_file():
+        if (
+            isinstance(self.media, (io.BytesIO, raw.types.InputFile, raw.types.InputFileBig))
+            or Path(self.media).is_file()
+        ):
             uploaded_media = await client.invoke(
                 raw.functions.messages.UploadMedia(
                     peer=peer,

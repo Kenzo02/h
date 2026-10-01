@@ -45,7 +45,7 @@ class InputMedia(Object):
 
     def __init__(
         self,
-        media: PathType | BinaryIO | None = None,
+        media: PathType | BinaryIO | raw.types.InputFile | raw.types.InputFileBig | None = None,
         caption: str = "",
         parse_mode: str | None = None,
         caption_entities: list[MessageEntity] | None = None,

@@ -45,11 +45,12 @@ class InputMediaVideo(InputMedia):
     It is intended to be used with :obj:`~pyrogram.Client.send_media_group` or :obj:`~pyrogram.Client.send_paid_media`.
 
     Parameters:
-        media (``str`` | ``os.PathLike`` | ``BinaryIO``):
+        media (``str`` | ``os.PathLike`` | ``BinaryIO`` | ``InputFile`` | ``InputFileBig``):
             Video to send.
             Pass a file_id as string to send a video that exists on the Telegram servers or
             pass a file path as string to upload a new video that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
+            pass a previously uploaded InputFile or InputFileBig returned by save_file or
             pass an HTTP URL as a string for Telegram to get a video from the Internet.
 
         thumb (``str``):
@@ -98,6 +99,7 @@ class InputMediaVideo(InputMedia):
         video_cover (``str`` | ``os.PathLike`` | ``BinaryIO``, *optional*):
             Video cover.
             Pass a file_id as string to attach a photo that exists on the Telegram servers,
+            pass a previously uploaded InputFile or InputFileBig returned by save_file or
             pass an HTTP URL as a string for Telegram to get a photo from the Internet,
             pass a file path as string to upload a new photo that exists on your local machine, or
             pass a binary file-like object with its attribute ".name" set for in-memory uploads.
@@ -108,7 +110,7 @@ class InputMediaVideo(InputMedia):
 
     def __init__(
         self,
-        media: PathType | BinaryIO,
+        media: PathType | BinaryIO | raw.types.InputFile | raw.types.InputFileBig,
         thumb: PathType | None = None,
         caption: str = "",
         parse_mode: enums.ParseMode | None = None,
@@ -121,7 +123,11 @@ class InputMediaVideo(InputMedia):
         has_spoiler: bool | None = None,
         no_sound: bool | None = None,
         video_start_timestamp: int | None = None,
-        video_cover: PathType | BinaryIO | None = None,
+        video_cover: PathType
+        | BinaryIO
+        | raw.types.InputFile
+        | raw.types.InputFileBig
+        | None = None,
     ):
         super().__init__(media, caption, parse_mode, caption_entities)
 
@@ -154,7 +160,12 @@ class InputMediaVideo(InputMedia):
         input_video_cover = None
 
         if self.video_cover is not None:
-            if isinstance(self.video_cover, io.BytesIO) or Path(self.video_cover).is_file():
+            if (
+                isinstance(
+                    self.video_cover, (io.BytesIO, raw.types.InputFile, raw.types.InputFileBig)
+                )
+                or Path(self.video_cover).is_file()
+            ):
                 uploaded_media = await client.invoke(
                     raw.functions.messages.UploadMedia(
                         peer=peer,
@@ -194,7 +205,10 @@ class InputMediaVideo(InputMedia):
                     self.video_cover, FileType.PHOTO
                 ).id
 
-        if isinstance(self.media, io.BytesIO) or Path(self.media).is_file():
+        if (
+            isinstance(self.media, (io.BytesIO, raw.types.InputFile, raw.types.InputFileBig))
+            or Path(self.media).is_file()
+        ):
             uploaded_media = await client.invoke(
                 raw.functions.messages.UploadMedia(
                     peer=peer,

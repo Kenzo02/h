@@ -45,11 +45,12 @@ class InputMediaAudio(InputMedia):
     It is intended to be used with :meth:`~pyrogram.Client.send_media_group`.
 
     Parameters:
-        media (``str`` | ``os.PathLike`` | ``BinaryIO``):
+        media (``str`` | ``os.PathLike`` | ``BinaryIO`` | ``InputFile`` | ``InputFileBig``):
             Audio to send.
             Pass a file_id as string to send an audio that exists on the Telegram servers or
             pass a file path as string to upload a new audio that exists on your local machine or
             pass a binary file-like object with its attribute “.name” set for in-memory uploads or
+            pass a previously uploaded InputFile or InputFileBig returned by save_file or
             pass an HTTP URL as a string for Telegram to get an audio file from the Internet.
 
         thumb (``str`` | ``os.PathLike``, *optional*):
@@ -88,7 +89,7 @@ class InputMediaAudio(InputMedia):
 
     def __init__(
         self,
-        media: PathType | BinaryIO,
+        media: PathType | BinaryIO | raw.types.InputFile | raw.types.InputFileBig,
         thumb: PathType | None = None,
         caption: str = "",
         parse_mode: enums.ParseMode | None = None,
@@ -121,7 +122,10 @@ class InputMediaAudio(InputMedia):
         else:
             peer = await client.resolve_peer(chat_id)
 
-        if isinstance(self.media, io.BytesIO) or Path(self.media).is_file():
+        if (
+            isinstance(self.media, (io.BytesIO, raw.types.InputFile, raw.types.InputFileBig))
+            or Path(self.media).is_file()
+        ):
             mime_type = client.guess_mime_type(self.media) or "audio/mpeg"
 
             if mime_type == "audio/ogg":
