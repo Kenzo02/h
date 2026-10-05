@@ -23,7 +23,9 @@ import bisect
 import logging
 import os
 import time
+from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from enum import Enum, auto
 from hashlib import sha1, sha256
 from io import BytesIO
@@ -55,6 +57,52 @@ if TYPE_CHECKING:
     from pyrogram.connection import Connection
 
 log = logging.getLogger(__name__)
+
+
+class SessionNotReady(TimeoutError):
+    """This invocation never entered `send`; not a no-effect guarantee for its caller.
+
+    Earlier invocations or preparation in a high-level method may already have effects.
+    """
+
+    def __init__(self, session: Session, query_name: str):
+        self.session = session
+        self.query_name = query_name
+        self.no_send = True
+        super().__init__(
+            f'Waited {session.WAIT_TIMEOUT}s to invoke "{query_name}", and {session} is not started'
+        )
+
+
+@dataclass
+class AlbumPublicationPolicy:
+    """One caller task, client and primary session, for `messages.SendMultiMedia` only."""
+
+    task: asyncio.Task | None
+    client: pyrogram.Client
+    session: Session | None
+    attempted: bool = False
+    succeeded: bool = False
+
+
+_album_publication_policy: ContextVar[AlbumPublicationPolicy | None] = ContextVar(
+    "_album_publication_policy", default=None
+)
+
+
+@contextmanager
+def single_attempt_album_publication(client: pyrogram.Client):
+    """Opt into one native publication attempt without changing shared client defaults.
+
+    Child tasks inherit context but cannot use this policy. `attempted` fences off
+    high-level parsing/enrichment errors after publication from readiness recovery.
+    """
+    policy = AlbumPublicationPolicy(asyncio.current_task(), client, client.session)
+    token = _album_publication_policy.set(policy)
+    try:
+        yield policy
+    finally:
+        _album_publication_policy.reset(token)
 
 
 _cleanup_origin: ContextVar[tuple[asyncio.Task | None, asyncio.Task | None] | None] = ContextVar(
@@ -1042,12 +1090,27 @@ class Session:
         sleep_threshold: float = SLEEP_THRESHOLD,
         retry_delay: float = RETRY_DELAY,
     ):
-        if isinstance(query, (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout)):
-            inner_query = query.query
-        else:
-            inner_query = query
+        inner_query = query
+        while isinstance(
+            inner_query, (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout)
+        ):
+            inner_query = inner_query.query
 
         query_name = ".".join(inner_query.QUALNAME.split(".")[1:])
+
+        policy = _album_publication_policy.get()
+        scoped_publication = (
+            policy is not None
+            and policy.task is asyncio.current_task()
+            and policy.client is self.client
+            and isinstance(inner_query, raw.functions.messages.SendMultiMedia)
+        )
+        if scoped_publication and policy is not None:
+            if policy.session is not self:
+                # A same-owner publication may not inherit native retries when
+                # peer resolution changed the primary session after scope entry.
+                raise RuntimeError("album_publication_session_changed")
+            retries = 1
 
         try:
             await asyncio.wait_for(self.is_started.wait(), self.WAIT_TIMEOUT)
@@ -1056,17 +1119,20 @@ class Session:
         #  session whose `connection` is still `None`: `AttributeError: 'NoneType' object has
         #  no attribute 'protocol'`, naming neither the session nor the query.
         except asyncio.TimeoutError as e:
-            raise TimeoutError(
-                f'Waited {self.WAIT_TIMEOUT}s to invoke "{query_name}", and {self} is not started'
-            ) from e
+            raise SessionNotReady(self, query_name) from e
 
         for attempt in range(1, retries + 1):
             try:
-                return await self.send(query, timeout=timeout)
+                if scoped_publication and policy is not None:
+                    policy.attempted = True
+                result = await self.send(query, timeout=timeout)
+                if scoped_publication and policy is not None:
+                    policy.succeeded = True
+                return result
             except (FloodWait, FloodPremiumWait) as e:
                 amount = e.seconds
 
-                if amount is None or amount > sleep_threshold >= 0:
+                if scoped_publication or amount is None or amount > sleep_threshold >= 0:
                     raise
 
                 log.warning(
@@ -1078,6 +1144,8 @@ class Session:
 
                 await asyncio.sleep(amount)
             except (OSError, InternalServerError, ServiceUnavailable) as e:
+                if scoped_publication:
+                    raise
                 # `TCP.send` raises a bare `TimeoutError`, an `OSError` whose `str()` is
                 #  empty, so without the `repr` fallback the line would end at "due to: ".
                 #  `pyrogram/connection/transport/tcp/tcp.py:505`.
