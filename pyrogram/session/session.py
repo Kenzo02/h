@@ -105,6 +105,255 @@ def single_attempt_album_publication(client: pyrogram.Client):
         _album_publication_policy.reset(token)
 
 
+class PublicationUnconfirmed(RuntimeError):
+    """A scoped publication must not fall back to a fresh native query."""
+
+
+@dataclass
+class OrdinaryPublicationPolicy:
+    """Explicit business publication bound to one task, actor, session and peer."""
+
+    task: asyncio.Task | None
+    client: pyrogram.Client
+    session: Session | None
+    account_id: int
+    peer_bytes: bytes
+    method: str
+    source_ids: tuple[int, ...]
+    on_intent: Any
+    on_receipt: Any
+    before_attempt: Any
+    wait_retry: Any
+    max_retries: int = 3
+    attempted: bool = False
+    unknown: bool = False
+    succeeded: bool = False
+    query_bytes: bytes | None = None
+    target_ids: tuple[int, ...] | None = None
+    session_identity: tuple[bytes, bytes] | None = None
+    native_calls: int = 0
+
+    def check(self, session: Session | None) -> None:
+        actor = getattr(self.client, "me", None)
+        if (
+            session is None
+            or session is not self.session
+            or self.client.session is not session
+            or getattr(actor, "id", None) != self.account_id
+            or getattr(actor, "is_bot", True)
+            or (
+                self.session_identity is not None
+                and (session.session_id, session.auth_key_id) != self.session_identity
+            )
+        ):
+            msg = "ordinary_publication_identity_changed"
+            raise PublicationUnconfirmed(msg)
+
+
+_ordinary_publication_policy: ContextVar[OrdinaryPublicationPolicy | None] = ContextVar(
+    "_ordinary_publication_policy", default=None
+)
+
+
+@contextmanager
+def ordinary_publication(
+    client: pyrogram.Client,
+    *,
+    account_id: int,
+    peer: TLObject,
+    method: str,
+    source_ids: tuple[int, ...],
+    on_intent: Any,
+    on_receipt: Any,
+    before_attempt: Any,
+    wait_retry: Any,
+    max_retries: int = 3,
+):
+    """Opt in at an explicit business call site, never around a whole helper.
+
+    Synchronous hooks commit before wire and before optional enrichment. The retry
+    hook owns bounded cancellable waits and ownership verification.
+    """
+    if (
+        method not in ("SendMessage", "SendMedia", "SendMultiMedia")
+        or not source_ids
+        or len(set(source_ids)) != len(source_ids)
+        or any(member <= 0 for member in source_ids)
+        or not 0 <= max_retries <= 3
+    ):
+        msg = "ordinary_publication_invalid_manifest"
+        raise PublicationUnconfirmed(msg)
+    policy = OrdinaryPublicationPolicy(
+        asyncio.current_task(),
+        client,
+        client.session,
+        account_id,
+        peer.write(),
+        method,
+        tuple(source_ids),
+        on_intent,
+        on_receipt,
+        before_attempt,
+        wait_retry,
+        max_retries,
+    )
+    if getattr(type(client.session), "ORDINARY_PUBLICATION_CONTRACT_VERSION", None) != 1:
+        msg = "ordinary_publication_native_contract_unavailable"
+        raise PublicationUnconfirmed(msg)
+    policy.check(client.session)
+    policy.session_identity = (client.session.session_id, client.session.auth_key_id)
+    token = _ordinary_publication_policy.set(policy)
+    try:
+        yield policy
+    finally:
+        _ordinary_publication_policy.reset(token)
+
+
+def _publication_receipt(
+    query: Any, result: Any, random_ids: tuple[int, ...], account_id: int
+) -> tuple[int, ...]:
+    # `UpdateShortSentMessage` belongs to this exact scalar RPC, not an update stream.
+    if isinstance(result, raw.types.UpdateShortSentMessage) and len(random_ids) == 1:
+        if result.id > 0 and result.out:
+            return (result.id,)
+    updates = getattr(result, "updates", [])
+    mapping = {}
+    messages = {}
+    for update in updates:
+        if isinstance(update, raw.types.UpdateMessageID):
+            if update.random_id not in random_ids or update.random_id in mapping:
+                msg = "ordinary_publication_foreign_or_duplicate_mapping"
+                raise PublicationUnconfirmed(msg)
+            mapping[update.random_id] = update.id
+        elif isinstance(
+            update,
+            (
+                raw.types.UpdateNewMessage,
+                raw.types.UpdateNewChannelMessage,
+                raw.types.UpdateNewScheduledMessage,
+            ),
+        ):
+            message = update.message
+            peer = message.peer_id
+            destination = query.peer
+            same_peer = (
+                (
+                    isinstance(destination, raw.types.InputPeerChannel)
+                    and isinstance(peer, raw.types.PeerChannel)
+                    and destination.channel_id == peer.channel_id
+                )
+                or (
+                    isinstance(destination, raw.types.InputPeerChat)
+                    and isinstance(peer, raw.types.PeerChat)
+                    and destination.chat_id == peer.chat_id
+                )
+                or (
+                    isinstance(destination, raw.types.InputPeerUser)
+                    and isinstance(peer, raw.types.PeerUser)
+                    and destination.user_id == peer.user_id
+                )
+                or (
+                    isinstance(destination, raw.types.InputPeerSelf)
+                    and isinstance(peer, raw.types.PeerUser)
+                    and peer.user_id == account_id
+                )
+            )
+            if message.id in messages or not same_peer or not getattr(message, "out", False):
+                msg = "ordinary_publication_foreign_or_conflicting_message"
+                raise PublicationUnconfirmed(msg)
+            messages[message.id] = message
+    target_ids = tuple(mapping.get(random_id, 0) for random_id in random_ids)
+    if (
+        any(target <= 0 for target in target_ids)
+        or len(set(target_ids)) != len(random_ids)
+        or set(messages) != set(target_ids)
+    ):
+        msg = "ordinary_publication_receipt_incomplete"
+        raise PublicationUnconfirmed(msg)
+    return target_ids
+
+
+async def _invoke_ordinary_publication(
+    session: Session,
+    query: TLObject,
+    inner: Any,
+    policy: OrdinaryPublicationPolicy,
+    timeout: float,
+):
+    if policy.query_bytes is not None:
+        msg = "ordinary_publication_fresh_query_forbidden"
+        raise PublicationUnconfirmed(msg)
+    query_bytes = query.write()
+    ids = (
+        tuple(item.random_id for item in inner.multi_media)
+        if isinstance(inner, raw.functions.messages.SendMultiMedia)
+        else (inner.random_id,)
+    )
+    if (
+        inner.peer.write() != policy.peer_bytes
+        or len(ids) != len(policy.source_ids)
+        or len(set(ids)) != len(ids)
+        or any(not random_id for random_id in ids)
+    ):
+        msg = "ordinary_publication_query_manifest_mismatch"
+        raise PublicationUnconfirmed(msg)
+    policy.query_bytes = query_bytes
+    for attempt in range(policy.max_retries + 1):
+        policy.check(session)
+        if query.write() != query_bytes:
+            msg = "ordinary_publication_query_mutated"
+            raise PublicationUnconfirmed(msg)
+        try:
+            await asyncio.wait_for(session.is_started.wait(), session.WAIT_TIMEOUT)
+        except asyncio.TimeoutError as error:
+            if attempt == policy.max_retries:
+                if policy.unknown:
+                    msg = "ordinary_publication_outcome_unconfirmed"
+                    raise PublicationUnconfirmed(msg) from error
+                raise SessionNotReady(session, f"messages.{policy.method}") from error
+            await policy.wait_retry(attempt, "readiness")
+            continue
+        if not policy.attempted:
+            # A failed intent transaction guarantees zero native writes.
+            policy.on_intent(query_bytes, ids)
+        policy.attempted = True
+        policy.native_calls += 1
+        try:
+            result = await session.send(query, timeout=timeout)
+        except asyncio.CancelledError:
+            policy.unknown = True
+            raise
+        except (OSError, InternalServerError, ServiceUnavailable) as error:
+            policy.unknown = True
+            failure = error
+        except RPCError as error:
+            # Telegram can encode `RANDOM_ID_DUPLICATE` as either 400 or 500.
+            if getattr(error, "ID", None) == "RANDOM_ID_DUPLICATE":
+                policy.unknown = True
+                failure = error
+            elif policy.unknown:
+                msg = "ordinary_publication_outcome_unconfirmed"
+                raise PublicationUnconfirmed(msg) from error
+            else:
+                raise
+        else:
+            # Fence before parsing/persistence: neither failure may create fresh IDs.
+            policy.succeeded = True
+            policy.unknown = True
+            try:
+                targets = _publication_receipt(inner, result, ids, policy.account_id)
+                policy.on_receipt(targets)
+                policy.target_ids = targets
+            except Exception as error:
+                msg = "ordinary_publication_receipt_unconfirmed"
+                raise PublicationUnconfirmed(msg) from error
+            return result
+        if attempt == policy.max_retries:
+            msg = "ordinary_publication_outcome_unconfirmed"
+            raise PublicationUnconfirmed(msg) from failure
+        await policy.wait_retry(attempt, "unknown")
+
+
 _cleanup_origin: ContextVar[tuple[asyncio.Task | None, asyncio.Task | None] | None] = ContextVar(
     "_cleanup_origin", default=None
 )
@@ -246,6 +495,7 @@ class Result:
 
 
 class Session:
+    ORDINARY_PUBLICATION_CONTRACT_VERSION = 1
     START_TIMEOUT = 2
     STOP_TIMEOUT = 2
     WAIT_TIMEOUT = 15
@@ -1041,10 +1291,46 @@ class Session:
             self.auth_key_id,
         )
 
+        ordinary = _ordinary_publication_policy.get()
+        send_inner = data
+        if (
+            ordinary is not None
+            and ordinary.task is asyncio.current_task()
+            and ordinary.client is self.client
+        ):
+            while isinstance(
+                send_inner, (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout)
+            ):
+                send_inner = send_inner.query
         try:
+            if (
+                ordinary is not None
+                and ordinary.task is asyncio.current_task()
+                and ordinary.client is self.client
+                and ordinary.query_bytes is not None
+                and isinstance(
+                    send_inner,
+                    (
+                        raw.functions.messages.SendMessage,
+                        raw.functions.messages.SendMedia,
+                        raw.functions.messages.SendMultiMedia,
+                    ),
+                )
+            ):
+                await ordinary.before_attempt()
+                ordinary.check(self)
+                if data.write() != ordinary.query_bytes:
+                    msg = "ordinary_publication_query_mutated"
+                    raise PublicationUnconfirmed(msg)
             await self.connection.send(payload)
-        except OSError as e:
-            self.results.pop(msg_id, None)
+        except BaseException as e:
+            if isinstance(e, OSError) or (
+                ordinary is not None
+                and ordinary.task is asyncio.current_task()
+                and ordinary.client is self.client
+                and ordinary.query_bytes is not None
+            ):
+                self.results.pop(msg_id, None)
             raise e
 
         if pending_result is not None:
@@ -1097,6 +1383,43 @@ class Session:
             inner_query = inner_query.query
 
         query_name = ".".join(inner_query.QUALNAME.split(".")[1:])
+
+        ordinary = _ordinary_publication_policy.get()
+        if (
+            ordinary is not None
+            and ordinary.task is asyncio.current_task()
+            and ordinary.client is self.client
+        ):
+            probe: Any = inner_query
+            while hasattr(probe, "query"):
+                probe = probe.query
+            if probe is not inner_query and isinstance(
+                probe,
+                (
+                    raw.functions.messages.SendMessage,
+                    raw.functions.messages.SendMedia,
+                    raw.functions.messages.SendMultiMedia,
+                ),
+            ):
+                msg = "ordinary_publication_unsupported_envelope"
+                raise PublicationUnconfirmed(msg)
+        if (
+            ordinary is not None
+            and ordinary.task is asyncio.current_task()
+            and ordinary.client is self.client
+            and isinstance(
+                inner_query,
+                (
+                    raw.functions.messages.SendMessage,
+                    raw.functions.messages.SendMedia,
+                    raw.functions.messages.SendMultiMedia,
+                ),
+            )
+        ):
+            if type(inner_query).__name__ != ordinary.method:
+                msg = "ordinary_publication_method_changed"
+                raise PublicationUnconfirmed(msg)
+            return await _invoke_ordinary_publication(self, query, inner_query, ordinary, timeout)
 
         policy = _album_publication_policy.get()
         scoped_publication = (
