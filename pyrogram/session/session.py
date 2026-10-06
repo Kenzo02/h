@@ -212,9 +212,13 @@ def ordinary_publication(
 def _publication_receipt(
     query: Any, result: Any, random_ids: tuple[int, ...], account_id: int
 ) -> tuple[int, ...]:
+    # Self-only incoming representations retain exact RPC and peer ownership.
+    self_peer = isinstance(query.peer, raw.types.InputPeerSelf) or (
+        isinstance(query.peer, raw.types.InputPeerUser) and query.peer.user_id == account_id
+    )
     # `UpdateShortSentMessage` belongs to this exact scalar RPC, not an update stream.
     if isinstance(result, raw.types.UpdateShortSentMessage) and len(random_ids) == 1:
-        if result.id > 0 and result.out:
+        if result.id > 0 and (result.out or self_peer):
             return (result.id,)
     updates = getattr(result, "updates", [])
     mapping = {}
@@ -258,7 +262,7 @@ def _publication_receipt(
                     and peer.user_id == account_id
                 )
             )
-            if message.id in messages or not same_peer or not getattr(message, "out", False):
+            if message.id in messages or not same_peer or not (getattr(message, "out", False) or self_peer):
                 msg = "ordinary_publication_foreign_or_conflicting_message"
                 raise PublicationUnconfirmed(msg)
             messages[message.id] = message
