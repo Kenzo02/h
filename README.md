@@ -3,10 +3,39 @@
 This fork of [Kurigram](https://github.com/kurigram-org/kurigram) is used by UserBot
 and related Telegram services. The Python import remains `pyrogram`.
 
-Python **3.10 or newer** is required. Package version `2.2.26.post1` identifies the
-local integration of upstream `01ad943c9f7f5d6b540f19a1b3649732d3740f27` with this
-fork's compatibility and runtime fixes. It is not a statement that the package
-has been published or deployed.
+Python **3.10 or newer** is required. Package version `2.2.26.post5` integrates
+upstream `d4d06981` (maintained `main`, Telegram Layer 230) with this fork's
+compatibility and runtime fixes. The package version alone does not prove that
+an artifact has been published or deployed.
+
+## Changes from 2.2.26.post4
+
+- Retain ACK obligations over reconnects, normalize proxy assignments, and preserve
+  embedded business replies even when additional reply fetching is disabled.
+- Preserve fork-owned shutdown/cancellation, publication receipts and no-replay
+  protection, DC failover/cache, storage adapters, and preuploaded album handling.
+- Use upstream dispatcher admission: packets received before dispatcher startup,
+  after shutdown, or with `no_updates=True` are not queued. Processing begins when
+  dispatcher startup opens admission. This intentionally retires the fork's old
+  pre-initialize backlog preservation; no extra buffering or startup mechanism.
+- Add inline game scores without changing the fork's existing positional/named
+  arguments or edit-only return selection. The new `inline_message_id` is additive.
+- Add Layer 230 TON address entities, wallet methods and service message types.
+  No wallet, transfer, backup or dApp connection is enabled automatically.
+- Layer 230 changes verification descriptions to formatted text. High-level
+  `BotVerification.description` now exposes `FormattedText`; use `str(value)` for
+  plain text and `.text`/`.entities` for structured content. Raw verification
+  requests require `TextWithEntities`, not a string. The removed raw
+  `InputPasskeyCredentialFirebasePNV` cannot be kept as a working wire API.
+- Assigning `client.proxy` now validates immediately, just like construction;
+  dictionary forms must include a valid `scheme`. Changes apply on reconnect,
+  not retroactively to open connections.
+
+New wallet and inline-game capabilities require explicit application calls; they
+are not forwarding settings. Existing forwarding clients need no new feature flag.
+Consumer rollout must still verify the exact immutable package and existing
+application compatibility before activation. See the upgrade notes below when
+coming from older package versions.
 
 ## Installation and upgrades
 

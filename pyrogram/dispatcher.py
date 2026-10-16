@@ -157,6 +157,8 @@ class Dispatcher:
         #  not exist yet.
         self._groups_lock = threading.Lock()
 
+        self._accepting_updates: bool = False
+
         async def message_parser(update, users, chats):
             return (
                 await pyrogram.types.Message._parse(
@@ -365,30 +367,14 @@ class Dispatcher:
     # Rebuilds the queue for the loop about to run it. Why, on
     #  `Client._rebuild_loop_bound_state`.
     def _rebuild_loop_bound_state(self) -> None:
-        # `handle_updates()` can receive and persist an update before
-        # `initialize()` starts the dispatcher. Replacing the queue outright
-        # loses that packet after its cursor has already advanced, so preserve
-        # the FIFO contents while moving the loop-bound primitive.
-        pending_updates = []
-
-        while True:
-            try:
-                packet = self.updates_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-
-            # Stop sentinels belong to workers from the old run. `stop()` waits
-            # for those workers before another start can rebuild the queue.
-            if packet is not None:
-                pending_updates.append(packet)
-
         self.updates_queue = asyncio.Queue()
-
-        for packet in pending_updates:
-            self.updates_queue.put_nowait(packet)
 
     async def start(self):
         self._rebuild_loop_bound_state()
+
+        # Open before `start_handler`, not when the workers exist: an update arriving while it
+        #  runs is delivered once they start, and its `pts` is already saved by then.
+        self._accepting_updates = not self.client.no_updates
 
         if callable(self.client.start_handler):
             try:
@@ -413,19 +399,38 @@ class Dispatcher:
                 log.exception(e)
 
         if not self.client.no_updates:
+            # Closed before the sentinels go in, so `enqueue` drops what arrives from here on
+            #  instead of queueing it behind them for no worker.
+            self._accepting_updates = False
+
             for _ in range(self.client.workers):
                 self.updates_queue.put_nowait(None)
 
-            for i in self.handler_worker_tasks:
-                await i
+            for handler_worker_task in self.handler_worker_tasks:
+                await handler_worker_task
+
+            self.handler_worker_tasks.clear()
 
             if clear_handlers:
-                self.handler_worker_tasks.clear()
-
                 with self._groups_lock:
                     self.groups = {}
 
             log.info("Stopped %s HandlerTasks", self.client.workers)
+
+    def enqueue(
+        self,
+        update: raw.base.Update,
+        *,
+        users: dict[int, raw.base.User],
+        chats: dict[int, raw.base.Chat],
+    ) -> None:
+        # Only `start()` spawns the workers that drain the queue, so a client that only called
+        #  `connect()` queued every update forever. Nothing is lost by dropping: `start()`
+        #  replaces the queue, so a packet put before it never reached a worker either.
+        if not self._accepting_updates:
+            return
+
+        self.updates_queue.put_nowait((update, users, chats))
 
     def add_handler(self, handler: Handler[Any], group: int) -> None:
         with self._groups_lock:

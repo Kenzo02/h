@@ -24,7 +24,11 @@ def test_saved_messages_native_receipt_does_not_require_out_flag(peer_kind, enve
                 raw.types.UpdateMessageID(random_id=71, id=902),
                 raw.types.UpdateNewMessage(
                     message=raw.types.Message(
-                        id=902, peer_id=raw.types.PeerUser(user_id=999), date=1, message="Fixture", out=False
+                        id=902,
+                        peer_id=raw.types.PeerUser(user_id=999),
+                        date=1,
+                        message="Fixture",
+                        out=False,
                     ),
                     pts=1,
                     pts_count=1,

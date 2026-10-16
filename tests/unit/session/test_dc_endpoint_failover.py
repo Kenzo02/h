@@ -1066,7 +1066,7 @@ async def test_select_dc_option_orders_equal_latency_candidates_deterministicall
 async def test_get_dc_option_does_not_direct_probe_when_proxy_is_configured(monkeypatch):
     client = make_endpoint_client(
         [dc_option(5, DC5_CONFIG_ENDPOINT)],
-        proxy={"hostname": "127.0.0.1", "port": 1080},
+        proxy={"scheme": "socks5", "hostname": "127.0.0.1", "port": 1080},
     )
 
     async def fail_probe(*args, **kwargs):

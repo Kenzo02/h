@@ -161,6 +161,7 @@ class Client(Methods):
             never adds the TLS record layer. A secret longer than 16 bytes - dd-prefixed or
             ee-prefixed - asks for random padding, and the transport that sends it is picked
             from the secret, so *proxy* is the only argument either scheme needs.
+            Assigning ``client.proxy`` later accepts the same forms; the next connection uses it.
 
         test_mode (``bool``, *optional*):
             Enable or disable login to the test servers.
@@ -383,7 +384,7 @@ class Client(Methods):
         self.lang_code = lang_code.lower()
         self.system_lang_code = system_lang_code.lower()
         self.ipv6 = ipv6
-        self.proxy = normalize_proxy(proxy)
+        self.proxy = proxy
         self.test_mode = test_mode
         self.bot_token = bot_token
         self.session_string = session_string
@@ -980,7 +981,11 @@ class Client(Methods):
                                 users.update({u.id: u for u in diff.users})
                                 chats.update({c.id: c for c in diff.chats})
 
-                self.dispatcher.updates_queue.put_nowait((update, users, chats))
+                self.dispatcher.enqueue(
+                    update,
+                    users=users,
+                    chats=chats,
+                )
 
                 # Hydrating a minimal channel update can suspend. Keep its cursor
                 # recoverable until the hydrated update is available for dispatch.
@@ -1001,24 +1006,32 @@ class Client(Methods):
             chats = {c.id: c for c in diff.chats}
 
             for message in diff.new_messages:
-                self.dispatcher.updates_queue.put_nowait(
-                    (
-                        raw.types.UpdateNewMessage(
-                            message=message, pts=updates.pts, pts_count=updates.pts_count
-                        ),
-                        users,
-                        chats,
-                    )
+                self.dispatcher.enqueue(
+                    raw.types.UpdateNewMessage(
+                        message=message,
+                        pts=updates.pts,
+                        pts_count=updates.pts_count,
+                    ),
+                    users=users,
+                    chats=chats,
                 )
 
             for update in diff.other_updates:
-                self.dispatcher.updates_queue.put_nowait((update, users, chats))
+                self.dispatcher.enqueue(
+                    update,
+                    users=users,
+                    chats=chats,
+                )
 
             await self.storage.set_update_state(
                 UpdateState(0, updates.pts, None, updates.date, None)
             )
         elif isinstance(updates, raw.types.UpdateShort):
-            self.dispatcher.updates_queue.put_nowait((updates.update, {}, {}))
+            self.dispatcher.enqueue(
+                updates.update,
+                users={},
+                chats={},
+            )
         elif isinstance(updates, raw.types.UpdatesTooLong):
             log.info(updates)
 
@@ -1904,6 +1917,14 @@ class Client(Methods):
         else:
             update_endpoint_cache(cache_key, (server_address, port))
             log.info("Session DC%s address is already %s:%s", dc_id, server_address, port)
+
+    @property
+    def proxy(self) -> Proxy | None:
+        return self._proxy
+
+    @proxy.setter
+    def proxy(self, proxy: str | ProxyDict | Proxy | None) -> None:
+        self._proxy = normalize_proxy(proxy)
 
     @property
     def server_time(self) -> float:

@@ -27,9 +27,11 @@ from pyrogram.raw.core import TLObject, Vector
 
 BLOCK = raw.types.PageBlockParagraph(text=raw.types.TextPlain(text="hi"))
 PHOTO = raw.types.InputPhoto(id=1, access_hash=2, file_reference=b"")
-# NOTE: `read()` gives a `flags.N?true` field `False`, never `None`, so the two `true` flags are
-#       spelled out here - otherwise the objects compare unequal for a reason this file is not about.
-USERNAME = raw.types.Username(username="name", editable=False, active=True)
+# `read()` gives absent `flags.N?true` fields False, not None. Spell out every
+# Layer 230 flag so equality checks test vectors rather than flag normalization.
+USERNAME = raw.types.Username(
+    username="name", editable=False, active=True, deletable=False, expired=False
+)
 
 # One case per sub-type the generator branches on, plus a function and a class whose vector
 # lives in the second flags group. `build(None)` is the field never passed, `build([])` the

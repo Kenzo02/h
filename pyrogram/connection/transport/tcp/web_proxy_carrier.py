@@ -646,7 +646,12 @@ class WebProxyCarrier:
         #  `_closed` is checked because `recv()` still serves whatever the buffer
         #  holds after `close()`, and a grant task started then is never
         #  cancelled: `close()` has already walked `_background_tasks`.
-        if amount <= 0 or self._close_task is not None or self._closed or self._fail_exc is not None:
+        if (
+            amount <= 0
+            or self._close_task is not None
+            or self._closed
+            or self._fail_exc is not None
+        ):
             return
 
         self._pending_grant += amount

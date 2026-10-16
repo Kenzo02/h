@@ -8,6 +8,7 @@ import pytest
 from pyrogram.client import Client as PyrogramClient
 from pyrogram import raw
 from pyrogram.methods.advanced.recover_gaps import RecoverGaps
+from pyrogram.dispatcher import Dispatcher
 from pyrogram.storage import UpdateState
 
 
@@ -44,7 +45,10 @@ class Storage:
 class Client(RecoverGaps):
     def __init__(self):
         self.storage = Storage()
-        self.dispatcher = SimpleNamespace(updates_queue=asyncio.Queue())
+        self.dispatcher = SimpleNamespace(updates_queue=asyncio.Queue(), _accepting_updates=True)
+        self.dispatcher.enqueue = lambda update, **kwargs: Dispatcher.enqueue(
+            self.dispatcher, update, **kwargs
+        )
         self._update_state_lock = asyncio.Lock()
         self.queries = []
 

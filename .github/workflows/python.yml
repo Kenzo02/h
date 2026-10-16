@@ -1,10 +1,9 @@
 name: Kurigram
 
 on:
-  # Branches live in this repository and are tested through their pull request, so an
-  #  unfiltered `push` ran the whole workflow a second time for the same commit.
+  # The fork delivers on dev; upstream delivers on main.
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   # Every job above installs from `uv.lock`, so a dependency release published after the last
   #  `uv lock` is exercised by nothing until somebody happens to relock. `test-ceil` resolves
@@ -20,7 +19,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 
     steps:
       - uses: actions/checkout@v5
@@ -57,7 +56,7 @@ jobs:
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: "3.14"
+          python-version: "3.15"
 
       - name: Install dependencies
         run: |
@@ -80,7 +79,7 @@ jobs:
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: "3.14"
+          python-version: "3.15"
 
       - name: Install dependencies
         run: |

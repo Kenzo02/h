@@ -262,7 +262,11 @@ def _publication_receipt(
                     and peer.user_id == account_id
                 )
             )
-            if message.id in messages or not same_peer or not (getattr(message, "out", False) or self_peer):
+            if (
+                message.id in messages
+                or not same_peer
+                or not (getattr(message, "out", False) or self_peer)
+            ):
                 msg = "ordinary_publication_foreign_or_conflicting_message"
                 raise PublicationUnconfirmed(msg)
             messages[message.id] = message
@@ -891,13 +895,13 @@ class Session:
 
         self.stored_msg_ids.clear()
 
-        # The unsent acks name msg ids of the connection this stop closes, which the
-        #  server cannot match after a reconnect.
-        self.pending_acks.clear()
+        # ACK obligations belong to the session, not this connection, and survive
+        # reconnects. Received-ID sets handle deduplication: pending_acks can also
+        # name a not-yet-received body announced by MsgDetailedInfo.
+        # https://core.telegram.org/mtproto/description#message-identifier-msg-id
 
-        # A pending waiter's msg id also dies with the connection and nothing re-sends
-        #  the request, so no answer can arrive: failing each waiter here turns a
-        #  silent `WAIT_TIMEOUT` into an immediate, accurate error.
+        # Nothing re-sends a pending waiter's request, so no answer can arrive:
+        #  failing each waiter here turns a silent `WAIT_TIMEOUT` into an immediate, accurate error.
         for result in self.results.values():
             result.exception = TimeoutError("Session stopped before an answer arrived")
             result.event.set()
