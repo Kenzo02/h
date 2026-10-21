@@ -1287,30 +1287,31 @@ class Session:
             pending_result = Result()
             self.results[msg_id] = pending_result
 
-        log.debug("Sent: %s", message)
-
-        payload = await asyncio.get_running_loop().run_in_executor(
-            self.connection.protocol.crypto_executor,
-            mtproto.pack,
-            message,
-            self._current_salt(self.client.server_time),
-            self.session_id,
-            self.auth_key,
-            self.auth_key_id,
-        )
-
-        ordinary = _ordinary_publication_policy.get()
-        send_inner = data
-        if (
-            ordinary is not None
-            and ordinary.task is asyncio.current_task()
-            and ordinary.client is self.client
-        ):
-            while isinstance(
-                send_inner, (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout)
-            ):
-                send_inner = send_inner.query
         try:
+            log.debug("Sent: %s", message)
+
+            payload = await asyncio.get_running_loop().run_in_executor(
+                self.connection.protocol.crypto_executor,
+                mtproto.pack,
+                message,
+                self._current_salt(self.client.server_time),
+                self.session_id,
+                self.auth_key,
+                self.auth_key_id,
+            )
+
+            ordinary = _ordinary_publication_policy.get()
+            send_inner = data
+            if (
+                ordinary is not None
+                and ordinary.task is asyncio.current_task()
+                and ordinary.client is self.client
+            ):
+                while isinstance(
+                    send_inner,
+                    (raw.functions.InvokeWithoutUpdates, raw.functions.InvokeWithTakeout),
+                ):
+                    send_inner = send_inner.query
             if (
                 ordinary is not None
                 and ordinary.task is asyncio.current_task()
@@ -1331,24 +1332,19 @@ class Session:
                     msg = "ordinary_publication_query_mutated"
                     raise PublicationUnconfirmed(msg)
             await self.connection.send(payload)
-        except BaseException as e:
-            if isinstance(e, OSError) or (
-                ordinary is not None
-                and ordinary.task is asyncio.current_task()
-                and ordinary.client is self.client
-                and ordinary.query_bytes is not None
-            ):
-                self.results.pop(msg_id, None)
-            raise e
+
+            if pending_result is not None:
+                try:
+                    await asyncio.wait_for(pending_result.event.wait(), timeout)
+                except asyncio.TimeoutError:
+                    pass
+        finally:
+            # Cancellation or failure can happen at any await after registration.
+            # Stop may already have cleared this entry; never remove another owner.
+            if pending_result is not None and self.results.get(msg_id) is pending_result:
+                self.results.pop(msg_id)
 
         if pending_result is not None:
-            try:
-                await asyncio.wait_for(pending_result.event.wait(), timeout)
-            except asyncio.TimeoutError:
-                pass
-
-            self.results.pop(msg_id, None)
-
             if pending_result.exception is not None:
                 raise pending_result.exception
 
