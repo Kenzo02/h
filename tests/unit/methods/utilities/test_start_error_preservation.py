@@ -1,4 +1,5 @@
 """Exercise real Client.start and native cleanup error with all wire calls mocked."""
+
 import asyncio
 import traceback
 
@@ -9,7 +10,9 @@ from pyrogram.session.session import SessionCleanupError
 
 
 @pytest.mark.parametrize("error_type", [ConnectionError, TimeoutError, ValueError, SessionRevoked])
-async def test_real_client_preserves_primary_failure_and_chains_cleanup(offline_client, monkeypatch, error_type):
+async def test_real_client_preserves_primary_failure_and_chains_cleanup(
+    offline_client, monkeypatch, error_type
+):
     client = offline_client
     original_disconnect = client.disconnect
     primary = error_type()
@@ -32,7 +35,9 @@ async def test_real_client_preserves_primary_failure_and_chains_cleanup(offline_
         assert primary.__cause__ is secondary
         assert disconnects == [True]
         assert not client.is_initialized
-        formatted = "".join(traceback.format_exception(type(primary), primary, primary.__traceback__))
+        formatted = "".join(
+            traceback.format_exception(type(primary), primary, primary.__traceback__)
+        )
         assert "SessionCleanupError" in formatted
         assert error_type.__name__ in formatted
         assert len(formatted) < 20_000  # Cyclic context/cause references render finitely.
@@ -48,7 +53,7 @@ async def test_real_client_cleanup_cancellation_remains_cancellation(offline_cli
         raise ConnectionError("offline failure")
 
     async def canceled_disconnect():
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     monkeypatch.setattr(client, "invoke", failing_invoke)
     monkeypatch.setattr(client, "disconnect", canceled_disconnect)
@@ -65,7 +70,7 @@ async def test_real_client_start_cancellation_keeps_existing_semantics(offline_c
     disconnects = []
 
     async def canceled_invoke(_query):
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     async def record_disconnect():
         disconnects.append(True)

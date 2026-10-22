@@ -3,10 +3,28 @@
 This fork of [Kurigram](https://github.com/kurigram-org/kurigram) is used by UserBot
 and related Telegram services. The Python import remains `pyrogram`.
 
-Python **3.10 or newer** is required. Package version `2.2.26.post5` integrates
-upstream `d4d06981` (maintained `main`, Telegram Layer 230) with this fork's
+Python **3.10 or newer** is required. Candidate package version `2.2.26.post8` integrates
+maintained upstream `main` through Telegram Layer 232 with this fork's
 compatibility and runtime fixes. The package version alone does not prove that
 an artifact has been published or deployed.
+
+## Changes from 2.2.26.post7
+
+- Integrate the latest reviewed upstream Layer 231/232 schema, `Message.sender`,
+  named storage sentinel and documentation updates. The sentinel still aliases
+  `object`; storage `None` writes and the fork's legacy adapters are preserved.
+- Preserve startup-error classification/cleanup chaining, pending-RPC cancellation
+  cleanup, DC endpoint selection/fallback, dispatcher admission, and publication
+  and no-replay controls.
+- New gift deletion and wallet/theme wire APIs require explicit application calls;
+  integration does not invoke them or enable financial actions.
+- Raw `payments.GetStarGiftWithdrawalUrl` now takes `tmp_password` instead of the
+  former SRP `password` object. Raw callers must migrate to the new protocol.
+  Existing forwarding callers do not need a new feature flag.
+
+The candidate is prepared on a separate integration branch. This does not indicate
+publication, production installation or activation. The last delivered production
+wheel remains a separate rollout.
 
 ## Changes from 2.2.26.post4
 

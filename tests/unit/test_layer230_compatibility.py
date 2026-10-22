@@ -68,5 +68,5 @@ def test_ton_exports_are_additive_and_do_not_change_client_defaults():
     assert types.RichTextTonAddress
     assert types.TonWalletTransfer
     assert types.TonConnectRequest
-    assert raw.all.layer == 230
+    assert raw.all.layer == 232
     assert raw.types.MessageEntityTonAddress(offset=0, length=1).write()
