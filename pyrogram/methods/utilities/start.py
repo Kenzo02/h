@@ -100,8 +100,13 @@ class Start:
                         UpdateState(0, state.pts, state.qts, state.date, state.seq)
                     )
                     await self.storage.save()
-        except (Exception, KeyboardInterrupt):
-            await self.disconnect()
+        except (Exception, KeyboardInterrupt) as startup_error:
+            try:
+                await self.disconnect()
+            except Exception as cleanup_error:
+                # Retry/terminal classification belongs to the failed startup
+                # operation. Retain teardown as its cause, never replace it.
+                raise startup_error from cleanup_error
             raise
         else:
             self.me = await self.get_me()
