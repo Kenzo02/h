@@ -125,6 +125,7 @@ class OrdinaryPublicationPolicy:
     before_attempt: Any
     wait_retry: Any
     max_retries: int = 3
+    on_result: Any = None
     attempted: bool = False
     unknown: bool = False
     succeeded: bool = False
@@ -168,11 +169,14 @@ def ordinary_publication(
     before_attempt: Any,
     wait_retry: Any,
     max_retries: int = 3,
+    on_result: Any = None,
 ):
     """Opt in at an explicit business call site, never around a whole helper.
 
     Synchronous hooks commit before wire and before optional enrichment. The retry
     hook owns bounded cancellable waits and ownership verification.
+    Optional `on_result` observes the exact native result synchronously before
+    full receipt validation, including partial results. Failure remains unknown.
     """
     if (
         method not in ("SendMessage", "SendMedia", "SendMultiMedia")
@@ -196,6 +200,7 @@ def ordinary_publication(
         before_attempt,
         wait_retry,
         max_retries,
+        on_result=on_result,
     )
     if getattr(type(client.session), "ORDINARY_PUBLICATION_CONTRACT_VERSION", None) != 1:
         msg = "ordinary_publication_native_contract_unavailable"
@@ -349,6 +354,8 @@ async def _invoke_ordinary_publication(
             policy.succeeded = True
             policy.unknown = True
             try:
+                if policy.on_result is not None:
+                    policy.on_result(result)
                 targets = _publication_receipt(inner, result, ids, policy.account_id)
                 policy.on_receipt(targets)
                 policy.target_ids = targets
@@ -504,6 +511,7 @@ class Result:
 
 class Session:
     ORDINARY_PUBLICATION_CONTRACT_VERSION = 1
+    ORDINARY_PUBLICATION_RESULT_CONTRACT_VERSION = 1
     START_TIMEOUT = 2
     STOP_TIMEOUT = 2
     WAIT_TIMEOUT = 15

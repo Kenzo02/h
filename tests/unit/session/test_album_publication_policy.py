@@ -416,6 +416,104 @@ async def test_ordinary_policy_inherited_child_other_client_and_unrelated_query_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("complete", [False, True])
+async def test_result_hook_observes_exact_native_result_before_full_receipt(monkeypatch, complete):
+    ids = tuple(range(71, 79))
+    result = ordinary_updates(ids if complete else ids[:-1])
+    query = raw.functions.messages.SendMultiMedia(
+        peer=ordinary_query().peer,
+        multi_media=[
+            raw.types.InputSingleMedia(
+                media=raw.types.InputMediaEmpty(), random_id=random_id, message="Fixture"
+            )
+            for random_id in ids
+        ],
+    )
+    f = ordinary_transport(monkeypatch, [result])
+    observed = []
+
+    def observe(native_result):
+        assert native_result is result
+        assert not f.receipts
+        observed.extend(
+            (u.random_id, u.id)
+            for u in native_result.updates
+            if isinstance(u, raw.types.UpdateMessageID)
+        )
+
+    assert f.session.ORDINARY_PUBLICATION_RESULT_CONTRACT_VERSION == 1
+    with ordinary_publication(
+        f.session.client,
+        method="SendMultiMedia",
+        source_ids=tuple(range(101, 109)),
+        on_result=observe,
+        **f.hooks,
+    ) as policy:
+        if complete:
+            assert await f.session.invoke(query) is result
+            assert f.receipts == [tuple(902 - i for i in range(8))]
+        else:
+            with pytest.raises(PublicationUnconfirmed, match="receipt_unconfirmed") as caught:
+                await f.session.invoke(query)
+            assert str(caught.value.__cause__) == "ordinary_publication_receipt_incomplete"
+            assert not f.receipts and policy.target_ids is None
+        assert policy.unknown and policy.succeeded
+        with pytest.raises(PublicationUnconfirmed, match="fresh_query"):
+            await f.session.invoke(query)
+    expected = [(rid, 902 - i) for i, rid in enumerate(ids if complete else ids[:-1])]
+    assert sorted(observed) == expected
+    assert len(f.session.connection.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_result_hook_failure_preserves_unknown_and_prevents_replay(monkeypatch):
+    f = ordinary_transport(monkeypatch, [None])
+
+    def fail(result):
+        raise RuntimeError("observation persistence failed")
+
+    with ordinary_publication(
+        f.session.client, method="SendMessage", source_ids=(101,), on_result=fail, **f.hooks
+    ) as policy:
+        with pytest.raises(PublicationUnconfirmed, match="receipt_unconfirmed") as caught:
+            await f.session.invoke(ordinary_query())
+        assert str(caught.value.__cause__) == "observation persistence failed"
+        assert policy.unknown and policy.succeeded and policy.target_ids is None
+        with pytest.raises(PublicationUnconfirmed, match="fresh_query"):
+            await f.session.invoke(ordinary_query())
+    assert not f.receipts and len(f.session.connection.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_result_hook_does_not_escape_owning_task_or_scope(monkeypatch):
+    result = ordinary_updates()
+    f = ordinary_transport(monkeypatch, [result])
+    observed = []
+    with ordinary_publication(
+        f.session.client,
+        method="SendMessage",
+        source_ids=(101,),
+        on_result=observed.append,
+        **f.hooks,
+    ) as policy:
+        assert await asyncio.create_task(f.session.invoke(ordinary_query())) is result
+        assert not observed and not policy.attempted
+        assert await f.session.invoke(ordinary_query()) is result
+        assert observed == [result]
+    assert await f.session.invoke(ordinary_query()) is result
+    assert observed == [result]
+
+
+@pytest.mark.asyncio
+async def test_unscoped_partial_result_is_returned_without_receipt_validation(monkeypatch):
+    result = ordinary_updates((71,))
+    f = ordinary_transport(monkeypatch, [result])
+    assert await f.session.invoke(ordinary_query("SendMultiMedia")) is result
+    assert not f.intents and not f.receipts
+    assert len(f.session.connection.sent) == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("change", ["peer", "method", "session_id", "bot"])
 async def test_ordinary_policy_wrong_binding_fails_before_wire(monkeypatch, change):
     f = ordinary_transport(monkeypatch, [None])
