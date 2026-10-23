@@ -171,8 +171,64 @@ def test_endpoint_cache_rejects_non_directory_cache_parent(monkeypatch, tmp_path
     assert cache_parent.read_bytes() == b"keep-me"
 
 
+def _run_fifo_cache_probe(operation, cache_file, *, startup_delay=0, block_operation=False):
+    repo_root = Path(__file__).parents[3]
+    script = """
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+# Interpreter/package initialization is outside the cache operation's deadline.
+time.sleep(float(sys.argv[3]))
+import pyrogram.dc_options as dc_options
+
+operation = sys.argv[1]
+cache_path = Path(sys.argv[2])
+dc_options.endpoint_cache_path = lambda: cache_path
+
+if sys.argv[4] == "block":
+    # Negative control: reproduce a blocking FIFO open in this child only.
+    dc_options._open_endpoint_cache_file = lambda *args, **kwargs: os.open(cache_path, os.O_RDONLY)
+
+def operation_timed_out(signum, frame):
+    # Exit cannot be swallowed by the cache's expected OSError handling.
+    raise SystemExit("endpoint cache operation exceeded 2 seconds")
+
+signal.signal(signal.SIGALRM, operation_timed_out)
+signal.setitimer(signal.ITIMER_REAL, 2)
+try:
+    if operation == "load":
+        assert dc_options.load_endpoint_cache(cache_path) == {"version": 1, "endpoints": {}}
+    else:
+        dc_options.update_endpoint_cache("prod:v4:dc5:api", ("149.154.171.5", 443))
+finally:
+    signal.setitimer(signal.ITIMER_REAL, 0)
+"""
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            operation,
+            str(cache_file),
+            str(startup_delay),
+            "block" if block_operation else "normal",
+        ],
+        cwd=repo_root,
+        env={**os.environ, "PYTHONPATH": str(repo_root)},
+        capture_output=True,
+        check=False,
+        text=True,
+        # Bound cold import/startup independently; cache IO still has a strict 2s watchdog.
+        timeout=30,
+    )
+
+
 @pytest.mark.parametrize("operation", ["load", "update"])
-def test_endpoint_cache_rejects_fifo_without_blocking(operation, tmp_path: Path):
+@pytest.mark.parametrize("startup_delay", [0, 2.1], ids=["normal-startup", "slow-startup"])
+def test_endpoint_cache_rejects_fifo_without_blocking(operation, startup_delay, tmp_path: Path):
     if not hasattr(os, "mkfifo"):
         pytest.skip("FIFO files are unavailable")
 
@@ -181,42 +237,36 @@ def test_endpoint_cache_rejects_fifo_without_blocking(operation, tmp_path: Path)
     cache_file = cache_dir / "dc_endpoints.json"
     os.mkfifo(cache_file, 0o640)
     before = cache_file.lstat()
-    repo_root = Path(__file__).parents[3]
-    script = """
-import sys
-from pathlib import Path
 
-import pyrogram.dc_options as dc_options
-
-operation = sys.argv[1]
-cache_path = Path(sys.argv[2])
-dc_options.endpoint_cache_path = lambda: cache_path
-
-if operation == "load":
-    assert dc_options.load_endpoint_cache(cache_path) == {"version": 1, "endpoints": {}}
-else:
-    dc_options.update_endpoint_cache("prod:v4:dc5:api", ("149.154.171.5", 443))
-"""
-
-    result = subprocess.run(
-        [sys.executable, "-c", script, operation, str(cache_file)],
-        cwd=repo_root,
-        env={**os.environ, "PYTHONPATH": str(repo_root)},
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=2,
-    )
-
+    result = _run_fifo_cache_probe(operation, cache_file, startup_delay=startup_delay)
     assert result.returncode == 0, result.stderr
 
     after = cache_file.lstat()
-
     assert stat.S_ISFIFO(after.st_mode)
     assert after.st_ino == before.st_ino
     assert after.st_nlink == before.st_nlink
     assert stat.S_IMODE(after.st_mode) == stat.S_IMODE(before.st_mode)
     assert not list(cache_dir.glob(f".{cache_file.name}.*.tmp"))
+
+
+@pytest.mark.parametrize("operation", ["load", "update"])
+def test_endpoint_cache_fifo_watchdog_rejects_blocked_operation(operation, tmp_path: Path):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("FIFO files are unavailable")
+
+    cache_file = tmp_path / "dc_endpoints.json"
+    os.mkfifo(cache_file, 0o640)
+    before = cache_file.lstat()
+
+    result = _run_fifo_cache_probe(operation, cache_file, block_operation=True)
+    assert result.returncode != 0
+    assert "endpoint cache operation exceeded 2 seconds" in result.stderr
+    after = cache_file.lstat()
+    assert stat.S_ISFIFO(after.st_mode)
+    assert after.st_ino == before.st_ino
+    assert after.st_nlink == before.st_nlink
+    assert stat.S_IMODE(after.st_mode) == stat.S_IMODE(before.st_mode)
+    assert not list(cache_file.parent.glob(f".{cache_file.name}.*.tmp"))
 
 
 def test_endpoint_cache_accepts_trusted_sticky_root_ancestor(monkeypatch, tmp_path: Path):
