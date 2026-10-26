@@ -18,10 +18,12 @@
 
 from __future__ import annotations as _annotations
 
+import asyncio
 import logging
 
 import pyrogram
 from pyrogram import raw
+from pyrogram.session.session import _finish_cleanup
 from pyrogram.storage import UpdateState
 
 log = logging.getLogger(__name__)
@@ -100,16 +102,19 @@ class Start:
                         UpdateState(0, state.pts, state.qts, state.date, state.seq)
                     )
                     await self.storage.save()
-        except (Exception, KeyboardInterrupt) as startup_error:
+            self.me = await self.get_me()
+            await self.initialize()
+        except (Exception, KeyboardInterrupt, asyncio.CancelledError) as startup_error:
             try:
-                await self.disconnect()
+                await _finish_cleanup(self.disconnect())
+            except asyncio.CancelledError as cleanup_error:
+                if isinstance(startup_error, asyncio.CancelledError):
+                    raise startup_error from cleanup_error
+                raise
             except Exception as cleanup_error:
                 # Retry/terminal classification belongs to the failed startup
                 # operation. Retain teardown as its cause, never replace it.
                 raise startup_error from cleanup_error
             raise
         else:
-            self.me = await self.get_me()
-            await self.initialize()
-
             return self

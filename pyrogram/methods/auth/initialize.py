@@ -22,6 +22,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from pyrogram.session.session import _finish_cleanup
+
 if TYPE_CHECKING:
     import pyrogram
 
@@ -47,7 +49,16 @@ class Initialize:
         if self.is_initialized:
             raise ConnectionError("Client is already initialized")
 
-        await self.dispatcher.start()
+        try:
+            await self.dispatcher.start()
+        except BaseException as startup_error:
+            # Dispatcher.start can fail after publishing workers (recover_gaps).
+            # Drain them before Client.start closes their storage/transport.
+            try:
+                await _finish_cleanup(self.dispatcher.stop(clear_handlers=False))
+            except (Exception, asyncio.CancelledError) as cleanup_error:
+                raise startup_error from cleanup_error
+            raise
 
         self.updates_watchdog_task = asyncio.create_task(self.updates_watchdog())
 

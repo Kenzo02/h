@@ -567,6 +567,7 @@ class Session:
         self._startup_attempt = 0
         self._stop_task: asyncio.Task | None = None
         self._initial_start_owner: asyncio.Task | None = None
+        self._restart_requested = False
 
         self.auth_key_id = sha1(auth_key).digest()[-8:]
 
@@ -689,6 +690,17 @@ class Session:
                 pass
             raise
 
+    def _check_receiver(self) -> None:
+        task = self.recv_task
+        if task is None or task.done():
+            if task is not None and not task.cancelled():
+                error = task.exception()
+                if error is not None:
+                    raise error
+            raise ConnectionError("Session receiver stopped before readiness")
+        if self._restart_requested:
+            raise ConnectionError("Session restart requested during startup")
+
     async def _start(self):
         if self._state in (SessionState.STARTED, SessionState.STARTING):
             log.debug("Session already started")
@@ -779,6 +791,7 @@ class Session:
                         timeout=self.START_TIMEOUT,
                     )
 
+                self._check_receiver()
                 self.ping_task = asyncio.create_task(self.ping_worker())
             except (AuthKeyDuplicated, Unauthorized):
                 raise
@@ -831,6 +844,7 @@ class Session:
         log.info("System: %s (%s)", self.client.system_version, self.client.lang_code)
 
         await self._set_state(SessionState.STARTED)
+        self._check_receiver()
         self.is_started.set()
 
         log.info("Session started")
@@ -841,6 +855,10 @@ class Session:
                 await self.client.connect_handler(self.client, self)
             except Exception as e:
                 self._log_lifecycle("connect-callback", self._startup_attempt, e)
+        if self._must_stay_stopped:
+            await self._stop()
+            return
+        self._check_receiver()
         self._startup_phase = "ready"
 
     async def stop(self):
@@ -986,6 +1004,10 @@ class Session:
                 await self._stop()
 
     def schedule_restart(self, reason: str):
+        if self._must_stay_stopped:
+            return
+        self._restart_requested = True
+        self.is_started.clear()
         if self.restart_task and not self.restart_task.done():
             log.debug("Session restart already scheduled")
             return
@@ -1004,6 +1026,7 @@ class Session:
                 trigger, trigger_code = "recv-transport", int(code)
 
         while getattr(self.client, "is_connected", True) and not self._must_stay_stopped:
+            self._restart_requested = False
             attempt += 1
             self._log_lifecycle(
                 "reconnect",
@@ -1014,6 +1037,10 @@ class Session:
             )
             try:
                 await self.restart()
+                if self._must_stay_stopped or not getattr(self.client, "is_connected", True):
+                    break
+                if self._restart_requested or not self.is_started.is_set():
+                    raise ConnectionError("Session lost readiness during reconnect")
             except (AuthKeyDuplicated, Unauthorized) as error:
                 self._log_lifecycle(
                     "reconnect-aborted",
@@ -1243,45 +1270,63 @@ class Session:
 
     async def recv_worker(self):
         log.info("NetworkTask started")
+        reason = "recv-null"
+        failure = ConnectionError("Session receiver reached EOF")
+        cancelled = False
+        try:
+            while True:
+                packet = await self.connection.recv()
 
-        while True:
-            packet = await self.connection.recv()
-
-            if packet is None or len(packet) == 4:
-                if packet:
-                    error_code = -Int.read(BytesIO(packet))
-                    error_msg = "unknown error"
-
-                    if error_code == 404:
-                        raise AuthKeyNotFound(
-                            "Auth key not found in the system. Try again or delete your session file "
-                            "and log in again with your phone number or bot token."
-                        )
-
-                    try:
-                        if error_code == 429:
-                            raise TransportFlood("Transport flood. Please slow down your requests.")
-                        elif error_code == 444:
-                            raise InvalidDC("Invalid data center. Please check your configuration.")
-                    except TransportError as e:
-                        error_msg = str(e)
-
-                    log.warning("Server sent transport error: %s (%s)", error_code, error_msg)
-
-                if self.is_started.is_set():
+                if packet is None or len(packet) == 4:
                     if packet:
-                        error = f"Server sent transport error - {error_code} - ({error_msg})."
-                    else:
-                        error = "Server sent a null packet."
+                        error_code = -Int.read(BytesIO(packet))
+                        reason = f"recv-transport:{error_code}"
+                        error_msg = "unknown error"
 
-                    log.info("Restarting session due to - %s", error)
-                    self.schedule_restart(f"recv-transport:{error_code}" if packet else "recv-null")
+                        if error_code == 404:
+                            raise AuthKeyNotFound(
+                                "Auth key not found in the system. Try again or delete your session file "
+                                "and log in again with your phone number or bot token."
+                            )
 
-                break
+                        try:
+                            if error_code == 429:
+                                raise TransportFlood(
+                                    "Transport flood. Please slow down your requests."
+                                )
+                            elif error_code == 444:
+                                raise InvalidDC(
+                                    "Invalid data center. Please check your configuration."
+                                )
+                        except TransportError as e:
+                            error_msg = str(e)
 
-            self._create_tracked_task(self.handle_packet(packet))
+                        log.warning("Server sent transport error: %s (%s)", error_code, error_msg)
+                    break
 
-        log.info("NetworkTask stopped")
+                self._create_tracked_task(self.handle_packet(packet))
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+        except Exception as error:
+            failure = error
+            raise
+        finally:
+            # A completed receiver cannot deliver another answer, including during
+            # handshake or a connect callback owned by the current restart task.
+            if (
+                not cancelled
+                and asyncio.current_task() is self.recv_task
+                and self.state in (SessionState.STARTING, SessionState.STARTED)
+            ):
+                self.is_started.clear()
+                for result in self.results.values():
+                    if not result.event.is_set():
+                        result.exception = failure
+                        result.event.set()
+                if self.state is SessionState.STARTED:
+                    self.schedule_restart(reason)
+            log.info("NetworkTask stopped")
 
     async def send(self, data: TLObject, wait_response: bool = True, timeout: float = WAIT_TIMEOUT):
         message = await self.msg_factory.create(data)

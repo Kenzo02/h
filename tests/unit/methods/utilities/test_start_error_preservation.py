@@ -64,7 +64,9 @@ async def test_real_client_cleanup_cancellation_remains_cancellation(offline_cli
         await original_disconnect()
 
 
-async def test_real_client_start_cancellation_keeps_existing_semantics(offline_client, monkeypatch):
+async def test_real_client_start_cancellation_disconnects_before_return(
+    offline_client, monkeypatch
+):
     client = offline_client
     original_disconnect = client.disconnect
     disconnects = []
@@ -81,8 +83,8 @@ async def test_real_client_start_cancellation_keeps_existing_semantics(offline_c
     try:
         with pytest.raises(asyncio.CancelledError):
             await client.start()
-        # The patch does not broaden the existing startup catch to BaseException.
-        assert disconnects == []
+        assert disconnects == [True]
+        assert not client.is_connected and not client.is_initialized
     finally:
         await original_disconnect()
 
