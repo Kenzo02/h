@@ -564,9 +564,13 @@ async def native_sdk(sdk):
     # Replace all four connections, not Session/Client/storage/dispatcher methods.
     wires = []
     for session in sdk.sessions:
-        for task in (session.ping_task, session.recv_task):
+        old_workers = (session.ping_task, session.recv_task)
+        # Detach the fixture's old receiver generation before replacing its wire;
+        # cancelling an owned STARTED receiver now correctly invalidates readiness.
+        session.recv_task = None
+        for task in old_workers:
             task.cancel()
-        await asyncio.gather(session.ping_task, session.recv_task, return_exceptions=True)
+        await asyncio.gather(*old_workers, return_exceptions=True)
         await session.connection.close()
         connection = Connection(DC, "127.0.0.1", 443, True)
         tcp = connection.protocol = TCPAbridged()
@@ -643,8 +647,9 @@ async def test_native_worker_public_self_stop_retains_origin_until_disconnect(
     if role == "tracked":
         worker = session._create_tracked_task(request_stop())
     elif role == "recv":
-        session.recv_task.cancel()
-        await asyncio.gather(session.recv_task, return_exceptions=True)
+        old_receiver, session.recv_task = session.recv_task, None
+        old_receiver.cancel()
+        await asyncio.gather(old_receiver, return_exceptions=True)
         original_recv = session.connection.recv
 
         async def receiving():

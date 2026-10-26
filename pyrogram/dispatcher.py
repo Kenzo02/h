@@ -26,6 +26,7 @@ from typing import Any
 
 import pyrogram
 from pyrogram import raw, utils
+from pyrogram.session.session import SessionCleanupError, _cleanup_caller, _finish_cleanup
 from pyrogram.handlers import (
     BusinessConnectionHandler,
     BusinessMessageHandler,
@@ -392,30 +393,52 @@ class Dispatcher:
                 await self.client.recover_gaps()
 
     async def stop(self, clear_handlers: bool = True):
+        self._accepting_updates = False
+        await _finish_cleanup(self._stop_workers(clear_handlers))
+
+    async def _stop_workers(self, clear_handlers: bool):
+        failures = []
         if callable(self.client.stop_handler):
             try:
                 await self.client.stop_handler(self.client)
             except Exception as e:
                 log.exception(e)
+            except asyncio.CancelledError as error:
+                failures.append(("stop-handler", error))
 
         if not self.client.no_updates:
             # Closed before the sentinels go in, so `enqueue` drops what arrives from here on
             #  instead of queueing it behind them for no worker.
             self._accepting_updates = False
 
-            for _ in range(self.client.workers):
+            for _ in self.handler_worker_tasks:
                 self.updates_queue.put_nowait(None)
 
-            for handler_worker_task in self.handler_worker_tasks:
-                await handler_worker_task
+            for index, handler_worker_task in enumerate(self.handler_worker_tasks):
+                if handler_worker_task is _cleanup_caller():
+                    failures.append(
+                        (f"worker-{index}", RuntimeError("Dispatcher worker is still running"))
+                    )
+                    continue
+                try:
+                    await handler_worker_task
+                except (Exception, asyncio.CancelledError) as error:
+                    # A failed/cancelled worker is finished, not permission to
+                    # abandon independent workers before their storage closes.
+                    failures.append((f"worker-{index}", error))
 
-            self.handler_worker_tasks.clear()
+            self.handler_worker_tasks[:] = [
+                task for task in self.handler_worker_tasks if not task.done()
+            ]
 
             if clear_handlers:
                 with self._groups_lock:
                     self.groups = {}
 
             log.info("Stopped %s HandlerTasks", self.client.workers)
+
+        if failures:
+            raise SessionCleanupError(failures)
 
     def enqueue(
         self,

@@ -52,11 +52,15 @@ class Initialize:
         try:
             await self.dispatcher.start()
         except BaseException as startup_error:
-            # Dispatcher.start can fail after publishing workers (recover_gaps).
-            # Drain them before Client.start closes their storage/transport.
+            # Start callbacks and gap recovery can publish both dispatcher workers
+            # and media/auxiliary sessions before initialization commits.
             try:
-                await _finish_cleanup(self.dispatcher.stop(clear_handlers=False))
-            except (Exception, asyncio.CancelledError) as cleanup_error:
+                await _finish_cleanup(self._terminate_resources(clear_handlers=False))
+            except asyncio.CancelledError as cleanup_error:
+                if isinstance(startup_error, asyncio.CancelledError):
+                    raise startup_error from cleanup_error
+                raise
+            except Exception as cleanup_error:
                 raise startup_error from cleanup_error
             raise
 

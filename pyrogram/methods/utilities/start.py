@@ -23,7 +23,7 @@ import logging
 
 import pyrogram
 from pyrogram import raw
-from pyrogram.session.session import _finish_cleanup
+from pyrogram.session.session import SessionCleanupError, _finish_cleanup
 from pyrogram.storage import UpdateState
 
 log = logging.getLogger(__name__)
@@ -114,6 +114,13 @@ class Start:
             except Exception as cleanup_error:
                 # Retry/terminal classification belongs to the failed startup
                 # operation. Retain teardown as its cause, never replace it.
+                previous_cleanup = startup_error.__cause__
+                if isinstance(previous_cleanup, SessionCleanupError) and isinstance(
+                    cleanup_error, SessionCleanupError
+                ):
+                    cleanup_error = SessionCleanupError(
+                        [*previous_cleanup.failures, *cleanup_error.failures]
+                    )
                 raise startup_error from cleanup_error
             raise
         else:

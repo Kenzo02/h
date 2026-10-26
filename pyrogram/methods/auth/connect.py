@@ -21,6 +21,8 @@ from __future__ import annotations as _annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from pyrogram.session.session import _finish_cleanup
+
 if TYPE_CHECKING:
     import pyrogram
 
@@ -45,27 +47,40 @@ class Connect:
         self._loop = asyncio.get_running_loop()
         self._rebuild_loop_bound_state()
 
-        await self.load_session()
+        try:
+            await self.load_session()
 
-        server_address = await self.storage.server_address()
+            server_address = await self.storage.server_address()
 
-        # `load_session` fills the address only for a fresh session; a stored one
-        #  missing it is corrupt, and `":" in None` would raise a bare `TypeError`.
-        if server_address is None:
-            raise ValueError("The session storage holds no server address")
+            # `load_session` fills the address only for a fresh session; a stored one
+            #  missing it is corrupt, and `":" in None` would raise a bare `TypeError`.
+            if server_address is None:
+                raise ValueError("The session storage holds no server address")
 
-        self.session = await self.get_session(
-            server_address=server_address,
-            port=await self.storage.port(),
-            export_authorization=False,
-            temporary=True,
-            order_fallback_endpoints=True,
-        )
-        self.is_connected = True
+            self.session = await self.get_session(
+                server_address=server_address,
+                port=await self.storage.port(),
+                export_authorization=False,
+                temporary=True,
+                order_fallback_endpoints=True,
+            )
+            self.is_connected = True
 
-        is_ipv6_session: bool = ":" in server_address
+            is_ipv6_session: bool = ":" in server_address
 
-        if (self.ipv6 and not is_ipv6_session) or (not self.ipv6 and is_ipv6_session):
-            await self.set_dc(dc_id=await self.storage.dc_id())
+            if (self.ipv6 and not is_ipv6_session) or (not self.ipv6 and is_ipv6_session):
+                await self.set_dc(dc_id=await self.storage.dc_id())
 
-        return bool(await self.storage.user_id())
+            return bool(await self.storage.user_id())
+        except BaseException as startup_error:
+            # The duplicate-connect precondition above owns nothing. Once session
+            # loading begins, roll back even before is_connected can be committed.
+            try:
+                await _finish_cleanup(self._disconnect())
+            except asyncio.CancelledError as cleanup_error:
+                if isinstance(startup_error, asyncio.CancelledError):
+                    raise startup_error from cleanup_error
+                raise
+            except Exception as cleanup_error:
+                raise startup_error from cleanup_error
+            raise

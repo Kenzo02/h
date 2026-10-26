@@ -1212,7 +1212,7 @@ async def test_public_client_stop_finishes_after_drained_worker_fault(h, caplog,
     h.client.storage.save = save
     h.client.storage.close = close
     h.client.storage.set_update_state = set_update_state
-    h.client.dispatcher = SimpleNamespace(stop=stop_dispatcher)
+    h.client.dispatcher = SimpleNamespace(stop=stop_dispatcher, handler_worker_tasks=[])
     h.client.is_initialized = True
     watchdog = h.client.updates_watchdog_task = asyncio.create_task(h.client.updates_watchdog())
     updates = raw.types.Updates(updates=[], users=[], chats=[], date=0, seq=0)

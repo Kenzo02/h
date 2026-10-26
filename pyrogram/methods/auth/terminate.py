@@ -18,11 +18,12 @@
 
 from __future__ import annotations as _annotations
 
+import asyncio
 import logging
 
 import pyrogram
 from pyrogram import raw
-from pyrogram.session.session import SessionCleanupError
+from pyrogram.session.session import SessionCleanupError, SessionState, _finish_cleanup
 
 log = logging.getLogger(__name__)
 
@@ -50,31 +51,50 @@ class Terminate:
             log.info("Takeout session %s finished", self.takeout_id)
 
         await self.storage.save()
-        await self.dispatcher.stop(clear_handlers=clear_handlers)
+        await _finish_cleanup(self._terminate_resources(clear_handlers=clear_handlers))
 
+    async def _terminate_resources(self: pyrogram.Client, clear_handlers: bool = True):
+        # Also owns rollback before initialize has committed is_initialized.
+        failures = []
+        try:
+            await self.dispatcher.stop(clear_handlers=clear_handlers)
+        except SessionCleanupError as error:
+            failures.extend((f"dispatcher-{phase}", cause) for phase, cause in error.failures)
+        failures.extend(await self._stop_auxiliary_sessions())
+
+        self.updates_watchdog_event.set()
+        if self.updates_watchdog_task is not None:
+            try:
+                await self.updates_watchdog_task
+            except (Exception, asyncio.CancelledError) as error:
+                failures.append(("watchdog", error))
+        self.updates_watchdog_event.clear()
+        self.is_initialized = False
+        if failures:
+            raise SessionCleanupError(failures)
+
+    async def _stop_auxiliary_sessions(self: pyrogram.Client, only_active: bool = False):
         failures = []
         # Preserve the established media -> auxiliary -> watchdog ordering, but
         # a rejected close must not strand independent sessions. Keep failed
         # resources (and any originating worker) reachable for diagnostics.
         for kind, sessions in (("media", self.media_sessions), ("auxiliary", self.sessions)):
             for dc_id, session in list(sessions.items()):
+                if only_active and session.state in (
+                    SessionState.STOPPED,
+                    SessionState.STOP_FAILED,
+                ):
+                    continue
                 try:
                     await session.stop()
                 except SessionCleanupError as error:
                     failures.extend(
                         (f"{kind}-{dc_id}-{phase}", cause) for phase, cause in error.failures
                     )
+                except (Exception, asyncio.CancelledError) as error:
+                    failures.append((f"{kind}-{dc_id}", error))
                 else:
                     if not session._has_live_workers():
                         sessions.pop(dc_id, None)
 
-        self.updates_watchdog_event.set()
-
-        if self.updates_watchdog_task is not None:
-            await self.updates_watchdog_task
-
-        self.updates_watchdog_event.clear()
-
-        self.is_initialized = False
-        if failures:
-            raise SessionCleanupError(failures)
+        return failures

@@ -20,7 +20,7 @@ from __future__ import annotations as _annotations
 
 from typing import TYPE_CHECKING
 
-from pyrogram.session.session import SessionCleanupError, SessionState
+from pyrogram.session.session import SessionCleanupError, SessionState, _finish_cleanup
 
 if TYPE_CHECKING:
     import pyrogram
@@ -42,24 +42,33 @@ class Disconnect:
         if self.is_initialized:
             raise ConnectionError("Can't disconnect an initialized client")
 
-        cleanup_error = None
-        try:
-            await self.session.stop()
-        except SessionCleanupError as error:
-            cleanup_error = error
+        await _finish_cleanup(self._disconnect())
+
+    async def _disconnect(self: pyrogram.Client):
+        # Connect can fail after opening storage, but before publishing a main
+        # session or setting is_connected. Its rollback owns these resources too.
+        failures = await self._stop_auxiliary_sessions(only_active=True)
+        if self.session is not None:
+            try:
+                await self.session.stop()
+            except SessionCleanupError as error:
+                failures.extend(error.failures)
 
         sessions = [self.session, *self.media_sessions.values(), *self.sessions.values()]
         # A stopped transport does not imply a worker requesting its own stop
         # has returned. Storage must stay open while any such worker can use it.
-        if any(session._has_live_workers() for session in sessions):
-            failures = list(cleanup_error.failures) if cleanup_error is not None else []
+        if (
+            any(session is not None and session._has_live_workers() for session in sessions)
+            or any(not task.done() for task in self.dispatcher.handler_worker_tasks)
+            or (self.updates_watchdog_task is not None and not self.updates_watchdog_task.done())
+        ):
             failures.append(("workers", RuntimeError("Client workers are still running")))
             # Retain the client/storage owner so disconnect can be retried after
             # the originating worker has returned.
             raise SessionCleanupError(failures)
         await self.storage.close()
-        if cleanup_error is not None:
-            raise cleanup_error
+        if failures:
+            raise SessionCleanupError(failures)
         # A self-stopping worker kept its cache entry alive during terminate.
         # On a safe retry, retire that stopped generation; failed closes remain
         # owned for diagnostics instead of being silently discarded.

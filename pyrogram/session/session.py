@@ -929,8 +929,9 @@ class Session:
         # Nothing re-sends a pending waiter's request, so no answer can arrive:
         #  failing each waiter here turns a silent `WAIT_TIMEOUT` into an immediate, accurate error.
         for result in self.results.values():
-            result.exception = TimeoutError("Session stopped before an answer arrived")
-            result.event.set()
+            if not result.event.is_set():
+                result.exception = TimeoutError("Session stopped before an answer arrived")
+                result.event.set()
 
         self.results.clear()
 
@@ -1272,7 +1273,6 @@ class Session:
         log.info("NetworkTask started")
         reason = "recv-null"
         failure = ConnectionError("Session receiver reached EOF")
-        cancelled = False
         try:
             while True:
                 packet = await self.connection.recv()
@@ -1306,7 +1306,8 @@ class Session:
 
                 self._create_tracked_task(self.handle_packet(packet))
         except asyncio.CancelledError:
-            cancelled = True
+            reason = "recv-cancelled"
+            failure = ConnectionError("Session receiver was cancelled")
             raise
         except Exception as error:
             failure = error
@@ -1315,8 +1316,8 @@ class Session:
             # A completed receiver cannot deliver another answer, including during
             # handshake or a connect callback owned by the current restart task.
             if (
-                not cancelled
-                and asyncio.current_task() is self.recv_task
+                asyncio.current_task() is self.recv_task
+                and not self._must_stay_stopped
                 and self.state in (SessionState.STARTING, SessionState.STARTED)
             ):
                 self.is_started.clear()
