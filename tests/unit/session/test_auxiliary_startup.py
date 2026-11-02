@@ -41,7 +41,13 @@ import pytest
 import pyrogram
 from pyrogram import raw
 from pyrogram.crypto import aes, mtproto
-from pyrogram.errors import AuthBytesInvalid, AuthKeyUnregistered, Forbidden
+from pyrogram.errors import (
+    AuthBytesInvalid,
+    AuthKeyUnregistered,
+    FloodPremiumWait,
+    FloodWait,
+    Forbidden,
+)
 from pyrogram.file_id import FileId, FileType
 from pyrogram.raw.core import Bool, FutureSalt, FutureSalts, Long, Message, TLObject
 from pyrogram.session.session import Session, SessionCleanupError, SessionState
@@ -102,6 +108,9 @@ class Transport:
         self.upload_requests = []
         self.upload_failure = None
         self.upload_fail_part = 0
+        self.config_failure = None
+        self.startup_failure = None
+        self.close_failure = None
         self.import_entered = asyncio.Event()
         self.import_release = asyncio.Event()
         self.request_entered = asyncio.Event()
@@ -123,8 +132,10 @@ class Transport:
         self.close_entered.set()
         if self.block_close:
             await self.close_release.wait()
-        self.closed = True
         self.close_calls += 1
+        if self.close_failure is not None:
+            raise self.close_failure
+        self.closed = True
         await self.incoming.put(None)
 
     async def recv(self):
@@ -152,7 +163,14 @@ class Transport:
                 if self.mode == "auth_error"
                 else config()
             )
-            response = raw.types.RpcResult(req_msg_id=request.msg_id, result=result)
+            failure = (
+                self.startup_failure
+                if isinstance(body, raw.functions.InvokeWithLayer)
+                else self.config_failure
+            )
+            if isinstance(failure, BaseException):
+                raise failure
+            response = raw.types.RpcResult(req_msg_id=request.msg_id, result=failure or result)
         elif isinstance(body, raw.functions.GetFutureSalts):
             now = int(self.owner.server_time)
             response = FutureSalts(
@@ -191,6 +209,9 @@ class Transport:
             body, (raw.functions.upload.SaveFilePart, raw.functions.upload.SaveBigFilePart)
         ):
             self.upload_requests.append(body)
+            if self.mode == "upload_block":
+                self.request_entered.set()
+                await self.request_release.wait()
             result = SavedPart()
             if body.file_part == self.upload_fail_part and self.upload_failure is not None:
                 if isinstance(self.upload_failure, BaseException):
@@ -1566,3 +1587,173 @@ async def test_cancelling_upload_fallback_startup_drains_owned_close_before_rele
             upload.cancel()
         await asyncio.gather(upload, return_exceptions=True)
         fp.close()
+
+
+@pytest.mark.parametrize("stage", ["config", "startup", "part"])
+@pytest.mark.parametrize(
+    "code,message,expected",
+    [
+        (420, "FLOOD_WAIT_1", FloodWait),
+        (420, "FLOOD_WAIT_3600", FloodWait),
+        (420, "FLOOD_PREMIUM_WAIT_1", FloodPremiumWait),
+        (420, "FLOOD_PREMIUM_WAIT_3600", FloodPremiumWait),
+        (403, "CHAT_WRITE_FORBIDDEN", Forbidden),
+        (401, "AUTH_KEY_UNREGISTERED", AuthKeyUnregistered),
+        (None, None, PermissionError),
+    ],
+)
+async def test_upload_selection_and_startup_negatives_stay_typed(
+    h, monkeypatch, stage, code, message, expected
+):
+    if stage == "part" and code == 420:
+        pytest.skip("part waits already have same-part native cooldown controls")
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch)
+    failure = (
+        raw.types.RpcError(error_code=code, error_message=message)
+        if code
+        else PermissionError("fixture permission denied")
+    )
+    borrowed.connection.upload_failure = failure if stage == "part" else OSError("transport")
+    h.client.session.connection.config_failure = failure if stage == "config" else None
+    original = h.client.connection_factory
+
+    def factory(**kwargs):
+        transport = original(**kwargs)
+        transport.startup_failure = failure
+        return transport
+
+    if stage == "startup":
+        h.client.connection_factory = factory
+    sleeps = []
+    sleep = asyncio.sleep
+
+    async def observe_sleep(seconds):
+        if seconds > 0:
+            sleeps.append(seconds)
+        await sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", observe_sleep)
+    with pytest.raises(expected) as caught:
+        await asyncio.wait_for(h.client.save_file(BytesIO(FIXTURE)), 2)
+    if code == 420:
+        assert caught.value.value == int(message.rsplit("_", 1)[1])
+    assert not sleeps
+    assert len(h.transports) == (3 if stage == "startup" else 2)
+    if stage == "startup":
+        assert h.transports[-1].closed
+        assert not h.transports[-1].upload_requests
+        assert h.transports[-1].requests.count("functions.InvokeWithLayer") == 1
+    assert len(borrowed.connection.upload_requests) == 1
+    assert h.client.media_sessions == {DC: borrowed}
+    assert not borrowed.connection.closed
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_upload_failed_startup_cleanup_retains_terminal_owned_session(h, monkeypatch, cancel):
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch)
+    borrowed.connection.upload_failure = OSError("transport")
+    h.modes[(DC, True)] = "error"
+    original = h.client.connection_factory
+
+    def factory(**kwargs):
+        transport = original(**kwargs)
+        transport.close_failure = OSError("close rejected")
+        transport.block_close = cancel
+        return transport
+
+    h.client.connection_factory = factory
+    upload = asyncio.create_task(h.client.save_file(BytesIO(FIXTURE)))
+    try:
+        if cancel:
+            await wait_until(
+                lambda: len(h.transports) == 3 and h.transports[-1].close_entered.is_set()
+            )
+            for _ in range(3):
+                upload.cancel()
+                await asyncio.sleep(0)
+                assert not upload.done()
+            h.transports[-1].close_release.set()
+        with pytest.raises(SessionCleanupError) as caught:
+            await asyncio.wait_for(upload, 2)
+        session = caught.value.session
+        assert session in h.client._failed_upload_sessions
+        h.owned.append(session)
+        assert session.state is SessionState.STOP_FAILED
+        assert session._must_stay_stopped
+        assert session.connection is h.transports[-1]
+        assert not session.connection.closed and session.connection.close_calls == 1
+        assert isinstance(caught.value.__cause__, (ConnectionError, OSError))
+        assert not session.connection.requests
+        assert not session.pending_tasks and not session.results
+        assert h.client.media_sessions == {DC: borrowed}
+        assert not borrowed.connection.closed
+    finally:
+        h.transports[-1].close_failure = None
+        h.transports[-1].close_release.set()
+        await asyncio.gather(upload, return_exceptions=True)
+
+
+@pytest.mark.parametrize("phase", ["connect", "handshake", "part", "stop"])
+@pytest.mark.parametrize("failed_close", [False, True])
+async def test_upload_cancellation_drains_each_owned_cleanup_without_later_rpc(
+    h, monkeypatch, phase, failed_close
+):
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch)
+    borrowed.connection.upload_failure = OSError("transport")
+    h.modes[(DC, True)] = {
+        "connect": "block",
+        "handshake": "handshake_block",
+        "part": "upload_block",
+        "stop": "ok",
+    }[phase]
+    original = h.client.connection_factory
+
+    def factory(**kwargs):
+        transport = original(**kwargs)
+        transport.block_close = True
+        if failed_close:
+            transport.close_failure = OSError("close rejected")
+        return transport
+
+    h.client.connection_factory = factory
+    upload = asyncio.create_task(h.client.save_file(BytesIO(FIXTURE)))
+    try:
+        await wait_until(lambda: len(h.transports) == 3)
+        transport = h.transports[-1]
+        if phase in {"handshake", "part"}:
+            await asyncio.wait_for(transport.request_entered.wait(), 2)
+        elif phase == "connect":
+            await asyncio.wait_for(transport.entered.wait(), 2)
+        else:
+            await asyncio.wait_for(transport.close_entered.wait(), 2)
+        upload.cancel()
+        await asyncio.wait_for(transport.close_entered.wait(), 2)
+        requests = list(transport.requests)
+        for _ in range(3):
+            upload.cancel()
+            await asyncio.sleep(0)
+            assert not upload.done()
+        transport.close_release.set()
+        with pytest.raises(
+            SessionCleanupError if failed_close else asyncio.CancelledError
+        ) as caught:
+            await asyncio.wait_for(upload, 2)
+        assert transport.requests == requests
+        assert transport.close_calls == 1
+        assert transport.closed is not failed_close
+        if failed_close:
+            session = caught.value.session
+            assert session in h.client._failed_upload_sessions
+            assert session._must_stay_stopped
+            h.owned.append(session)
+        assert h.client.media_sessions == {DC: borrowed}
+        assert not borrowed.connection.closed
+    finally:
+        for transport in h.transports:
+            transport.close_failure = None
+            transport.close_release.set()
+            transport.request_release.set()
+        await asyncio.gather(upload, return_exceptions=True)

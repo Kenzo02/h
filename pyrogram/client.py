@@ -67,7 +67,7 @@ from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
 from pyrogram.qrlogin import QRLogin
 from pyrogram.session import Auth, Session
-from pyrogram.session.session import _finish_cleanup, _log_lifecycle
+from pyrogram.session.session import SessionCleanupError, _finish_cleanup, _log_lifecycle
 from pyrogram.storage import SQLiteStorage, Storage, UpdateState
 from pyrogram.types import LinkPreviewOptions, TermsOfService, User
 from pyrogram.utils import ainput
@@ -443,6 +443,8 @@ class Client(Methods):
 
         self.sessions = {}
         self.media_sessions = {}
+        # Failed owned upload transports stay reachable, never in the borrowed cache.
+        self._failed_upload_sessions: set[Session] = set()
         self.sessions_lock = asyncio.Lock()
         self._update_state_lock = asyncio.Lock()
 
@@ -1531,6 +1533,7 @@ class Client(Methods):
         port: int | None = None,
         temporary: bool = False,
         order_fallback_endpoints: bool = False,
+        _upload_fallback: bool = False,
     ) -> Session:
         """Get existing session or create a new one.
 
@@ -1694,6 +1697,7 @@ class Client(Methods):
                 fallback_endpoints=fallback_endpoints,
             )
 
+            session._upload_fallback = _upload_fallback
             # Publish before `start`: connect callbacks can reenter `get_session`,
             # including through another task. Only this creator owns rollback/cleanup.
             if not temporary:
@@ -1765,7 +1769,7 @@ class Client(Methods):
                     await auth.connection.close()
 
             try:
-                await _finish_cleanup(cleanup())
+                await _finish_cleanup(cleanup(), preserve_failure=_upload_fallback)
             except asyncio.CancelledError:
                 pass
             except Exception as cleanup_error:
@@ -1780,6 +1784,10 @@ class Client(Methods):
                     attempt,
                     cleanup_error,
                 )
+                if _upload_fallback and isinstance(cleanup_error, SessionCleanupError):
+                    if cleanup_error is error:
+                        raise
+                    raise cleanup_error from error
             raise
 
     async def _get_upload_fallback_session(
@@ -1788,7 +1796,9 @@ class Client(Methods):
         # Use only provider-advertised endpoints from this client's environment.
         # A temporary media session reuses the same-DC auth key without replacing
         # the borrowed cache generation or changing primary-session routing.
-        config = await self.invoke(raw.functions.help.GetConfig(), retries=1, retry_delay=0)
+        config = await self.invoke(
+            raw.functions.help.GetConfig(), retries=1, sleep_threshold=0, retry_delay=0
+        )
         if bool(config.test_mode) != bool(await self.storage.test_mode()):
             return None
 
@@ -1808,6 +1818,7 @@ class Client(Methods):
                     export_authorization=False,
                     server_address=option.ip_address,
                     port=option.port,
+                    _upload_fallback=True,
                 )
         return None
 

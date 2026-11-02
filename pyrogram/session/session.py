@@ -38,8 +38,10 @@ from pyrogram.crypto import mtproto
 from pyrogram.errors import (
     AuthKeyDuplicated,
     BadMsgNotification,
+    ChatWriteForbidden,
     FloodPremiumWait,
     FloodWait,
+    Forbidden,
     InternalServerError,
     RPCError,
     SecurityCheckMismatch,
@@ -382,7 +384,9 @@ def _cleanup_caller() -> asyncio.Task | None:
     return inherited[1] if inherited is not None and inherited[0] is current else current
 
 
-async def _finish_cleanup(coroutine: Coroutine[Any, Any, Any] | asyncio.Task) -> None:
+async def _finish_cleanup(
+    coroutine: Coroutine[Any, Any, Any] | asyncio.Task, *, preserve_failure: bool = False
+) -> None:
     # Keep a strong reference and drain even if the owner is cancelled repeatedly.
     # Only cleanup runs separately; startup stays in its original caller task.
     if isinstance(coroutine, asyncio.Task):
@@ -408,6 +412,8 @@ async def _finish_cleanup(coroutine: Coroutine[Any, Any, Any] | asyncio.Task) ->
         except Exception:
             break
     if cancelled is not None:
+        if preserve_failure and not task.cancelled() and task.exception() is not None:
+            task.result()
         if not task.cancelled():
             task.exception()
         raise cancelled
@@ -477,8 +483,11 @@ class SessionState(Enum):
 
 
 class SessionCleanupError(RuntimeError):
-    def __init__(self, failures: list[tuple[str, BaseException]]):
+    def __init__(
+        self, failures: list[tuple[str, BaseException]], *, session: Session | None = None
+    ):
         self.failures = tuple(failures)
+        self.session = session
         super().__init__("Session cleanup failed; see sanitized lifecycle diagnostics")
 
 
@@ -567,6 +576,7 @@ class Session:
         self._startup_attempt = 0
         self._stop_task: asyncio.Task | None = None
         self._initial_start_owner: asyncio.Task | None = None
+        self._upload_fallback = False
         self._restart_requested = False
 
         self.auth_key_id = sha1(auth_key).digest()[-8:]
@@ -796,10 +806,25 @@ class Session:
             except (AuthKeyDuplicated, Unauthorized):
                 raise
             except (OSError, RPCError, ConnectionError, TimeoutError) as e:
+                if self._upload_fallback and isinstance(
+                    e,
+                    (
+                        FloodWait,
+                        FloodPremiumWait,
+                        Forbidden,
+                        ChatWriteForbidden,
+                        Unauthorized,
+                        PermissionError,
+                    ),
+                ):
+                    # A rejected hidden-upload startup must not authorize another endpoint.
+                    raise
                 elapsed = time.monotonic() - started_at
                 try:
                     await self._stop()
-                except SessionCleanupError:
+                except SessionCleanupError as cleanup_error:
+                    if self._upload_fallback:
+                        raise cleanup_error from e
                     raise e from None
 
                 if self._must_stay_stopped:
@@ -886,7 +911,7 @@ class Session:
             # is honored, but only independent callers can wait for completion.
             if current in self.pending_tasks or current in (self.recv_task, self.ping_task):
                 return
-            await _finish_cleanup(task)
+            await _finish_cleanup(task, preserve_failure=self._upload_fallback)
             return
         if self._state is SessionState.STOP_FAILED and task is not None:
             task.result()
@@ -898,7 +923,7 @@ class Session:
         task = self._stop_task = asyncio.create_task(self._stop_resources(current))
         cleanup_error = None
         try:
-            await _finish_cleanup(task)
+            await _finish_cleanup(task, preserve_failure=self._upload_fallback)
         except SessionCleanupError as error:
             cleanup_error = error
 
@@ -984,7 +1009,11 @@ class Session:
         await drain("pending", self._wait_pending_tasks(origin))
         await self._set_state(SessionState.STOPPED if closed else SessionState.STOP_FAILED)
         if failures:
-            raise SessionCleanupError(failures)
+            if self._upload_fallback:
+                # Custody survives caller unwinding, without replacing borrowed sessions
+                # or automatically retrying a provider close which already failed.
+                self.client._failed_upload_sessions.add(self)
+            raise SessionCleanupError(failures, session=self)
         log.info("Session stopped")
 
     async def restart(self):
@@ -1525,6 +1554,18 @@ class Session:
 
                 await asyncio.sleep(amount)
             except (OSError, InternalServerError, ServiceUnavailable) as e:
+                if isinstance(e, PermissionError) and (
+                    isinstance(
+                        inner_query,
+                        (raw.functions.upload.SaveFilePart, raw.functions.upload.SaveBigFilePart),
+                    )
+                    or (
+                        isinstance(inner_query, raw.functions.help.GetConfig)
+                        and retries == 1
+                        and sleep_threshold == 0
+                    )
+                ):
+                    raise
                 if scoped_publication:
                     raise
                 # `TCP.send` raises a bare `TimeoutError`, an `OSError` whose `str()` is

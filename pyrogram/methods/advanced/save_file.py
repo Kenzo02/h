@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, BinaryIO, overload
 import pyrogram
 from pyrogram import raw
 from pyrogram.errors import FloodPremiumWait, FloodWait
-from pyrogram.session.session import _finish_cleanup
+from pyrogram.session.session import SessionCleanupError, _finish_cleanup
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -316,14 +316,17 @@ class SaveFile:
                             task.cancel()
 
                     async def cleanup():
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                        results = await asyncio.gather(*tasks, return_exceptions=True)
                         await asyncio.gather(group, return_exceptions=True)
                         if callback_future is not None:
                             await asyncio.gather(callback_future, return_exceptions=True)
                         if fallback_session is not None:
                             await fallback_session.stop()
+                        for result in results:
+                            if isinstance(result, SessionCleanupError):
+                                raise result
 
-                    await _finish_cleanup(cleanup())
+                    await _finish_cleanup(cleanup(), preserve_failure=True)
             finally:
                 if owns_file:
                     fp.close()
