@@ -29,7 +29,7 @@ from hashlib import md5
 from typing import TYPE_CHECKING, BinaryIO, overload
 
 import pyrogram
-from pyrogram import StopTransmission, raw
+from pyrogram import raw
 from pyrogram.errors import FloodPremiumWait, FloodWait
 
 if TYPE_CHECKING:
@@ -156,8 +156,6 @@ class SaveFile:
             if path is None:
                 return None
 
-            failures: list[Exception] = []
-
             async def worker(session):
                 while True:
                     data = await queue.get()
@@ -176,12 +174,8 @@ class SaveFile:
                             )
                             await asyncio.sleep(e.seconds)
                         except Exception as e:
-                            # Keep consuming after a failed part: stopping this worker would
-                            # leave the producer blocked on the one-slot queue. The failure is
-                            # raised after every worker has drained its sentinel.
                             log.exception(e)
-                            failures.append(e)
-                            break
+                            raise
 
             part_size = 512 * 1024
 
@@ -220,28 +214,26 @@ class SaveFile:
                 is_missing_part = file_id is not None
                 file_id = file_id or self.rnd_id()
                 md5_sum = md5() if not is_big and not is_missing_part else None
+                md5_checksum = ""
                 dc_id = await self.storage.dc_id()
 
                 session = await self.get_session(dc_id, is_media=True)
                 queue = asyncio.Queue(1)
                 workers = [asyncio.create_task(worker(session)) for _ in range(workers_count)]
-                cancel_workers = False
 
-                async def cancel_and_wait_for_workers() -> None:
-                    for upload_worker in workers:
-                        upload_worker.cancel()
+                async def produce() -> None:
+                    nonlocal file_part, md5_checksum
 
-                    await asyncio.gather(*workers, return_exceptions=True)
-
-                try:
                     fp.seek(part_size * file_part)
 
                     while True:
                         chunk = fp.read(part_size)
 
                         if not chunk:
-                            if not is_big and not is_missing_part:
-                                md5_sum = "".join([hex(i)[2:].zfill(2) for i in md5_sum.digest()])
+                            if md5_sum is not None:
+                                md5_checksum = "".join(
+                                    [hex(i)[2:].zfill(2) for i in md5_sum.digest()]
+                                )
                             break
 
                         if is_big:
@@ -261,7 +253,7 @@ class SaveFile:
                         if is_missing_part:
                             break
 
-                        if not is_big and not is_missing_part:
+                        if md5_sum is not None:
                             md5_sum.update(chunk)
 
                         file_part += 1
@@ -280,32 +272,22 @@ class SaveFile:
                                 await asyncio.get_running_loop().run_in_executor(
                                     self.executor, func
                                 )
-                except (asyncio.CancelledError, StopTransmission):
-                    cancel_workers = True
-                    raise
-                except Exception as e:
-                    log.exception(e)
-                    raise
-                finally:
-                    try:
-                        if cancel_workers:
-                            await cancel_and_wait_for_workers()
-                        else:
-                            for _ in workers:
-                                await queue.put(None)
+                    for _ in workers:
+                        await queue.put(None)
 
-                            await asyncio.gather(*workers)
-                    except asyncio.CancelledError:
-                        await cancel_and_wait_for_workers()
-                        raise
+                producer = asyncio.create_task(produce())
+                tasks = [producer, *workers]
+                try:
+                    # Observe worker failures even while `produce()` is blocked on `queue.put()`.
+                    await asyncio.gather(*tasks)
+                except BaseException:
+                    for task in tasks:
+                        task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    raise
             finally:
                 if owns_file:
                     fp.close()
-
-            # A worker only reports a failed part once it has drained its sentinel, so a check any
-            # earlier can miss it.
-            if failures:
-                raise failures[0]
 
             if is_missing_part:
                 return None
@@ -314,5 +296,5 @@ class SaveFile:
                 return raw.types.InputFileBig(id=file_id, parts=file_total_parts, name=file_name)
 
             return raw.types.InputFile(
-                id=file_id, parts=file_total_parts, name=file_name, md5_checksum=md5_sum
+                id=file_id, parts=file_total_parts, name=file_name, md5_checksum=md5_checksum
             )

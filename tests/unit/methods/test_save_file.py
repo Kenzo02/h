@@ -21,13 +21,14 @@ from __future__ import annotations as _annotations
 import asyncio
 import contextlib
 import io
+from hashlib import md5
 from typing import TYPE_CHECKING, Final, cast
 
 import pytest
 
 import pyrogram
 from pyrogram import StopTransmission, raw, types
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodPremiumWait, FloodWait
 from pyrogram.methods.advanced.save_file import SaveFile
 
 if TYPE_CHECKING:
@@ -105,7 +106,23 @@ async def test_a_finished_upload_describes_every_part(three_parts: str) -> None:
 
     assert isinstance(file, raw.types.InputFile)
     assert file.parts == 3
+    assert file.md5_checksum == md5(b"x" * (2 * _PART_SIZE + 1)).hexdigest()
     assert media.saved_parts == [0, 1, 2]
+
+
+@pytest.mark.asyncio
+async def test_a_finished_big_upload_describes_every_part() -> None:
+    media = Media()
+    tracked_file = TrackedFile(b"x" * (21 * _PART_SIZE))
+
+    file = await uploader(media).save_file(tracked_file)
+
+    assert isinstance(file, raw.types.InputFileBig)
+    assert file.parts == 21
+    assert file.id == _FILE_ID
+    assert media.saved_parts == list(range(21))
+    assert not tracked_file.closed
+    tracked_file.close()
 
 
 @pytest.mark.asyncio
@@ -120,15 +137,14 @@ async def test_a_part_the_server_refused_reaches_the_caller(three_parts: str) ->
 
 
 @pytest.mark.asyncio
-async def test_the_parts_around_the_refused_one_are_still_sent(three_parts: str) -> None:
+async def test_a_refused_part_stops_the_remaining_parts(three_parts: str) -> None:
     media = Media(rejects_part=1)
 
     with pytest.raises(ConnectionError):
         await uploader(media).save_file(three_parts)
 
-    # The upload is not aborted mid-way: a worker that stops consuming leaves the producer
-    #  blocked on a queue of size one, so every part is offered and only the answer is remembered.
-    assert media.saved_parts == [0, 2]
+    # Once a part has failed, sending the remaining parts cannot complete this upload.
+    assert media.saved_parts == [0]
 
 
 @pytest.mark.asyncio
@@ -181,9 +197,87 @@ class TrackedFile(io.BytesIO):
     name = "upload.bin"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("workers_count", [1, 4], ids=["small", "big"])
+@pytest.mark.parametrize("owns_file", [False, True], ids=["caller-file", "sdk-file"])
+async def test_a_part_failure_drains_workers_and_unblocks_the_producer(
+    monkeypatch, workers_count: int, *, owns_file: bool
+) -> None:
+    producer_blocked = asyncio.Event()
+    fail_part = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    finish_cleanup = asyncio.Event()
+    failure = ConnectionError("the server closed the connection")
+    sent_parts: list[int] = []
+    cancelled_parts: list[int] = []
+    worker_tasks: list[asyncio.Task] = []
+
+    class ReadingFile(TrackedFile):
+        reads = 0
+
+        def read(self, size: int | None = -1) -> bytes:
+            self.reads += 1
+            # Active RPCs plus one queued part leave the next `put()` blocked.
+            if self.reads == workers_count + 2:
+                producer_blocked.set()
+            return super().read(size)
+
+    class FailingMedia(Media):
+        async def invoke(self, query) -> None:
+            task = asyncio.current_task()
+            assert task is not None
+            worker_tasks.append(task)
+            sent_parts.append(query.file_part)
+            if query.file_part == 0:
+                await fail_part.wait()
+                raise failure
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled_parts.append(query.file_part)
+                if len(cancelled_parts) == workers_count - 1:
+                    cleanup_started.set()
+                await finish_cleanup.wait()
+                raise
+
+    tracked_file = ReadingFile(b"x" * ((21 if workers_count == 4 else 5) * _PART_SIZE))
+    media = FailingMedia()
+    client = uploader(media)
+    if owns_file:
+        monkeypatch.setattr("builtins.open", lambda *args, **kwargs: tracked_file)
+    upload = asyncio.create_task(client.save_file("upload.bin" if owns_file else tracked_file))
+    try:
+        await asyncio.wait_for(producer_blocked.wait(), timeout=1)
+        assert sent_parts == list(range(workers_count))
+        fail_part.set()
+        if workers_count > 1:
+            await asyncio.wait_for(cleanup_started.wait(), timeout=0.2)
+            assert not upload.done()
+            assert not tracked_file.closed
+            assert client.save_file_semaphore.locked()
+        finish_cleanup.set()
+        with pytest.raises(ConnectionError) as raised:
+            await asyncio.wait_for(asyncio.shield(upload), timeout=0.2)
+        assert raised.value is failure
+        assert sent_parts == list(range(workers_count))
+        assert sorted(cancelled_parts) == list(range(1, workers_count))
+        assert all(task.done() for task in worker_tasks)
+        assert tracked_file.reads == workers_count + 2
+        assert tracked_file.closed is owns_file
+        assert not client.save_file_semaphore.locked()
+    finally:
+        fail_part.set()
+        finish_cleanup.set()
+        if not upload.done():
+            upload.cancel()
+        await asyncio.gather(upload, return_exceptions=True)
+        tracked_file.close()
+
+
 class FloodingMedia(Media):
-    def __init__(self) -> None:
+    def __init__(self, wait_type: type[FloodWait | FloodPremiumWait] = FloodWait) -> None:
         super().__init__()
+        self.wait_type = wait_type
         self.sent_parts: list[int] = []
 
     async def invoke(
@@ -193,7 +287,7 @@ class FloodingMedia(Media):
         self.sent_parts.append(query.file_part)
 
         if len(self.sent_parts) == 1:
-            raise FloodWait(3600)
+            raise self.wait_type(3600)
 
 
 class BlockingMedia(Media):
@@ -232,8 +326,11 @@ async def await_cancelled(task: asyncio.Task[object]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_long_flood_wait_retries_when_the_upload_is_not_cancelled(monkeypatch) -> None:
-    media = FloodingMedia()
+@pytest.mark.parametrize("wait_type", [FloodWait, FloodPremiumWait])
+async def test_a_long_flood_wait_retries_when_the_upload_is_not_cancelled(
+    monkeypatch, wait_type
+) -> None:
+    media = FloodingMedia(wait_type)
     tracked_file = TrackedFile(b"x")
     waits: list[int] = []
 
