@@ -21,6 +21,7 @@ from __future__ import annotations as _annotations
 import asyncio
 import contextlib
 import io
+import threading
 from hashlib import md5
 from typing import TYPE_CHECKING, Final, cast
 
@@ -28,7 +29,7 @@ import pytest
 
 import pyrogram
 from pyrogram import StopTransmission, raw, types
-from pyrogram.errors import FloodPremiumWait, FloodWait
+from pyrogram.errors import AuthKeyUnregistered, ChatWriteForbidden, FloodPremiumWait, FloodWait
 from pyrogram.methods.advanced.save_file import SaveFile
 
 if TYPE_CHECKING:
@@ -57,7 +58,8 @@ class Media:
     async def invoke(
         self,
         query: raw.functions.upload.SaveFilePart | raw.functions.upload.SaveBigFilePart,
-    ) -> None:
+        **kwargs,
+    ) -> bool | None:
         if query.file_part == self.rejects_part:
             raise ConnectionError("the server closed the connection")
 
@@ -72,6 +74,13 @@ class Uploader(SaveFile):
         self.storage = Storage()
         self.executor: Executor | None = None
         self.save_file_semaphore = asyncio.Semaphore(1)
+        self.fallback: UploadMedia | None = None
+        self.fallback_calls = 0
+        self.media_sessions: dict[int, Media] = {}
+
+    async def _get_upload_fallback_session(self, dc_id, failed_session):
+        self.fallback_calls += 1
+        return self.fallback
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -223,7 +232,7 @@ async def test_a_part_failure_drains_workers_and_unblocks_the_producer(
             return super().read(size)
 
     class FailingMedia(Media):
-        async def invoke(self, query) -> None:
+        async def invoke(self, query, **kwargs) -> None:
             task = asyncio.current_task()
             assert task is not None
             worker_tasks.append(task)
@@ -283,6 +292,7 @@ class FloodingMedia(Media):
     async def invoke(
         self,
         query: raw.functions.upload.SaveFilePart | raw.functions.upload.SaveBigFilePart,
+        **kwargs,
     ) -> None:
         self.sent_parts.append(query.file_part)
 
@@ -303,6 +313,7 @@ class BlockingMedia(Media):
     async def invoke(
         self,
         query: raw.functions.upload.SaveFilePart | raw.functions.upload.SaveBigFilePart,
+        **kwargs,
     ) -> None:
         self.sent_parts.append(query.file_part)
 
@@ -340,11 +351,13 @@ async def test_a_long_flood_wait_retries_when_the_upload_is_not_cancelled(
     monkeypatch.setattr("pyrogram.methods.advanced.save_file.asyncio.sleep", skip_wait)
     monkeypatch.setattr("builtins.open", lambda *args, **kwargs: tracked_file)
 
-    file = await uploader(media).save_file("upload.bin")
+    client = Uploader(media)
+    file = await cast("pyrogram.Client", client).save_file("upload.bin")
 
     assert isinstance(file, raw.types.InputFile)
     assert waits == [3600]
     assert media.sent_parts == [0, 0]
+    assert client.fallback_calls == 0
     assert tracked_file.closed
 
 
@@ -395,7 +408,8 @@ async def test_cancelling_an_active_rpc_keeps_the_caller_file_open() -> None:
     media = BlockingMedia()
     tracked_file = TrackedFile(b"x")
 
-    upload = asyncio.create_task(uploader(media).save_file(tracked_file))
+    client = Uploader(media)
+    upload = asyncio.create_task(cast("pyrogram.Client", client).save_file(tracked_file))
 
     await media.workers_started.wait()
     upload.cancel()
@@ -406,6 +420,7 @@ async def test_cancelling_an_active_rpc_keeps_the_caller_file_open() -> None:
         assert media.sent_parts == [0]
         assert media.workers_cancelled.is_set()
         assert not tracked_file.closed
+        assert client.fallback_calls == 0
     finally:
         media.release.set()
 
@@ -470,3 +485,318 @@ async def test_stop_transmission_from_a_progress_callback_ends_the_upload(
     saved_parts = media.saved_parts.copy()
     await asyncio.sleep(0)
     assert media.saved_parts == saved_parts
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owns_file", [False, True], ids=["caller-file", "sdk-file"])
+@pytest.mark.parametrize("cancel", [False, True], ids=["worker-failure", "caller-cancel"])
+@pytest.mark.parametrize("repeats", [0, 3], ids=["no-repeat", "repeat-cancel"])
+async def test_sync_progress_finishes_before_releasing_upload_ownership(
+    monkeypatch, repeats, *, owns_file, cancel
+):
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    release = threading.Event()
+    failure = asyncio.Event()
+    callback_result = []
+    error = ValueError("fixture part rejected")
+    fp = TrackedFile(b"x")
+
+    class FailingMedia(Media):
+        async def invoke(self, query, **kwargs):
+            await failure.wait()
+            raise error
+
+    client = Uploader(FailingMedia())
+    if owns_file:
+        monkeypatch.setattr("builtins.open", lambda *args, **kwargs: fp)
+
+    def progress(*args):
+        loop.call_soon_threadsafe(started.set)
+        release.wait(2)
+        callback_result.append((fp.closed, fp.read(1)))
+
+    upload = asyncio.create_task(
+        cast("pyrogram.Client", client).save_file(
+            "upload.bin" if owns_file else fp, progress=progress
+        )
+    )
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        if cancel:
+            upload.cancel()
+        else:
+            failure.set()
+        for i in range(repeats + 1):
+            await asyncio.sleep(0.01)
+            assert not upload.done()
+            assert not fp.closed
+            assert client.save_file_semaphore.locked()
+            if i < repeats:
+                upload.cancel()
+        release.set()
+        result = (await asyncio.wait_for(asyncio.gather(upload, return_exceptions=True), 1))[0]
+        if cancel or repeats:
+            assert isinstance(result, asyncio.CancelledError)
+        else:
+            assert result is error
+        assert callback_result == [(False, b"")]
+        assert fp.closed is owns_file
+        assert not client.save_file_semaphore.locked()
+    finally:
+        release.set()
+        failure.set()
+        await asyncio.gather(upload, return_exceptions=True)
+        fp.close()
+
+
+class UploadMedia(Media):
+    def __init__(self, failure=None, rejects_part=0):
+        self.saved_parts = []
+        self.failure = failure
+        self.rejects_part = rejects_part
+        self.requests = []
+        self.stops = 0
+
+    async def invoke(self, query, **kwargs):
+        self.requests.append((query, kwargs))
+        if self.failure is not None and query.file_part == self.rejects_part:
+            raise self.failure
+        self.saved_parts.append(query.file_part)
+        return True
+
+    async def stop(self):
+        self.stops += 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_part", [0, 1])
+@pytest.mark.parametrize("big", [False, True], ids=["small", "big"])
+async def test_transport_failure_retries_identical_part_on_one_owned_session(failed_part, big):
+    source = UploadMedia(ConnectionError("fixture transport failure"), failed_part)
+    fallback = UploadMedia()
+    client = Uploader(source)
+    client.fallback = fallback
+    fp = TrackedFile(b"x" * ((21 if big else 3) * _PART_SIZE))
+    try:
+        result = await cast("pyrogram.Client", client).save_file(fp)
+        assert result.parts == (21 if big else 3)
+        assert result.id == _FILE_ID
+        assert client.fallback_calls == 1
+        assert fallback.stops == 1
+        assert source.stops == 0
+        original = next(q for q, _ in source.requests if q.file_part == failed_part)
+        retried = next(q for q, _ in fallback.requests if q.file_part == failed_part)
+        assert retried is original
+        assert retried.write() == original.write()
+        assert sorted(source.saved_parts + fallback.saved_parts) == list(range(result.parts))
+        for _, options in source.requests + fallback.requests:
+            assert options["retries"] == 1
+        assert not fp.closed
+    finally:
+        fp.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_part_fallback_preserves_file_id_and_scope(three_parts):
+    source = UploadMedia(TimeoutError("fixture readiness failure"), 1)
+    fallback = UploadMedia()
+    client = Uploader(source)
+    client.fallback = fallback
+    assert (
+        await cast("pyrogram.Client", client).save_file(three_parts, file_id=_FILE_ID, file_part=1)
+        is None
+    )
+    assert [q.file_part for q, _ in source.requests] == [1]
+    assert [q.file_part for q, _ in fallback.requests] == [1]
+    assert source.requests[0][0] is fallback.requests[0][0]
+    assert fallback.requests[0][0].file_id == _FILE_ID
+    assert fallback.stops == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("alternative", [False, True], ids=["no-alternative", "fallback-fails"])
+async def test_upload_fallback_exhaustion_is_finite(three_parts, alternative):
+    error = ConnectionError("fixture source failure")
+    source = UploadMedia(error)
+    fallback_error = TimeoutError("fixture fallback failure")
+    fallback = UploadMedia(fallback_error)
+    client = Uploader(source)
+    client.fallback = fallback if alternative else None
+    with pytest.raises((ConnectionError, TimeoutError)) as raised:
+        await cast("pyrogram.Client", client).save_file(three_parts)
+    assert raised.value is (fallback_error if alternative else error)
+    assert client.fallback_calls == 1
+    assert len(source.requests) == 1
+    assert len(fallback.requests) == int(alternative)
+    assert fallback.stops == int(alternative)
+    assert source.stops == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("file/progress"),
+        PermissionError("permission"),
+        AuthKeyUnregistered(),
+        ChatWriteForbidden(),
+    ],
+)
+async def test_non_transport_failures_never_open_upload_fallback(three_parts, error):
+    source = UploadMedia(error)
+    client = Uploader(source)
+    with pytest.raises(type(error)) as raised:
+        await cast("pyrogram.Client", client).save_file(three_parts)
+    assert raised.value is error
+    assert client.fallback_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_worker_failures_share_one_fallback_without_stopping_borrowed_session():
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    count = 0
+
+    class ConcurrentMedia(UploadMedia):
+        async def invoke(self, query, **kwargs):
+            nonlocal count
+            self.requests.append((query, kwargs))
+            if query.file_id != _FILE_ID:
+                await release.wait()
+                return True
+            count += 1
+            if count == 4:
+                entered.set()
+            await entered.wait()
+            raise ConnectionError("fixture shared transport failure")
+
+    source = ConcurrentMedia()
+    fallback = UploadMedia()
+    client = Uploader(source)
+    client.fallback = fallback
+    client.media_sessions = {2: source}
+    unrelated = asyncio.create_task(
+        source.invoke(raw.functions.upload.SaveFilePart(file_id=99, file_part=0, bytes=b"other"))
+    )
+    fp = TrackedFile(b"x" * (21 * _PART_SIZE))
+    try:
+        result = await asyncio.wait_for(cast("pyrogram.Client", client).save_file(fp), 1)
+        assert result.parts == 21
+        assert client.fallback_calls == 1
+        assert sorted(fallback.saved_parts) == list(range(21))
+        assert client.media_sessions == {2: source}
+        assert not unrelated.done()
+        assert source.stops == 0
+        assert fallback.stops == 1
+        release.set()
+        assert await unrelated is True
+    finally:
+        release.set()
+        await asyncio.gather(unrelated, return_exceptions=True)
+        fp.close()
+
+
+@pytest.mark.asyncio
+async def test_progress_transport_error_is_not_upload_retry_permission(three_parts):
+    client = Uploader(Media())
+    error = ConnectionError("fixture progress callback failure")
+
+    def progress(*args):
+        raise error
+
+    with pytest.raises(ConnectionError) as raised:
+        await cast("pyrogram.Client", client).save_file(three_parts, progress=progress)
+    assert raised.value is error
+    assert client.fallback_calls == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["part", "close"])
+async def test_owned_fallback_is_closed_only_after_work_drains_despite_repeat_cancellation(
+    monkeypatch, phase
+):
+    entered = asyncio.Event()
+    drain_started = asyncio.Event()
+    release_work = asyncio.Event()
+    close_started = asyncio.Event()
+    release_close = asyncio.Event()
+    source = UploadMedia(ConnectionError("fixture source transport failure"))
+    fp = TrackedFile(b"x")
+
+    class OwnedMedia(UploadMedia):
+        async def invoke(self, query, **kwargs):
+            self.requests.append((query, kwargs))
+            entered.set()
+            if phase == "part":
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    drain_started.set()
+                    await release_work.wait()
+            return True
+
+        async def stop(self):
+            assert phase != "part" or release_work.is_set()
+            self.stops += 1
+            close_started.set()
+            await release_close.wait()
+
+    fallback = OwnedMedia()
+    client = Uploader(source)
+    client.fallback = fallback
+    monkeypatch.setattr("builtins.open", lambda *args, **kwargs: fp)
+    upload = asyncio.create_task(cast("pyrogram.Client", client).save_file("fixture.bin"))
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        if phase == "part":
+            upload.cancel()
+            await asyncio.wait_for(drain_started.wait(), 1)
+        else:
+            await asyncio.wait_for(close_started.wait(), 1)
+        for _ in range(3):
+            upload.cancel()
+            await asyncio.sleep(0.01)
+            assert not upload.done()
+            assert not fp.closed
+            assert client.save_file_semaphore.locked()
+            assert source.stops == 0
+        if phase == "part":
+            assert fallback.stops == 0
+            release_work.set()
+            await asyncio.wait_for(close_started.wait(), 1)
+        release_close.set()
+        await await_cancelled(upload)
+        assert fp.closed
+        assert fallback.stops == 1
+        assert client.fallback_calls == 1
+        assert not client.save_file_semaphore.locked()
+    finally:
+        release_work.set()
+        release_close.set()
+        if not upload.done():
+            upload.cancel()
+        await asyncio.gather(upload, return_exceptions=True)
+        fp.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_owned_close_does_not_allow_another_upload_attempt(three_parts):
+    error = ConnectionError("fixture close failure")
+
+    class OwnedMedia(UploadMedia):
+        async def stop(self):
+            self.stops += 1
+            raise error
+
+    source = UploadMedia(ConnectionError("fixture source transport failure"))
+    fallback = OwnedMedia()
+    client = Uploader(source)
+    client.fallback = fallback
+    with pytest.raises(ConnectionError) as raised:
+        await cast("pyrogram.Client", client).save_file(three_parts)
+    assert raised.value is error
+    assert fallback.saved_parts == [0, 1, 2]
+    assert fallback.stops == 1
+    assert source.stops == 0
+    assert client.fallback_calls == 1

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, BinaryIO, overload
 import pyrogram
 from pyrogram import raw
 from pyrogram.errors import FloodPremiumWait, FloodWait
+from pyrogram.session.session import _finish_cleanup
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -156,16 +157,27 @@ class SaveFile:
             if path is None:
                 return None
 
+            fallback_session = None
+            fallback_attempted = False
+            fallback_lock = asyncio.Lock()
+
             async def worker(session):
+                nonlocal fallback_session, fallback_attempted
                 while True:
                     data = await queue.get()
 
                     if data is None:
                         return
 
+                    async with fallback_lock:
+                        part_session = fallback_session or session
                     while True:
                         try:
-                            await session.invoke(data)
+                            # Upload parts are hidden and addressed by `file_id` and part index.
+                            # Keep native retries local, without replaying any publication helper.
+                            await part_session.invoke(
+                                data, retries=1, sleep_threshold=0, retry_delay=0
+                            )
                             break
                         except (FloodWait, FloodPremiumWait) as e:
                             log.warning(
@@ -173,6 +185,18 @@ class SaveFile:
                                 f"(required by {type(data).__name__} in save_file worker)"
                             )
                             await asyncio.sleep(e.seconds)
+                        except (ConnectionError, TimeoutError):
+                            if part_session is fallback_session:
+                                raise
+                            async with fallback_lock:
+                                if not fallback_attempted:
+                                    fallback_attempted = True
+                                    fallback_session = await self._get_upload_fallback_session(
+                                        dc_id, session
+                                    )
+                                if fallback_session is None:
+                                    raise
+                                part_session = fallback_session
                         except Exception as e:
                             log.exception(e)
                             raise
@@ -220,9 +244,10 @@ class SaveFile:
                 session = await self.get_session(dc_id, is_media=True)
                 queue = asyncio.Queue(1)
                 workers = [asyncio.create_task(worker(session)) for _ in range(workers_count)]
+                callback_future = None
 
                 async def produce() -> None:
-                    nonlocal file_part, md5_checksum
+                    nonlocal file_part, md5_checksum, callback_future
 
                     fp.seek(part_size * file_part)
 
@@ -269,22 +294,36 @@ class SaveFile:
                             if inspect.iscoroutinefunction(progress):
                                 await func()
                             else:
-                                await asyncio.get_running_loop().run_in_executor(
+                                callback_future = asyncio.get_running_loop().run_in_executor(
                                     self.executor, func
                                 )
+                                # Cancelling the producer cannot stop a running executor callback.
+                                # Retain the future for the upload owner's final drain.
+                                await asyncio.shield(callback_future)
                     for _ in workers:
                         await queue.put(None)
 
                 producer = asyncio.create_task(produce())
                 tasks = [producer, *workers]
+                group = asyncio.gather(*tasks)
                 try:
-                    # Observe worker failures even while `produce()` is blocked on `queue.put()`.
-                    await asyncio.gather(*tasks)
-                except BaseException:
+                    # Observe failures even while `produce()` is blocked on `queue.put()`.
+                    # The owner cancels once; repeated cancellation must not interrupt drain.
+                    await asyncio.shield(group)
+                finally:
                     for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                    raise
+                        if not task.done():
+                            task.cancel()
+
+                    async def cleanup():
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                        await asyncio.gather(group, return_exceptions=True)
+                        if callback_future is not None:
+                            await asyncio.gather(callback_future, return_exceptions=True)
+                        if fallback_session is not None:
+                            await fallback_session.stop()
+
+                    await _finish_cleanup(cleanup())
             finally:
                 if owns_file:
                     fp.close()

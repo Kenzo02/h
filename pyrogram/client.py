@@ -1782,6 +1782,35 @@ class Client(Methods):
                 )
             raise
 
+    async def _get_upload_fallback_session(
+        self, dc_id: int, failed_session: Session
+    ) -> Session | None:
+        # Use only provider-advertised endpoints from this client's environment.
+        # A temporary media session reuses the same-DC auth key without replacing
+        # the borrowed cache generation or changing primary-session routing.
+        config = await self.invoke(raw.functions.help.GetConfig(), retries=1, retry_delay=0)
+        if bool(config.test_mode) != bool(await self.storage.test_mode()):
+            return None
+
+        for option in config.dc_options:
+            if (
+                option.id == dc_id
+                and bool(option.ipv6) == self.ipv6
+                and not option.cdn
+                and not option.media_only
+                and (option.ip_address, option.port)
+                != (failed_session.server_address, failed_session.port)
+            ):
+                return await self.get_session(
+                    dc_id,
+                    is_media=True,
+                    temporary=True,
+                    export_authorization=False,
+                    server_address=option.ip_address,
+                    port=option.port,
+                )
+        return None
+
     async def get_dc_option(
         self,
         dc_id: int | None = None,

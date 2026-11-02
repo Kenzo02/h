@@ -41,9 +41,9 @@ import pytest
 import pyrogram
 from pyrogram import raw
 from pyrogram.crypto import aes, mtproto
-from pyrogram.errors import AuthBytesInvalid
+from pyrogram.errors import AuthBytesInvalid, AuthKeyUnregistered, Forbidden
 from pyrogram.file_id import FileId, FileType
-from pyrogram.raw.core import FutureSalt, FutureSalts, Long, Message
+from pyrogram.raw.core import Bool, FutureSalt, FutureSalts, Long, Message, TLObject
 from pyrogram.session.session import Session, SessionCleanupError, SessionState
 
 FIXTURE: Final = b"offline fixture media"
@@ -78,6 +78,11 @@ class Storage:
         pass
 
 
+class SavedPart(TLObject):
+    def write(self, *args):
+        return Bool(True)
+
+
 class Transport:
     def __init__(self, owner, media, mode, dc_id):
         self.owner = owner
@@ -94,6 +99,9 @@ class Transport:
         self.closed = False
         self.close_calls = 0
         self.requests = []
+        self.upload_requests = []
+        self.upload_failure = None
+        self.upload_fail_part = 0
         self.import_entered = asyncio.Event()
         self.import_release = asyncio.Event()
         self.request_entered = asyncio.Event()
@@ -178,6 +186,16 @@ class Transport:
                 result = raw.types.RpcError(error_code=400, error_message="AUTH_BYTES_INVALID")
             else:
                 result = raw.types.auth.Authorization(user=raw.types.User(id=1))
+            response = raw.types.RpcResult(req_msg_id=request.msg_id, result=result)
+        elif isinstance(
+            body, (raw.functions.upload.SaveFilePart, raw.functions.upload.SaveBigFilePart)
+        ):
+            self.upload_requests.append(body)
+            result = SavedPart()
+            if body.file_part == self.upload_fail_part and self.upload_failure is not None:
+                if isinstance(self.upload_failure, BaseException):
+                    raise self.upload_failure
+                result = self.upload_failure
             response = raw.types.RpcResult(req_msg_id=request.msg_id, result=result)
         elif isinstance(body, raw.functions.upload.GetFile):
             response = raw.types.RpcResult(
@@ -1310,3 +1328,241 @@ async def test_cancelled_pending_drain_is_not_a_diagnostic_worker_fault(h, caplo
     finally:
         release_worker.set()
         await asyncio.gather(stopping, worker, return_exceptions=True)
+
+
+def advertise_upload_options(monkeypatch, *, ipv6=False, available=True, mismatch=False):
+    advertised = config()
+    advertised.test_mode = not mismatch
+    address = "::2" if ipv6 else "127.0.0.2"
+    advertised.dc_options = [
+        raw.types.DcOption(id=DC + 1, ip_address=address, port=443, ipv6=ipv6),
+        raw.types.DcOption(id=DC, ip_address=address, port=443, ipv6=not ipv6),
+        raw.types.DcOption(id=DC, ip_address=address, port=443, ipv6=ipv6, cdn=True),
+        raw.types.DcOption(id=DC, ip_address=address, port=443, ipv6=ipv6, media_only=True),
+        raw.types.DcOption(id=DC, ip_address="127.0.0.1", port=443, ipv6=ipv6),
+    ]
+    if available:
+        advertised.dc_options.append(
+            raw.types.DcOption(id=DC, ip_address=address, port=444, ipv6=ipv6)
+        )
+    monkeypatch.setattr(f"{__name__}.config", lambda: advertised)
+    return address
+
+
+@pytest.mark.parametrize("ipv6", [False, True])
+@pytest.mark.parametrize("outcome", ["available", "no-alternative", "wrong-environment"])
+async def test_upload_endpoint_selection_preserves_primary_auth_and_cached_media(
+    h, monkeypatch, ipv6, outcome
+):
+    borrowed = await h.media()
+    primary = h.client.session
+    h.client.ipv6 = ipv6
+    expected = advertise_upload_options(
+        monkeypatch,
+        ipv6=ipv6,
+        available=outcome != "no-alternative",
+        mismatch=outcome == "wrong-environment",
+    )
+    before = len(h.transports)
+    fallback = await asyncio.wait_for(h.client._get_upload_fallback_session(DC, borrowed), 2)
+    if outcome == "available":
+        assert fallback is not borrowed
+        assert fallback.server_address == expected and fallback.port == 444
+        assert fallback.dc_id == DC and fallback.test_mode
+        assert fallback.is_media and not fallback.is_cdn
+        assert fallback.auth_key == primary.auth_key
+        assert fallback.state is SessionState.STARTED
+        assert len(h.transports) == before + 1
+        await fallback.stop()
+    else:
+        assert fallback is None
+        assert len(h.transports) == before
+    assert h.client.media_sessions == {DC: borrowed}
+    assert h.client.session is primary
+    assert h.client.sessions == {}
+    assert not borrowed.connection.closed
+    assert borrowed.state is SessionState.STARTED
+    await h.main_control()
+
+
+@pytest.mark.parametrize("mode", ["transport", "readiness"])
+@pytest.mark.parametrize("missing_big_part", [False, True])
+async def test_upload_fallback_at_real_session_encrypted_wire_boundary(
+    h, monkeypatch, mode, missing_big_part
+):
+    borrowed = await h.media()
+    primary = h.client.session
+    advertise_upload_options(monkeypatch)
+    failed_part = 20 if missing_big_part else 0
+    if mode == "readiness":
+        borrowed.is_started.clear()
+        borrowed.WAIT_TIMEOUT = 0.01
+    else:
+        borrowed.connection.upload_failure = OSError("fixture transport failure")
+        borrowed.connection.upload_fail_part = failed_part
+    fp = BytesIO(b"x" * (20 * 512 * 1024 + 1) if missing_big_part else FIXTURE)
+    options = {"file_id": 123, "file_part": 20} if missing_big_part else {}
+    try:
+        result = await asyncio.wait_for(h.client.save_file(fp, **options), 3)
+        if missing_big_part:
+            assert result is None
+        else:
+            assert result.parts == 1
+            assert isinstance(result, raw.types.InputFile)
+        fallback = h.owned[-1]
+        assert fallback is not borrowed and fallback is not primary
+        assert fallback.state is SessionState.STOPPED
+        assert fallback.connection.closed
+        assert fallback.connection.close_calls == 1
+        assert fallback.auth_key == primary.auth_key
+        assert fallback.server_address == "127.0.0.2"
+        source_requests = borrowed.connection.upload_requests
+        alternate_requests = fallback.connection.upload_requests
+        if mode == "readiness":
+            assert source_requests == []
+            confirmed = alternate_requests
+            borrowed.is_started.set()
+        else:
+            failed = [q for q in source_requests if q.file_part == failed_part]
+            assert len(failed) == 1, "one native attempt, not the global ten attempts"
+            retried = [q for q in alternate_requests if q.file_part == failed_part]
+            assert len(retried) == 1
+            assert retried[0].write() == failed[0].write()
+            confirmed = [q for q in source_requests if q.file_part != failed_part]
+            confirmed += alternate_requests
+        assert [q.file_part for q in confirmed] == [failed_part]
+        assert all(q.file_id == (123 if missing_big_part else result.id) for q in confirmed)
+        if missing_big_part:
+            assert all(q.file_total_parts == 21 and q.bytes == b"x" for q in confirmed)
+        assert borrowed.results == {} and fallback.results == {}
+        assert not fallback.pending_tasks
+        assert h.client.media_sessions == {DC: borrowed}
+        assert h.client.session is primary
+        assert not borrowed.connection.closed
+        assert not fp.closed
+        assert await h.download() == FIXTURE
+        await h.main_control()
+    finally:
+        borrowed.is_started.set()
+        fp.close()
+
+
+@pytest.mark.parametrize(
+    "error_code,error_message,expected",
+    [
+        (401, "AUTH_KEY_UNREGISTERED", AuthKeyUnregistered),
+        (403, "CHAT_WRITE_FORBIDDEN", Forbidden),
+    ],
+)
+async def test_upload_rpc_auth_and_permission_errors_never_create_fallback(
+    h, monkeypatch, error_code, error_message, expected
+):
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch)
+    borrowed.connection.upload_failure = raw.types.RpcError(
+        error_code=error_code, error_message=error_message
+    )
+    before = len(h.transports)
+    with pytest.raises(expected):
+        await asyncio.wait_for(h.client.save_file(BytesIO(b"fixture")), 2)
+    assert len(h.transports) == before
+    assert len(borrowed.connection.upload_requests) == 1
+    assert not borrowed.connection.closed
+    assert h.client.media_sessions == {DC: borrowed}
+    await h.main_control()
+
+
+@pytest.mark.parametrize("wait_name", ["FLOOD_WAIT_1", "FLOOD_PREMIUM_WAIT_1"])
+async def test_upload_native_short_flood_wait_keeps_the_same_part_on_borrowed_session(
+    h, monkeypatch, wait_name
+):
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch)
+    borrowed.connection.upload_failure = raw.types.RpcError(error_code=420, error_message=wait_name)
+    before = len(h.transports)
+    sleeps = []
+    real_sleep = asyncio.sleep
+
+    async def cooldown(seconds):
+        if seconds == 1:
+            sleeps.append(seconds)
+            borrowed.connection.upload_failure = None
+        else:
+            await real_sleep(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", cooldown)
+    result = await asyncio.wait_for(h.client.save_file(BytesIO(FIXTURE)), 2)
+    assert result.parts == 1
+    assert sleeps == [1]
+    requests = borrowed.connection.upload_requests
+    assert len(requests) == 2 and requests[0].write() == requests[1].write()
+    assert len(h.transports) == before
+    assert not borrowed.connection.closed
+
+
+@pytest.mark.parametrize("failure", ["no-alternative", "startup-auth", "fallback-transport"])
+async def test_upload_native_fallback_failure_is_finite_and_does_not_close_borrowed_session(
+    h, monkeypatch, failure
+):
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch, available=failure != "no-alternative")
+    borrowed.connection.upload_failure = OSError("fixture borrowed transport failure")
+    before = len(h.transports)
+    if failure == "startup-auth":
+        h.modes[(DC, True)] = "auth_error"
+    elif failure == "fallback-transport":
+
+        async def connected(client, session):
+            await h.remember(client, session)
+            session.connection.upload_failure = OSError("fixture fallback transport failure")
+
+        h.client.connect_handler = connected
+    with pytest.raises(AuthKeyUnregistered if failure == "startup-auth" else TimeoutError):
+        await asyncio.wait_for(h.client.save_file(BytesIO(FIXTURE)), 3)
+    assert len(h.transports) == before + int(failure != "no-alternative")
+    assert len(borrowed.connection.upload_requests) == 1
+    if failure != "no-alternative":
+        assert h.transports[-1].closed
+        if failure == "fallback-transport":
+            assert len(h.transports[-1].upload_requests) == 1
+    assert h.client.media_sessions == {DC: borrowed}
+    assert not borrowed.connection.closed
+    assert borrowed.results == {}
+    await h.main_control()
+
+
+async def test_cancelling_upload_fallback_startup_drains_owned_close_before_releasing_file(
+    h, monkeypatch
+):
+    borrowed = await h.media()
+    advertise_upload_options(monkeypatch)
+    borrowed.connection.upload_failure = OSError("fixture borrowed transport failure")
+    h.modes[(DC, True)] = "block"
+    fp = BytesIO(FIXTURE)
+    upload = asyncio.create_task(h.client.save_file(fp))
+    try:
+        await wait_until(lambda: len(h.transports) == 3)
+        owned = h.transports[-1]
+        owned.block_close = True
+        upload.cancel()
+        await asyncio.wait_for(owned.close_entered.wait(), 1)
+        for _ in range(3):
+            upload.cancel()
+            await asyncio.sleep(0.01)
+            assert not upload.done()
+            assert not fp.closed
+            assert not owned.closed
+        owned.close_release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(upload, 2)
+        assert owned.closed
+        assert h.client.media_sessions == {DC: borrowed}
+        assert not borrowed.connection.closed
+    finally:
+        for transport in h.transports:
+            transport.release.set()
+            transport.close_release.set()
+        if not upload.done():
+            upload.cancel()
+        await asyncio.gather(upload, return_exceptions=True)
+        fp.close()
