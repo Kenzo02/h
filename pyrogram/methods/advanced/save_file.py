@@ -160,10 +160,15 @@ class SaveFile:
             fallback_session = None
             fallback_attempted = False
             fallback_lock = asyncio.Lock()
+            loop = asyncio.get_running_loop()
+            last_progress = loop.time()
+            flood_wait_until = last_progress
+            progress_event = asyncio.Event()
+            finished = False
 
             async def worker(session):
-                nonlocal fallback_session, fallback_attempted
-                while True:
+                nonlocal fallback_session, fallback_attempted, last_progress, flood_wait_until
+                while not finished:
                     data = await queue.get()
 
                     if data is None:
@@ -171,20 +176,27 @@ class SaveFile:
 
                     async with fallback_lock:
                         part_session = fallback_session or session
-                    while True:
+                    while not finished:
                         try:
                             # Upload parts are hidden and addressed by `file_id` and part index.
                             # Keep native retries local, without replaying any publication helper.
                             await part_session.invoke(
                                 data, retries=1, sleep_threshold=0, retry_delay=0
                             )
+                            last_progress = loop.time()
+                            progress_event.set()
                             break
                         except (FloodWait, FloodPremiumWait) as e:
+                            seconds = e.seconds
+                            if seconds is None:
+                                raise
                             log.warning(
-                                f"[{self.name}] Waiting for {e.seconds} seconds before continuing "
+                                f"[{self.name}] Waiting for {seconds} seconds before continuing "
                                 f"(required by {type(data).__name__} in save_file worker)"
                             )
-                            await asyncio.sleep(e.seconds)
+                            flood_wait_until = max(flood_wait_until, loop.time() + seconds)
+                            progress_event.set()
+                            await asyncio.sleep(seconds)
                         except (ConnectionError, TimeoutError):
                             if part_session is fallback_session:
                                 raise
@@ -243,6 +255,7 @@ class SaveFile:
 
                 session = await self.get_session(dc_id, is_media=True)
                 queue = asyncio.Queue(1)
+                last_progress = loop.time()
                 workers = [asyncio.create_task(worker(session)) for _ in range(workers_count)]
                 callback_future = None
 
@@ -251,7 +264,7 @@ class SaveFile:
 
                     fp.seek(part_size * file_part)
 
-                    while True:
+                    while not finished:
                         chunk = fp.read(part_size)
 
                         if not chunk:
@@ -274,6 +287,8 @@ class SaveFile:
                             )
 
                         await queue.put(rpc)
+                        if finished:
+                            return
 
                         if is_missing_part:
                             break
@@ -303,14 +318,42 @@ class SaveFile:
                     for _ in workers:
                         await queue.put(None)
 
+                async def watch_progress():
+                    while not finished:
+                        progress_event.clear()
+                        remaining = (
+                            max(last_progress, flood_wait_until)
+                            + self.UPLOAD_STALL_TIMEOUT
+                            - loop.time()
+                        )
+                        if remaining <= 0:
+                            msg = "Upload stalled without acknowledged progress"
+                            raise TimeoutError(msg)
+                        try:
+                            await asyncio.wait_for(progress_event.wait(), timeout=remaining)
+                        except asyncio.TimeoutError:
+                            # Re-read the deadline if another worker extended a provider wait.
+                            continue
+
                 producer = asyncio.create_task(produce())
                 tasks = [producer, *workers]
                 group = asyncio.gather(*tasks)
+                watchdog = asyncio.create_task(watch_progress())
                 try:
                     # Observe failures even while `produce()` is blocked on `queue.put()`.
                     # The owner cancels once; repeated cancellation must not interrupt drain.
-                    await asyncio.shield(group)
+                    done, _ = await asyncio.wait(
+                        (group, watchdog), return_when=asyncio.FIRST_COMPLETED
+                    )
+                    if group in done:
+                        await group
+                    else:
+                        await watchdog
                 finally:
+                    # Also retires `wait_for()` if it consumed a concurrent cancellation.
+                    finished = True
+                    progress_event.set()
+                    tasks.append(watchdog)
                     for task in tasks:
                         if not task.done():
                             task.cancel()

@@ -319,6 +319,9 @@ class Client(Methods):
     # Interval of seconds in which the updates watchdog will kick in
     UPDATES_WATCHDOG_INTERVAL = 15 * 60
 
+    # Abort only uploads with no acknowledged parts or provider-mandated wait.
+    UPLOAD_STALL_TIMEOUT: float = 60
+
     MAX_CONCURRENT_TRANSMISSIONS = 1
     MAX_MESSAGE_CACHE_SIZE = 1000
     MAX_TOPIC_CACHE_SIZE = 1000
@@ -972,10 +975,13 @@ class Client(Methods):
                                     force=False,
                                 )
                             )
+                        # Failed peer hydration must not drop the current update or
+                        # the remaining batch, including its recoverable cursors.
                         except (
                             ChannelPrivate,
                             PersistentTimestampOutdated,
                             PersistentTimestampInvalid,
+                            TimeoutError,
                         ):
                             pass
                         else:
@@ -1569,6 +1575,9 @@ class Client(Methods):
             order_fallback_endpoints (``bool``, *optional*):
                 Order a stored endpoint with the fork's same-DC fallback candidates.
                 Explicit custom endpoints otherwise keep their original selection.
+
+            _upload_fallback (``bool``, *optional*):
+                Keep upload-local startup failures typed and retain failed cleanup custody.
         """
         if not dc_id:
             dc_id = await self.storage.dc_id()

@@ -64,10 +64,15 @@ class Terminate:
 
         self.updates_watchdog_event.set()
         if self.updates_watchdog_task is not None:
+            self.updates_watchdog_task.cancel()
             try:
                 await self.updates_watchdog_task
-            except (Exception, asyncio.CancelledError) as error:
+            except asyncio.CancelledError:
+                self.updates_watchdog_task = None
+            except Exception as error:
                 failures.append(("watchdog", error))
+            else:
+                self.updates_watchdog_task = None
         self.updates_watchdog_event.clear()
         self.is_initialized = False
         if failures:

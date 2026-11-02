@@ -1695,7 +1695,7 @@ async def test_upload_failed_startup_cleanup_retains_terminal_owned_session(h, m
         await asyncio.gather(upload, return_exceptions=True)
 
 
-@pytest.mark.parametrize("phase", ["connect", "handshake", "part", "stop"])
+@pytest.mark.parametrize("phase", ["connect", "handshake", "part", "stop", "stall"])
 @pytest.mark.parametrize("failed_close", [False, True])
 async def test_upload_cancellation_drains_each_owned_cleanup_without_later_rpc(
     h, monkeypatch, phase, failed_close
@@ -1703,11 +1703,14 @@ async def test_upload_cancellation_drains_each_owned_cleanup_without_later_rpc(
     borrowed = await h.media()
     advertise_upload_options(monkeypatch)
     borrowed.connection.upload_failure = OSError("transport")
+    if phase == "stall":
+        h.client.UPLOAD_STALL_TIMEOUT = 0.1
     h.modes[(DC, True)] = {
         "connect": "block",
         "handshake": "handshake_block",
         "part": "upload_block",
         "stop": "ok",
+        "stall": "upload_block",
     }[phase]
     original = h.client.connection_factory
 
@@ -1723,24 +1726,30 @@ async def test_upload_cancellation_drains_each_owned_cleanup_without_later_rpc(
     try:
         await wait_until(lambda: len(h.transports) == 3)
         transport = h.transports[-1]
-        if phase in {"handshake", "part"}:
+        if phase in {"handshake", "part", "stall"}:
             await asyncio.wait_for(transport.request_entered.wait(), 2)
         elif phase == "connect":
             await asyncio.wait_for(transport.entered.wait(), 2)
         else:
             await asyncio.wait_for(transport.close_entered.wait(), 2)
-        upload.cancel()
+        if phase != "stall":
+            upload.cancel()
         await asyncio.wait_for(transport.close_entered.wait(), 2)
         requests = list(transport.requests)
         for _ in range(3):
-            upload.cancel()
+            if phase != "stall":
+                upload.cancel()
             await asyncio.sleep(0)
             assert not upload.done()
         transport.close_release.set()
         with pytest.raises(
-            SessionCleanupError if failed_close else asyncio.CancelledError
+            SessionCleanupError
+            if failed_close
+            else (TimeoutError if phase == "stall" else asyncio.CancelledError)
         ) as caught:
             await asyncio.wait_for(upload, 2)
+        if phase == "stall" and not failed_close:
+            assert str(caught.value) == "Upload stalled without acknowledged progress"
         assert transport.requests == requests
         assert transport.close_calls == 1
         assert transport.closed is not failed_close

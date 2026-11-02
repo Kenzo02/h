@@ -57,6 +57,7 @@ class StartupWire(Transport):
                 self.request_entered.set()
                 await self.request_release.wait()
             if type(body) is self.fail_query:
+                assert self.failure is not None
                 raise self.failure
             if isinstance(body, raw.functions.updates.GetState):
                 result = raw.types.updates.State(pts=1, qts=0, date=1, seq=1, unread_count=0)

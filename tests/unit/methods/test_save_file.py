@@ -67,6 +67,8 @@ class Media:
 
 
 class Uploader(SaveFile):
+    UPLOAD_STALL_TIMEOUT: float = 60
+
     def __init__(self, media: Media) -> None:
         self.media = media
         self.name = "uploader"
@@ -489,10 +491,10 @@ async def test_stop_transmission_from_a_progress_callback_ends_the_upload(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("owns_file", [False, True], ids=["caller-file", "sdk-file"])
-@pytest.mark.parametrize("cancel", [False, True], ids=["worker-failure", "caller-cancel"])
+@pytest.mark.parametrize("abort", ["worker-failure", "caller-cancel", "stall"])
 @pytest.mark.parametrize("repeats", [0, 3], ids=["no-repeat", "repeat-cancel"])
 async def test_sync_progress_finishes_before_releasing_upload_ownership(
-    monkeypatch, repeats, *, owns_file, cancel
+    monkeypatch, repeats, abort, *, owns_file
 ):
     loop = asyncio.get_running_loop()
     started = asyncio.Event()
@@ -508,6 +510,8 @@ async def test_sync_progress_finishes_before_releasing_upload_ownership(
             raise error
 
     client = Uploader(FailingMedia())
+    if abort == "stall":
+        client.UPLOAD_STALL_TIMEOUT = 0.02
     if owns_file:
         monkeypatch.setattr("builtins.open", lambda *args, **kwargs: fp)
 
@@ -523,10 +527,12 @@ async def test_sync_progress_finishes_before_releasing_upload_ownership(
     )
     try:
         await asyncio.wait_for(started.wait(), 1)
-        if cancel:
+        if abort == "caller-cancel":
             upload.cancel()
-        else:
+        elif abort == "worker-failure":
             failure.set()
+        else:
+            await asyncio.sleep(0.06)
         for i in range(repeats + 1):
             await asyncio.sleep(0.01)
             assert not upload.done()
@@ -536,8 +542,11 @@ async def test_sync_progress_finishes_before_releasing_upload_ownership(
                 upload.cancel()
         release.set()
         result = (await asyncio.wait_for(asyncio.gather(upload, return_exceptions=True), 1))[0]
-        if cancel or repeats:
+        if abort == "caller-cancel" or repeats:
             assert isinstance(result, asyncio.CancelledError)
+        elif abort == "stall":
+            assert isinstance(result, TimeoutError)
+            assert str(result) == "Upload stalled without acknowledged progress"
         else:
             assert result is error
         assert callback_result == [(False, b"")]
@@ -546,7 +555,80 @@ async def test_sync_progress_finishes_before_releasing_upload_ownership(
     finally:
         release.set()
         failure.set()
+        if not upload.done():
+            upload.cancel()
         await asyncio.gather(upload, return_exceptions=True)
+        fp.close()
+
+
+@pytest.mark.parametrize("big", [False, True], ids=["small", "big"])
+async def test_no_acknowledgement_aborts_and_drains_without_later_parts(big):
+    media = BlockingMedia(workers_count=4 if big else 1)
+    client = Uploader(media)
+    client.UPLOAD_STALL_TIMEOUT = 0.03
+    fp = TrackedFile(b"x" * ((21 if big else 5) * _PART_SIZE))
+    before = asyncio.all_tasks()
+    upload = asyncio.create_task(cast("pyrogram.Client", client).save_file(fp))
+    try:
+        with pytest.raises(TimeoutError, match="Upload stalled without acknowledged progress"):
+            await asyncio.wait_for(asyncio.shield(upload), 0.5)
+        assert media.workers_cancelled.is_set()
+        assert media.sent_parts == list(range(4 if big else 1))
+        assert client.fallback_calls == 0
+        assert not client.save_file_semaphore.locked()
+        media.release.set()
+        await asyncio.sleep(0)
+        assert media.sent_parts == list(range(4 if big else 1))
+        assert not (asyncio.all_tasks() - before - {upload})
+        assert not fp.closed
+    finally:
+        if not upload.done():
+            upload.cancel()
+        await asyncio.gather(upload, return_exceptions=True)
+        fp.close()
+
+
+async def test_each_acknowledged_part_extends_the_stall_deadline(three_parts):
+    class SlowMedia(Media):
+        async def invoke(self, query, **kwargs):
+            await asyncio.sleep(0.04)
+            self.saved_parts.append(query.file_part)
+            return True
+
+    media = SlowMedia()
+    client = Uploader(media)
+    client.UPLOAD_STALL_TIMEOUT = 0.08
+    result = await cast("pyrogram.Client", client).save_file(three_parts)
+    assert result.parts == 3
+    assert media.saved_parts == [0, 1, 2]
+
+
+@pytest.mark.parametrize("wait_type", [FloodWait, FloodPremiumWait])
+async def test_provider_wait_extends_ack_deadline_without_fallback(wait_type):
+    class WaitingMedia(Media):
+        def __init__(self):
+            super().__init__()
+            self.attempts = 0
+
+        async def invoke(self, query, **kwargs):
+            self.attempts += 1
+            if self.attempts <= 2:
+                raise wait_type(1)
+            await asyncio.sleep(0.02)
+            self.saved_parts.append(query.file_part)
+            return True
+
+    media = WaitingMedia()
+    client = Uploader(media)
+    client.UPLOAD_STALL_TIMEOUT = 0.05
+    fp = TrackedFile(b"x")
+    try:
+        result = await cast("pyrogram.Client", client).save_file(fp)
+        assert result.parts == 1
+        assert media.attempts == 3
+        assert media.saved_parts == [0]
+        assert client.fallback_calls == 0
+    finally:
         fp.close()
 
 

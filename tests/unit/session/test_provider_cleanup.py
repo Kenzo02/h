@@ -257,6 +257,8 @@ async def sdk():
     await c.storage.is_bot(False)
     await c.session.start()
     await c.initialize()
+    watchdog = c.updates_watchdog_task
+    assert watchdog is not None
     first = await harness.media(server_address="127.0.0.1", port=443)
     second = await harness.media(temporary=True, server_address="127.0.0.1", port=443)
     c.media_sessions[6] = second
@@ -266,7 +268,9 @@ async def sdk():
     c.sessions[DC] = auxiliary
     sessions = (first, second, auxiliary, c.session)
     try:
-        yield SimpleNamespace(h=harness, client=c, first=first, sessions=sessions)
+        yield SimpleNamespace(
+            h=harness, client=c, first=first, sessions=sessions, watchdog=watchdog
+        )
     finally:
         c.connect_handler = c.disconnect_handler = None
         c.is_connected = False
@@ -285,8 +289,7 @@ async def sdk():
                 session._state = SessionState.STARTING
             await session.stop()
         c.updates_watchdog_event.set()
-        assert c.updates_watchdog_task is not None
-        await asyncio.gather(c.updates_watchdog_task, return_exceptions=True)
+        await asyncio.gather(watchdog, return_exceptions=True)
         await c.dispatcher.stop()
         await c.storage.close()
         c.executor.shutdown(wait=True)
@@ -305,7 +308,8 @@ def assert_native_stopped(sdk):
     assert not c.media_sessions and not c.sessions
     assert not c.is_initialized and not c.is_connected
     assert c.session is None
-    assert c.updates_watchdog_task.done()
+    assert sdk.watchdog.done()
+    assert c.updates_watchdog_task is None
     assert all(task.done() for task in c.dispatcher.handler_worker_tasks)
     with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
         c.storage.conn.execute("SELECT 1")
@@ -364,7 +368,8 @@ async def test_public_stop_close_failure_settles_independent_resources(
         assert sdk.client.media_sessions == {DC: sdk.first}
         assert not sdk.client.sessions
         assert not sdk.client.is_initialized
-        assert sdk.client.updates_watchdog_task.done()
+        assert sdk.watchdog.done()
+        assert sdk.client.updates_watchdog_task is None
         assert not sdk.client.dispatcher.handler_worker_tasks
         with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
             sdk.client.storage.conn.execute("SELECT 1")
@@ -604,7 +609,8 @@ def assert_native_wire_stopped(sdk):
     assert all(not s._has_live_workers() for s in sdk.sessions)
     assert not sdk.client.is_initialized and not sdk.client.is_connected
     assert sdk.client.session is None
-    assert sdk.client.updates_watchdog_task.done()
+    assert sdk.watchdog.done()
+    assert sdk.client.updates_watchdog_task is None
     assert not sdk.client.dispatcher.handler_worker_tasks
     with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
         sdk.client.storage.conn.execute("SELECT 1")

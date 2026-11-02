@@ -64,6 +64,7 @@ class Initialize:
                 raise startup_error from cleanup_error
             raise
 
-        self.updates_watchdog_task = asyncio.create_task(self.updates_watchdog())
+        if not self.no_updates:
+            self.updates_watchdog_task = asyncio.create_task(self.updates_watchdog())
 
         self.is_initialized = True
