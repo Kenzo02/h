@@ -19,6 +19,7 @@ import pytest
 import pyrogram.dc_options as dc_options
 from pyrogram import Client, raw
 from pyrogram.dc_options import get_dc_endpoints, select_dc_option
+from pyrogram.errors import NetworkMigrate, PhoneMigrate
 from pyrogram.session import Auth, Session
 from pyrogram.storage.sqlite_storage import SQLiteStorage
 from pyrogram.storage.storage import Storage
@@ -807,6 +808,175 @@ async def test_startup_stored_custom_endpoint_failure_does_not_try_static_fallba
         )
 
     assert attempts == [(custom_address, 443)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("migration", [PhoneMigrate, NetworkMigrate, None])
+@pytest.mark.parametrize("endpoint_policy", ["direct", "proxy", "custom", "ipv6", "test-mode"])
+async def test_send_code_migration_keeps_same_dc_fallback_and_stores_live_endpoint(
+    monkeypatch, tmp_path: Path, migration, endpoint_policy
+):
+    connections = []
+    auths = []
+    send_codes = []
+    successful_send_codes = []
+    probes = []
+    selected_address, selected_port = DC5_PRIMARY, 443
+    proxy = None
+
+    if endpoint_policy == "proxy":
+        proxy = {"scheme": "socks5", "hostname": "127.0.0.1", "port": 1080}
+    elif endpoint_policy == "custom":
+        selected_address, selected_port = "203.0.113.10", 8443
+    elif endpoint_policy == "ipv6":
+        selected_address = "2001:b28:f23d:f001::a"
+    elif endpoint_policy == "test-mode":
+        selected_address, selected_port = "149.154.175.117", 80
+
+    uses_fallback = endpoint_policy in ("direct", "proxy")
+    new_auth_key = b"m" * 256
+    old_auth_key = b"o" * 256
+
+    class TrackingConnection:
+        def __init__(self, **kwargs):
+            self.options = kwargs
+            self.closed = asyncio.Event()
+            connections.append(self)
+
+        async def connect(self):
+            if uses_fallback and self.options["server_address"] == DC5_PRIMARY:
+                raise OSError("selected migration endpoint unavailable")
+
+        async def close(self):
+            self.closed.set()
+
+    async def create_auth(self):
+        auths.append(self)
+        return new_auth_key
+
+    async def recv_worker(self):
+        await self.connection.closed.wait()
+
+    async def ping_worker(self):
+        await self.ping_task_event.wait()
+
+    async def send(self, query, *args, **kwargs):
+        if isinstance(query, (raw.functions.Ping, raw.functions.InvokeWithLayer)):
+            return object()
+        assert isinstance(query, raw.functions.auth.SendCode), "unexpected RPC/export"
+        assert query.phone_number == "15550100000"
+        send_codes.append(self.dc_id)
+        if migration is not None and self.dc_id == 2:
+            raise migration(5)
+        successful_send_codes.append(self.dc_id)
+        return raw.types.auth.SentCode(
+            type=raw.types.auth.SentCodeTypeApp(length=5), phone_code_hash="offline-code-hash"
+        )
+
+    async def get_dc_option(dc_id, *, ipv6=False):
+        assert dc_id == 5
+        assert ipv6 == (endpoint_policy == "ipv6")
+        return dc_option(dc_id, selected_address, selected_port, ipv6=ipv6)
+
+    async def probe(server_address, port, timeout):
+        assert endpoint_policy == "direct", "guarded endpoint must not be directly probed"
+        probes.append((server_address, port))
+        # Both are reachable at selection time; the first then fails during startup.
+        return True, 0.01 if server_address == DC5_PRIMARY else 0.02, None
+
+    monkeypatch.setattr(Auth, "create", create_auth)
+    monkeypatch.setattr(Session, "send", send)
+    monkeypatch.setattr(Session, "recv_worker", recv_worker)
+    monkeypatch.setattr(Session, "ping_worker", ping_worker)
+    monkeypatch.setattr(dc_options, "probe_tcp_endpoint", probe)
+    monkeypatch.setattr(dc_options, "endpoint_cache_path", lambda: tmp_path / "dc-cache.json")
+    client = Client(
+        "send-code-migration",
+        api_id=12345,
+        api_hash="offline-api-hash",
+        in_memory=True,
+        workdir=tmp_path,
+        proxy=proxy,
+        ipv6=endpoint_policy == "ipv6",
+        test_mode=endpoint_policy == "test-mode",
+        connection_factory=TrackingConnection,
+    )
+    client.get_dc_option = get_dc_option
+    await client.storage.open()
+    await client.storage.api_id(12345)
+    await client.storage.dc_id(2)
+    await client.storage.test_mode(endpoint_policy == "test-mode")
+    await client.storage.auth_key(old_auth_key)
+    old_session = None
+    try:
+        old_session = client.session = await client.get_session(
+            dc_id=2,
+            server_address="149.154.167.51",
+            port=443,
+            temporary=True,
+            export_authorization=False,
+        )
+        client.is_connected = True
+        result = await client.send_code("+1 555 010 0000")
+
+        assert result.phone_code_hash == "offline-code-hash"
+        assert send_codes == ([2, 5] if migration else [2])
+        assert successful_send_codes == ([5] if migration else [2])
+        assert client.sessions == client.media_sessions == {}
+        if migration:
+            final_endpoint = (
+                (DC5_FALLBACK, 443) if uses_fallback else (selected_address, selected_port)
+            )
+            assert [(c.options["server_address"], c.options["port"]) for c in connections] == [
+                ("149.154.167.51", 443),
+                (selected_address, selected_port),
+                *([(DC5_FALLBACK, 443)] if uses_fallback else []),
+            ]
+            assert all(c.closed.is_set() for c in connections[:-1])
+            assert old_session._must_stay_stopped
+            assert not old_session.is_started.is_set()
+            assert not old_session._has_live_workers()
+            assert len(auths) == 1
+            assert auths[0].dc_id == 5
+            assert auths[0].test_mode == (endpoint_policy == "test-mode")
+            assert auths[0].proxy == client.proxy
+            assert auths[0].connection is None
+            assert auths[0].fallback_endpoints == (
+                ((DC5_PRIMARY, 443), (DC5_FALLBACK, 443))
+                if uses_fallback
+                else ((selected_address, selected_port),)
+            )
+            assert await client.storage.dc_id() == 5
+            assert await client.storage.auth_key() == new_auth_key
+        else:
+            final_endpoint = ("149.154.167.51", 443)
+            assert client.session is old_session
+            assert len(connections) == 1
+            assert auths == []
+            assert await client.storage.dc_id() == 2
+            assert await client.storage.auth_key() == old_auth_key
+        assert (
+            await client.storage.server_address(),
+            await client.storage.port(),
+        ) == final_endpoint
+        assert (client.session.server_address, client.session.port) == final_endpoint
+        assert client.session.is_started.is_set()
+        assert not connections[-1].closed.is_set()
+        assert all(c.options["proxy"] == client.proxy for c in connections)
+        assert all(c.options["test_mode"] == (endpoint_policy == "test-mode") for c in connections)
+        assert probes == (
+            [(DC5_PRIMARY, 443), (DC5_FALLBACK, 443)]
+            if migration and endpoint_policy == "direct"
+            else []
+        )
+    finally:
+        if client.session is not None:
+            await client.session.stop()
+        if old_session is not None:
+            await old_session.stop()
+        await client.storage.close()
+    assert all(c.closed.is_set() for c in connections)
+    assert not client.session._has_live_workers()
 
 
 @pytest.mark.asyncio

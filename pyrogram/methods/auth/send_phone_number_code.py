@@ -220,6 +220,7 @@ class SendPhoneNumberCode:
                     port=dc_option.port,
                     export_authorization=False,
                     temporary=True,
+                    order_fallback_endpoints=True,
                 )
 
                 await self.storage.dc_id(e.dc_id)
