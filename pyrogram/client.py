@@ -80,10 +80,12 @@ from .file_id import FileId, FileType, ThumbnailSource
 from .parser import Parser
 from .session.internals import MsgId
 from .update_peer_cache import (
+    PeerIngestionScope,
     UpdatePeerCache,
     cached_update_peers,
     forget_changed_peer,
     peer_cache_for,
+    peer_lease,
     remember_peer,
 )
 
@@ -859,9 +861,12 @@ class Client(Methods):
         parsed_peers = []
         parsed_usernames = []
 
-        cache = peer_cache_for(self)
+        scope = PeerIngestionScope(self)
+        cache = scope.cache
         for peer in peers:
-            await remember_peer(cache, peer)
+            await remember_peer(cache, peer, peer_lease(peers, peer))
+            if not scope.check("cache_peer"):
+                return is_min
             if getattr(peer, "min", False):
                 is_min = True
                 continue
@@ -917,9 +922,12 @@ class Client(Methods):
                 parsed_usernames.append((peer_id, usernames))
 
         await self.storage.update_peers(parsed_peers)
+        if not scope.check("storage_peers"):
+            return is_min
 
         if parsed_usernames:
             await self.storage.update_usernames(parsed_usernames)
+            scope.check("storage_usernames")
 
         return is_min
 

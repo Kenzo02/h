@@ -553,3 +553,114 @@ async def test_logout_and_late_old_response_cannot_repopulate_new_authorization(
     finally:
         release.set()
         await asyncio.gather(old_call, return_exceptions=True)
+
+
+@pytest.mark.parametrize("replacement_during_merge", [False, True])
+async def test_minimal_snapshot_keeps_originating_lease_across_fetch_boundary(
+    client,
+    monkeypatch,
+    replacement_during_merge,
+):
+    now = 0.0
+    monkeypatch.setattr(time, "monotonic", lambda: now)
+    await client.fetch_peers([user()])
+    fresh = user()
+    fresh.first_name = "Fresh boundary fixture"
+    client.case_users[201] = fresh
+    native_fetch = client.fetch_peers
+    crossed = False
+
+    async def cross_boundary(peers):
+        nonlocal now, crossed
+        if not crossed:
+            crossed = True
+            if replacement_during_merge:
+                # A concurrent full response must not be overwritten by an
+                # older merged snapshot, even within the original lease.
+                await native_fetch([fresh])
+            else:
+                now = 600.002
+        return await native_fetch(peers)
+
+    now = 599.999
+    monkeypatch.setattr(client, "fetch_peers", cross_boundary)
+    await client.handle_updates(packet(1, chats=[channel()]))
+    assert client.case_calls == []
+    await client.handle_updates(packet(2, chats=[channel()]))
+    assert len(client.case_calls) == (0 if replacement_during_merge else 1)
+    assert client.case_deliveries[-1][1][201].first_name == fresh.first_name
+
+
+@pytest.mark.parametrize("pause_step", ["update_peers", "update_usernames"])
+@pytest.mark.parametrize("transition", ["key-only", "key-and-fresh-peer", "logout", "same-key"])
+async def test_response_scope_is_rechecked_after_suspended_storage(
+    client,
+    monkeypatch,
+    pause_step,
+    transition,
+):
+    client.session.auth_key = b"fixture-authorization-A"
+    stale = user(username="fixture_old")
+    old_channel = channel()
+    old_channel.id = 303
+    response = raw.types.messages.Messages(
+        messages=[], topics=[], users=[stale], chats=[old_channel]
+    )
+
+    async def invoke(query, **kwargs):
+        if isinstance(query, raw.functions.auth.LogOut):
+            return raw.types.auth.LoggedOut()
+        return response
+
+    client.session.invoke = invoke
+    native_store = getattr(client.storage, pause_step)
+    paused, release = asyncio.Event(), asyncio.Event()
+    first = True
+
+    async def suspend_after_write(rows):
+        nonlocal first
+        await native_store(rows)
+        if first and rows:
+            first = False
+            paused.set()
+            await release.wait()
+
+    monkeypatch.setattr(client.storage, pause_step, suspend_after_write)
+    old_call = asyncio.create_task(
+        client.invoke(
+            raw.functions.messages.GetMessages(id=[raw.types.InputMessageID(id=1)]),
+        )
+    )
+    try:
+        await asyncio.wait_for(paused.wait(), timeout=1)
+        if transition == "logout":
+            monkeypatch.setattr(client, "stop", AsyncMock())
+            monkeypatch.setattr(client.storage, "delete", AsyncMock())
+            assert await client.log_out()
+        else:
+            client.session = SimpleNamespace(
+                invoke=invoke,
+                auth_key=b"fixture-authorization-A"
+                if transition == "same-key"
+                else b"fixture-authorization-B",
+            )
+        if transition in ("key-and-fresh-peer", "logout"):
+            fresh = user(username="fixture_new")
+            fresh.access_hash = 77
+            await client.fetch_peers([fresh])
+        release.set()
+        assert await old_call is response
+        if transition == "same-key":
+            assert (await client.storage.get_peer_by_id(-1000000000303)).access_hash == 33
+        else:
+            # No later batch from the old response may enter the new scope.
+            with pytest.raises(KeyError):
+                await client.storage.get_peer_by_id(-1000000000303)
+            cache = getattr(client, "_update_peer_cache", None)
+            if cache is not None:
+                assert await cache.get(("channel", 303)) is None
+            if transition in ("key-and-fresh-peer", "logout"):
+                assert (await client.storage.get_peer_by_username("fixture_new")).access_hash == 77
+    finally:
+        release.set()
+        await asyncio.gather(old_call, return_exceptions=True)

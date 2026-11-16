@@ -21,6 +21,7 @@
 from __future__ import annotations as _annotations
 
 from copy import copy
+import logging
 import time
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
@@ -36,6 +37,20 @@ if TYPE_CHECKING:
 UPDATE_PEER_CACHE_SIZE = 4096
 UPDATE_PEER_CACHE_TTL = 600
 _Peer = TypeVar("_Peer", bound=raw.base.User | raw.base.Chat)
+_Lease = tuple[float, Any]
+log = logging.getLogger(__name__)
+
+
+class _UpdatePeers(list[_Peer]):
+    """Transient merge provenance; never attach private fields to wire peers."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.leases: dict[int, _Lease] = {}
+
+
+def peer_lease(peers: Sequence[_Peer], peer: _Peer) -> _Lease | None:
+    return peers.leases.get(id(peer)) if isinstance(peers, _UpdatePeers) else None
 
 
 class UpdatePeerCache(Cache):
@@ -58,23 +73,37 @@ class UpdatePeerCache(Cache):
             self._auth_key = auth_key
 
     async def get(self, key: Any, default: Any = None) -> Any:
+        entry = await self.snapshot(key)
+        return default if entry is None else entry[1]
+
+    async def snapshot(self, key: Any) -> _Lease | None:
         async with self._lock:
             entry = self._cache.get(key)
             if entry is None:
-                return default
-            expires, value = entry
+                return None
+            expires, _ = entry
             if time.monotonic() >= expires:
                 del self._cache[key]
-                return default
+                return None
             self._cache.move_to_end(key)
-            return value
+            return entry
+
+    async def set_merged(self, key: Any, value: Any, lease: _Lease) -> None:
+        async with self._lock:
+            # Preserve the *read's* deadline, not a new lease at write time.
+            # Entry identity also fences eviction, invalidation, authorization
+            # changes and a newer full response received since the merge read.
+            if self._cache.get(key) is not lease or time.monotonic() >= lease[0]:
+                return
+            self._cache[key] = (lease[0], value)
+            self._cache.move_to_end(key)
 
     async def set(self, key: Any, value: Any) -> None:
         async with self._lock:
             now = time.monotonic()
             previous = self._cache.get(key)
-            # Merged minimal peers pass through `fetch_peers` too. Repeated
-            # traffic must not keep a missed invalidation alive indefinitely.
+            # Full replacements conservatively keep an existing live lease.
+            # Minimal merges use set_merged and can never acquire a new lease.
             expires = (
                 previous[0]
                 if previous is not None and previous[0] > now
@@ -96,13 +125,39 @@ def peer_cache_for(client: Client) -> UpdatePeerCache | None:
     return cache
 
 
-async def ingest_peer_response(client: Client, response: Any) -> None:
+class PeerIngestionScope:
+    """Keep the response's generation across storage/plugin suspension points."""
+
+    def __init__(self, client: Client) -> None:
+        self.client = client
+        self.cache = peer_cache_for(client)
+        self.generation = self.cache.generation if self.cache is not None else None
+
+    def check(self, stage: str) -> bool:
+        current = peer_cache_for(self.client)  # Bind even if no other RPC noticed the new key.
+        valid = current is self.cache and (current is None or current.generation == self.generation)
+        if not valid:
+            log.debug(
+                "peer_ingestion_scope_changed owner=peer_cache stage=%s action=stop_peer_ingestion",
+                stage,
+            )
+        return valid
+
+
+async def ingest_peer_response(
+    client: Client,
+    response: Any,
+    _scope: PeerIngestionScope | None = None,
+) -> None:
     """Ingest native RPC peers and metadata before any consumer dispatches them."""
     cache = peer_cache_for(client)
     if isinstance(response, raw.types.auth.LoginTokenSuccess):
         response = response.authorization
     if cache is not None and isinstance(response, raw.types.auth.Authorization):
         cache.clear()
+    scope = _scope if _scope is not None else PeerIngestionScope(client)
+    if not scope.check("response"):
+        return
 
     # This shared boundary covers short-message expansion and both global and
     # channel gap recovery, not just live `Updates` containers.
@@ -111,17 +166,29 @@ async def ingest_peer_response(client: Client, response: Any) -> None:
         if isinstance(updates, (list, tuple)):
             for update in updates:
                 await forget_changed_peer(cache, update)
+                if not scope.check("metadata"):
+                    return
         elif isinstance(updates, raw.base.Updates):
-            await ingest_peer_response(client, updates)
+            await ingest_peer_response(client, updates, _scope=scope)
+            if not scope.check("nested_response"):
+                return
     update = getattr(response, "update", None)
     if isinstance(update, raw.base.Update):
         await forget_changed_peer(cache, update)
+        if not scope.check("metadata"):
+            return
     if isinstance(response, raw.base.Update):
         await forget_changed_peer(cache, response)
+        if not scope.check("metadata"):
+            return
 
     # Invalidate first; a full peer bundled with the change is already fresh.
     await client.fetch_peers(getattr(response, "users", []))
+    if not scope.check("users"):
+        return
     await client.fetch_peers(getattr(response, "chats", []))
+    if not scope.check("chats"):
+        return
     peers = response if isinstance(response, (list, tuple)) else [response]
     direct_peers: list[raw.base.User | raw.base.Chat] = [
         cast("raw.base.User | raw.base.Chat", peer)
@@ -133,6 +200,7 @@ async def ingest_peer_response(client: Client, response: Any) -> None:
         direct_peers.append(user)
     if direct_peers:
         await client.fetch_peers(direct_peers)
+        scope.check("direct_peers")
 
 
 # https://core.telegram.org/constructor/user specifies these min-field exceptions.
@@ -204,7 +272,11 @@ def _key(peer: raw.base.User | raw.base.Chat) -> tuple[str, int] | None:
     return None
 
 
-async def remember_peer(cache: Cache | None, peer: raw.base.User | raw.base.Chat) -> None:
+async def remember_peer(
+    cache: Cache | None,
+    peer: raw.base.User | raw.base.Chat,
+    lease: _Lease | None = None,
+) -> None:
     if cache is None or getattr(peer, "min", False):
         return
     key = _key(peer)
@@ -212,7 +284,10 @@ async def remember_peer(cache: Cache | None, peer: raw.base.User | raw.base.Chat
         return
     # Empty/forbidden replacements must not leave an older full snapshot usable.
     value = copy(peer) if isinstance(peer, (raw.types.User, raw.types.Channel)) else None
-    await cache.set(key, value)
+    if isinstance(cache, UpdatePeerCache) and lease is not None:
+        await cache.set_merged(key, value, lease)
+    else:
+        await cache.set(key, value)
 
 
 async def forget_changed_peer(cache: Cache | None, update: raw.base.Update) -> None:
@@ -256,11 +331,16 @@ async def cached_update_peers(
     peers: Sequence[_Peer],
 ) -> list[_Peer]:
     """Merge known full peers; leave unresolved peers minimal for native hydration."""
-    result = []
+    result: _UpdatePeers[_Peer] = _UpdatePeers()
     for peer in peers:
         merged = peer
         if cache is not None and isinstance(peer, (raw.types.User, raw.types.Channel)) and peer.min:
-            full = await cache.get(_key(peer))
+            if isinstance(cache, UpdatePeerCache):
+                lease = await cache.snapshot(_key(peer))
+                full = lease[1] if lease is not None else None
+            else:
+                lease = None
+                full = await cache.get(_key(peer))
             if (
                 isinstance(peer, raw.types.User)
                 and isinstance(full, raw.types.User)
@@ -273,5 +353,7 @@ async def cached_update_peers(
                 and not full.min
             ):
                 merged = cast("_Peer", _merge_channel(full, peer))
+            if merged is not peer and lease is not None:
+                result.leases[id(merged)] = lease
         result.append(merged)
     return result
