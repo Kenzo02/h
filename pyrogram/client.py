@@ -80,9 +80,10 @@ from .file_id import FileId, FileType, ThumbnailSource
 from .parser import Parser
 from .session.internals import MsgId
 from .update_peer_cache import (
-    UPDATE_PEER_CACHE_SIZE,
+    UpdatePeerCache,
     cached_update_peers,
     forget_changed_peer,
+    peer_cache_for,
     remember_peer,
 )
 
@@ -476,7 +477,7 @@ class Client(Methods):
         self.message_split_ranges: list[raw.base.MessageRange] | None = None
 
         self.message_cache = utils.Cache(self.max_message_cache_size)
-        self._update_peer_cache = utils.Cache(UPDATE_PEER_CACHE_SIZE)
+        self._update_peer_cache = UpdatePeerCache()
         self.topic_cache = utils.Cache(self.max_topic_cache_size)
         self.sticker_set_name_cache = utils.Cache(self.max_sticker_set_name_cache_size)
 
@@ -858,8 +859,9 @@ class Client(Methods):
         parsed_peers = []
         parsed_usernames = []
 
+        cache = peer_cache_for(self)
         for peer in peers:
-            await remember_peer(getattr(self, "_update_peer_cache", None), peer)
+            await remember_peer(cache, peer)
             if getattr(peer, "min", False):
                 is_min = True
                 continue
@@ -931,7 +933,7 @@ class Client(Methods):
         if isinstance(updates, (raw.types.Updates, raw.types.UpdatesCombined)):
             # A min constructor is not a gap. Merge an already-known full peer
             # before deciding whether native hydration is still necessary.
-            cache = getattr(self, "_update_peer_cache", None)
+            cache = peer_cache_for(self)
             for update in updates.updates:
                 await forget_changed_peer(cache, update)
             update_users = await cached_update_peers(cache, updates.users)
@@ -1062,7 +1064,7 @@ class Client(Methods):
                 UpdateState(0, updates.pts, None, updates.date, None)
             )
         elif isinstance(updates, raw.types.UpdateShort):
-            await forget_changed_peer(getattr(self, "_update_peer_cache", None), updates.update)
+            await forget_changed_peer(peer_cache_for(self), updates.update)
             self.dispatcher.enqueue(
                 updates.update,
                 users={},

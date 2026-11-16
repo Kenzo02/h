@@ -21,18 +21,119 @@
 from __future__ import annotations as _annotations
 
 from copy import copy
-from typing import TYPE_CHECKING, TypeVar, cast
+import time
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from pyrogram import raw
+from pyrogram.utils.cache import Cache
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pyrogram.utils.cache import Cache
+    from pyrogram import Client
 
 # Raw peer metadata only, never messages, updates or tasks. Eviction falls back to
 # the existing hydration path rather than retaining an unbounded peer dictionary.
 UPDATE_PEER_CACHE_SIZE = 4096
+UPDATE_PEER_CACHE_TTL = 600
 _Peer = TypeVar("_Peer", bound=raw.base.User | raw.base.Chat)
+
+
+class UpdatePeerCache(Cache):
+    """Bounded snapshots with a non-sliding lifetime and authorization fence."""
+
+    def __init__(self) -> None:
+        super().__init__(UPDATE_PEER_CACHE_SIZE)
+        self._auth_key: bytes | None = None
+        self.generation = 0
+
+    def clear(self) -> None:
+        # All cache critical sections run on the client loop without yielding.
+        self._cache.clear()
+        self._auth_key = None
+        self.generation += 1
+
+    def bind(self, auth_key: bytes) -> None:
+        if self._auth_key != auth_key:
+            self.clear()
+            self._auth_key = auth_key
+
+    async def get(self, key: Any, default: Any = None) -> Any:
+        async with self._lock:
+            entry = self._cache.get(key)
+            if entry is None:
+                return default
+            expires, value = entry
+            if time.monotonic() >= expires:
+                del self._cache[key]
+                return default
+            self._cache.move_to_end(key)
+            return value
+
+    async def set(self, key: Any, value: Any) -> None:
+        async with self._lock:
+            now = time.monotonic()
+            previous = self._cache.get(key)
+            # Merged minimal peers pass through `fetch_peers` too. Repeated
+            # traffic must not keep a missed invalidation alive indefinitely.
+            expires = (
+                previous[0]
+                if previous is not None and previous[0] > now
+                else now + UPDATE_PEER_CACHE_TTL
+            )
+            self._cache[key] = (expires, value)
+            self._cache.move_to_end(key)
+            if len(self._cache) > self.capacity:
+                self._cache.popitem(last=False)
+
+
+def peer_cache_for(client: Client) -> UpdatePeerCache | None:
+    cache = getattr(client, "_update_peer_cache", None)
+    if not isinstance(cache, UpdatePeerCache):
+        return None
+    auth_key = getattr(getattr(client, "session", None), "auth_key", None)
+    if isinstance(auth_key, bytes):
+        cache.bind(auth_key)
+    return cache
+
+
+async def ingest_peer_response(client: Client, response: Any) -> None:
+    """Ingest native RPC peers and metadata before any consumer dispatches them."""
+    cache = peer_cache_for(client)
+    if isinstance(response, raw.types.auth.LoginTokenSuccess):
+        response = response.authorization
+    if cache is not None and isinstance(response, raw.types.auth.Authorization):
+        cache.clear()
+
+    # This shared boundary covers short-message expansion and both global and
+    # channel gap recovery, not just live `Updates` containers.
+    for field in ("updates", "other_updates"):
+        updates = getattr(response, field, ())
+        if isinstance(updates, (list, tuple)):
+            for update in updates:
+                await forget_changed_peer(cache, update)
+        elif isinstance(updates, raw.base.Updates):
+            await ingest_peer_response(client, updates)
+    update = getattr(response, "update", None)
+    if isinstance(update, raw.base.Update):
+        await forget_changed_peer(cache, update)
+    if isinstance(response, raw.base.Update):
+        await forget_changed_peer(cache, response)
+
+    # Invalidate first; a full peer bundled with the change is already fresh.
+    await client.fetch_peers(getattr(response, "users", []))
+    await client.fetch_peers(getattr(response, "chats", []))
+    peers = response if isinstance(response, (list, tuple)) else [response]
+    direct_peers: list[raw.base.User | raw.base.Chat] = [
+        cast("raw.base.User | raw.base.Chat", peer)
+        for peer in peers
+        if isinstance(peer, (raw.base.User, raw.base.Chat))
+    ]
+    user = getattr(response, "user", None)
+    if isinstance(user, raw.base.User):
+        direct_peers.append(user)
+    if direct_peers:
+        await client.fetch_peers(direct_peers)
+
 
 # https://core.telegram.org/constructor/user specifies these min-field exceptions.
 _USER_PRESERVE = frozenset(

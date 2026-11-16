@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 import pyrogram
 from pyrogram import raw
 from pyrogram.session import Session
+from pyrogram.update_peer_cache import ingest_peer_response, peer_cache_for
 
 if TYPE_CHECKING:
     from pyrogram.raw.core import ReturnType, TLObject
@@ -105,6 +106,8 @@ class Invoke:
         if self.takeout_id:
             query = raw.functions.InvokeWithTakeout(takeout_id=self.takeout_id, query=query)
 
+        cache = peer_cache_for(self)
+        generation = cache.generation if cache is not None else None
         r = await session.invoke(
             query=query,
             retries=retries,
@@ -115,7 +118,14 @@ class Invoke:
             retry_delay=retry_delay,
         )
 
-        await self.fetch_peers(getattr(r, "users", []))
-        await self.fetch_peers(getattr(r, "chats", []))
+        # A response from an earlier authorization must not repopulate either
+        # the snapshots or persistent peer hashes after logout/re-authorization.
+        if cache is None or (peer_cache_for(self) is cache and cache.generation == generation):
+            await ingest_peer_response(self, r)
+        else:
+            log.debug(
+                "peer_response_scope_changed owner=peer_cache query_type=%s action=skip_peer_ingestion",
+                type(query).__name__,
+            )
 
         return r

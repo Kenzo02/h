@@ -22,6 +22,7 @@ import logging
 
 import pyrogram
 from pyrogram import raw
+from pyrogram.update_peer_cache import peer_cache_for
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +48,9 @@ class LogOut:
                 await app.log_out()
         """
         await self.invoke(raw.functions.auth.LogOut())
+        cache = peer_cache_for(self)
+        if cache is not None:
+            cache.clear()
         await self.stop()
         await self.storage.delete()
 
