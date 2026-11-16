@@ -50,6 +50,7 @@ from pyrogram.errors import (
 )
 from pyrogram.raw.all import layer
 from pyrogram.raw.core import FutureSalt, FutureSalts, Int, MsgContainer, TLObject
+from pyrogram.update_ingress_metrics import record_ingress
 
 from .internals import MsgFactory
 
@@ -608,6 +609,11 @@ class Session:
         self.recv_task: asyncio.Task | None = None
 
         self.pending_tasks: set[asyncio.Task] = set()
+        # Accepted update bodies have session custody, not transport custody.
+        # Keep their original tasks/context/FIFO lock position across reconnect;
+        # a terminal stop still discards them under the existing no-replay policy.
+        self._update_tasks: set[asyncio.Task] = set()
+        self._reconnecting = False
 
         self.is_started = asyncio.Event()
         self.restart_lock = asyncio.Lock()
@@ -630,7 +636,9 @@ class Session:
 
             log.debug("Session state changed: %s -> %s", old_state.name, new_state.name)
 
-    def _create_tracked_task(self, coroutine: Coroutine[Any, Any, Any]) -> asyncio.Task:
+    def _create_tracked_task(
+        self, coroutine: Coroutine[Any, Any, Any], *, update: bool = False
+    ) -> asyncio.Task:
         # The set is what `stop()` waits on, and it is also the strong reference the
         #  loop does not hold: an unreferenced task can be collected mid-execution.
         #  https://docs.python.org/3/library/asyncio-task.html#creating-tasks
@@ -638,15 +646,34 @@ class Session:
 
         self.pending_tasks.add(task)
         task.add_done_callback(self.pending_tasks.discard)
+        if update:
+            self._update_tasks.add(task)
+            task.add_done_callback(self._update_task_done)
+            record_ingress(self.client, "tasks_accepted")
 
         return task
+
+    def _update_task_done(self, task: asyncio.Task) -> None:
+        self._update_tasks.discard(task)
+        outcome = (
+            "tasks_cancelled"
+            if task.cancelled()
+            else ("tasks_failed" if task.exception() is not None else "tasks_completed")
+        )
+        record_ingress(self.client, outcome)
 
     async def _wait_pending_tasks(self, exclude: asyncio.Task | None = None) -> None:
         # A tracked `handle_packet` spawns a tracked `handle_updates`, so drain
         # successive generations. The worker requesting stop cannot join itself.
-        while round_tasks := self.pending_tasks - {exclude}:
-            round_tasks = set(round_tasks)
+        while True:
+            round_tasks = self.pending_tasks - {exclude}
+            if self._reconnecting and not self._must_stay_stopped:
+                round_tasks -= self._update_tasks
+            if not round_tasks:
+                break
             _, running = await asyncio.wait(round_tasks, timeout=self.STOP_TIMEOUT)
+            if self._must_stay_stopped:
+                record_ingress(self.client, "terminal_cancelled", len(running & self._update_tasks))
             for task in running:
                 task.cancel()
             for result in await asyncio.gather(*round_tasks, return_exceptions=True):
@@ -912,10 +939,19 @@ class Session:
             if current in self.pending_tasks or current in (self.recv_task, self.ping_task):
                 return
             await _finish_cleanup(task, preserve_failure=self._upload_fallback)
+            # A terminal stop can join a reconnect's already-running cleanup.
+            # That owner may have passed its retention decision before stop won.
+            if self._must_stay_stopped and self.pending_tasks - {current}:
+                await self._stop()
             return
         if self._state is SessionState.STOP_FAILED and task is not None:
             task.result()
         if self._state is SessionState.STOPPED:
+            if self._must_stay_stopped and self.pending_tasks - {current}:
+                # Reconnect has closed the transport, but accepted updates still
+                # belong to us. Drain without closing that transport a second time.
+                task = self._stop_task = asyncio.create_task(self._wait_pending_tasks(current))
+                await _finish_cleanup(task, preserve_failure=self._upload_fallback)
             log.debug("Session already stopped")
             return
 
@@ -1007,6 +1043,10 @@ class Session:
             self.recv_task = None
 
         await drain("pending", self._wait_pending_tasks(origin))
+        if self._reconnecting and not self._must_stay_stopped:
+            # Repeated reconnects may retain the same task; this is an observation
+            # count, not unique updates. No historical replay is requested.
+            record_ingress(self.client, "retained_on_reconnect", len(self._update_tasks))
         await self._set_state(SessionState.STOPPED if closed else SessionState.STOP_FAILED)
         if failures:
             if self._upload_fallback:
@@ -1018,20 +1058,25 @@ class Session:
 
     async def restart(self):
         async with self.restart_lock:
-            if self.stored_msg_ids:
-                self.recent_msg_ids = self.stored_msg_ids[:30]
-
-            await self._stop()
-
-            if self._must_stay_stopped:
-                return
-
-            await self.start()
-
-            # `stop()` does not acquire `restart_lock`: it may race the call
-            # above and must win even if `start()` completed its handshake.
-            if self._must_stay_stopped:
+            record_ingress(self.client, "reconnects")
+            self._reconnecting = True
+            try:
+                if self.stored_msg_ids:
+                    self.recent_msg_ids = self.stored_msg_ids[:30]
                 await self._stop()
+                if self._must_stay_stopped:
+                    return
+                await self.start()
+                # Public stop wins even across the reconnect handoff.
+                if self._must_stay_stopped:
+                    await self._stop()
+                else:
+                    record_ingress(self.client, "reconnect_ready")
+            except BaseException:
+                record_ingress(self.client, "reconnect_failed")
+                raise
+            finally:
+                self._reconnecting = False
 
     def schedule_restart(self, reason: str):
         if self._must_stay_stopped:
@@ -1211,7 +1256,7 @@ class Session:
                 msg_id = msg.body.msg_id
             else:
                 if self.client is not None:
-                    self._create_tracked_task(self.client.handle_updates(msg.body))
+                    self._create_tracked_task(self.client.handle_updates(msg.body), update=True)
 
             if msg_id in self.results:
                 self.results[msg_id].value = getattr(msg.body, "result", msg.body)

@@ -79,6 +79,7 @@ from .dispatcher import Dispatcher
 from .file_id import FileId, FileType, ThumbnailSource
 from .parser import Parser
 from .session.internals import MsgId
+from .update_ingress_metrics import UpdateIngressMetrics, record_ingress
 from .update_parser_policy import should_parse_update
 from .update_peer_cache import (
     PeerIngestionScope,
@@ -486,6 +487,8 @@ class Client(Methods):
         # raw delivery and cursors, but avoids hydration and parsed consumers.
         # See update_parser_policy.py; unset preserves all existing behavior.
         self.update_parser_policy: Callable[[raw.base.Update], bool] | None = None
+        self.update_ingress_observer: Callable[[dict[str, int]], None] | None = None
+        self._update_ingress_metrics = UpdateIngressMetrics()
         self.topic_cache = utils.Cache(self.max_topic_cache_size)
         self.sticker_set_name_cache = utils.Cache(self.max_sticker_set_name_cache_size)
 
@@ -987,6 +990,7 @@ class Client(Methods):
                     log.info(update)
 
                 parse_update = should_parse_update(self, update)
+                record_ingress(self, "full" if parse_update else "raw_only")
                 if (
                     isinstance(update, raw.types.UpdateNewChannelMessage)
                     and is_min
@@ -995,6 +999,7 @@ class Client(Methods):
                     message = update.message
 
                     if not isinstance(message, raw.types.MessageEmpty):
+                        record_ingress(self, "hydration_attempts")
                         try:
                             diff = await self.invoke(
                                 raw.functions.updates.GetChannelDifference(
@@ -1021,6 +1026,7 @@ class Client(Methods):
                             PersistentTimestampInvalid,
                             TimeoutError,
                         ) as error:
+                            record_ingress(self, "hydration_fallbacks")
                             log.warning(
                                 "update_peer_hydration_failed channel_id=%s message_id=%s "
                                 "error_type=%s action=dispatch_original_update",
@@ -1029,6 +1035,7 @@ class Client(Methods):
                                 type(error).__name__,
                             )
                         else:
+                            record_ingress(self, "hydration_completed")
                             if not isinstance(diff, raw.types.updates.ChannelDifferenceEmpty):
                                 users.update({u.id: u for u in diff.users})
                                 chats.update({c.id: c for c in diff.chats})
