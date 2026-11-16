@@ -27,6 +27,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import Enum, auto
+from functools import partial
 from hashlib import sha1, sha256
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
@@ -53,6 +54,7 @@ from pyrogram.raw.core import FutureSalt, FutureSalts, Int, MsgContainer, TLObje
 from pyrogram.update_ingress_metrics import record_ingress
 
 from .internals import MsgFactory
+from .update_custody import PendingUpdateCustody, PtsRange
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine, Iterable
@@ -613,6 +615,9 @@ class Session:
         # Keep their original tasks/context/FIFO lock position across reconnect;
         # a terminal stop still discards them under the existing no-replay policy.
         self._update_tasks: set[asyncio.Task] = set()
+        self._update_custody = PendingUpdateCustody()
+        self._update_fault_logged_at: float | None = None
+        self._update_fault_suppressed = 0
         self._reconnecting = False
 
         self.is_started = asyncio.Event()
@@ -637,7 +642,12 @@ class Session:
             log.debug("Session state changed: %s -> %s", old_state.name, new_state.name)
 
     def _create_tracked_task(
-        self, coroutine: Coroutine[Any, Any, Any], *, update: bool = False
+        self,
+        coroutine: Coroutine[Any, Any, Any],
+        *,
+        update: bool = False,
+        message_id: int | None = None,
+        ranges: tuple[PtsRange, ...] = (),
     ) -> asyncio.Task:
         # The set is what `stop()` waits on, and it is also the strong reference the
         #  loop does not hold: an unreferenced task can be collected mid-execution.
@@ -648,17 +658,47 @@ class Session:
         task.add_done_callback(self.pending_tasks.discard)
         if update:
             self._update_tasks.add(task)
-            task.add_done_callback(self._update_task_done)
+            if message_id is not None:
+                self._update_custody.claim(message_id, ranges)
+            task.add_done_callback(partial(self._update_task_done, message_id=message_id))
             record_ingress(self.client, "tasks_accepted")
 
         return task
 
-    def _update_task_done(self, task: asyncio.Task) -> None:
+    def _update_task_done(self, task: asyncio.Task, *, message_id: int | None = None) -> None:
         self._update_tasks.discard(task)
+        error = None if task.cancelled() else task.exception()
+        if message_id is not None:
+            self._update_custody.release(
+                message_id, completed=not task.cancelled() and error is None
+            )
+        if error is not None:
+            # Retrieving task.exception() consumes asyncio's unhandled diagnostic.
+            # Replace it even without an observer, without payload/traceback logs.
+            now = time.monotonic()
+            if self._update_fault_logged_at is None or now - self._update_fault_logged_at >= 60:
+                self._update_fault_logged_at = now
+                name = type(error).__name__
+                name = (
+                    name
+                    if name.isascii() and name.isidentifier() and len(name) <= 80
+                    else "Exception"
+                )
+                log.error(
+                    "accepted_update_failed owner=sdk_native operation=client.handle_updates "
+                    "error_type=%s suppressed=%s action=inspect_native_ingress",
+                    name,
+                    self._update_fault_suppressed,
+                )
+                self._update_fault_suppressed = 0
+            else:
+                self._update_fault_suppressed = min(
+                    (1 << 31) - 1, self._update_fault_suppressed + 1
+                )
         outcome = (
             "tasks_cancelled"
             if task.cancelled()
-            else ("tasks_failed" if task.exception() is not None else "tasks_completed")
+            else ("tasks_failed" if error is not None else "tasks_completed")
         )
         record_ingress(self.client, outcome)
 
@@ -1169,7 +1209,11 @@ class Session:
         log.debug("Received: %s", data)
 
         for msg in messages:
-            if msg.msg_id in self.recent_msg_ids or msg.msg_id in self.stored_msg_ids:
+            if (
+                msg.msg_id in self._update_custody.messages
+                or msg.msg_id in self.recent_msg_ids
+                or msg.msg_id in self.stored_msg_ids
+            ):
                 # A known retransmission still needs an ACK, but must not replay its
                 # body, change the clock, or count towards a security restart.
                 # https://core.telegram.org/mtproto/service_messages#message-copies
@@ -1256,7 +1300,14 @@ class Session:
                 msg_id = msg.body.msg_id
             else:
                 if self.client is not None:
-                    self._create_tracked_task(self.client.handle_updates(msg.body), update=True)
+                    body, ranges = self._update_custody.prepare(msg.body)
+                    if body is not None:
+                        self._create_tracked_task(
+                            self.client.handle_updates(body),
+                            update=True,
+                            message_id=msg.msg_id,
+                            ranges=ranges,
+                        )
 
             if msg_id in self.results:
                 self.results[msg_id].value = getattr(msg.body, "result", msg.body)
