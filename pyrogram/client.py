@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from importlib import import_module
 from io import BytesIO
+from itertools import chain
 from mimetypes import MimeTypes
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -78,6 +79,12 @@ from .dispatcher import Dispatcher
 from .file_id import FileId, FileType, ThumbnailSource
 from .parser import Parser
 from .session.internals import MsgId
+from .update_peer_cache import (
+    UPDATE_PEER_CACHE_SIZE,
+    cached_update_peers,
+    forget_changed_peer,
+    remember_peer,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Sequence
@@ -469,6 +476,7 @@ class Client(Methods):
         self.message_split_ranges: list[raw.base.MessageRange] | None = None
 
         self.message_cache = utils.Cache(self.max_message_cache_size)
+        self._update_peer_cache = utils.Cache(UPDATE_PEER_CACHE_SIZE)
         self.topic_cache = utils.Cache(self.max_topic_cache_size)
         self.sticker_set_name_cache = utils.Cache(self.max_sticker_set_name_cache_size)
 
@@ -523,6 +531,7 @@ class Client(Methods):
         self.updates_watchdog_event = asyncio.Event()
 
         self.message_cache.reset_lock()
+        self._update_peer_cache.reset_lock()
         self.topic_cache.reset_lock()
         self.sticker_set_name_cache.reset_lock()
 
@@ -844,12 +853,13 @@ class Client(Methods):
 
         self.parse_mode = parse_mode
 
-    async def fetch_peers(self, peers: list[raw.base.User | raw.base.Chat]) -> bool:
+    async def fetch_peers(self, peers: Sequence[raw.base.User | raw.base.Chat]) -> bool:
         is_min = False
         parsed_peers = []
         parsed_usernames = []
 
         for peer in peers:
+            await remember_peer(getattr(self, "_update_peer_cache", None), peer)
             if getattr(peer, "min", False):
                 is_min = True
                 continue
@@ -919,15 +929,22 @@ class Client(Methods):
         self.last_update_time = datetime.now()
 
         if isinstance(updates, (raw.types.Updates, raw.types.UpdatesCombined)):
+            # A min constructor is not a gap. Merge an already-known full peer
+            # before deciding whether native hydration is still necessary.
+            cache = getattr(self, "_update_peer_cache", None)
+            for update in updates.updates:
+                await forget_changed_peer(cache, update)
+            update_users = await cached_update_peers(cache, updates.users)
+            update_chats = await cached_update_peers(cache, updates.chats)
             is_min = any(
                 (
-                    await self.fetch_peers(updates.users),
-                    await self.fetch_peers(updates.chats),
+                    await self.fetch_peers(update_users),
+                    await self.fetch_peers(update_chats),
                 )
             )
 
-            users = {u.id: u for u in updates.users}
-            chats = {c.id: c for c in updates.chats}
+            users = {u.id: u for u in update_users}
+            chats = {c.id: c for c in update_chats}
 
             for update in updates.updates:
                 channel_id = getattr(
@@ -982,12 +999,22 @@ class Client(Methods):
                             PersistentTimestampOutdated,
                             PersistentTimestampInvalid,
                             TimeoutError,
-                        ):
-                            pass
+                        ) as error:
+                            log.warning(
+                                "update_peer_hydration_failed channel_id=%s message_id=%s "
+                                "error_type=%s action=dispatch_original_update",
+                                channel_id,
+                                message.id,
+                                type(error).__name__,
+                            )
                         else:
                             if not isinstance(diff, raw.types.updates.ChannelDifferenceEmpty):
                                 users.update({u.id: u for u in diff.users})
                                 chats.update({c.id: c for c in diff.chats})
+                                is_min = any(
+                                    getattr(peer, "min", False)
+                                    for peer in chain(users.values(), chats.values())
+                                )
 
                 self.dispatcher.enqueue(
                     update,
@@ -1035,6 +1062,7 @@ class Client(Methods):
                 UpdateState(0, updates.pts, None, updates.date, None)
             )
         elif isinstance(updates, raw.types.UpdateShort):
+            await forget_changed_peer(getattr(self, "_update_peer_cache", None), updates.update)
             self.dispatcher.enqueue(
                 updates.update,
                 users={},
