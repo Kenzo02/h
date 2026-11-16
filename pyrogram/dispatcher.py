@@ -100,6 +100,12 @@ from pyrogram.raw.types import (
 log = logging.getLogger(__name__)
 
 
+class _RawOnlyPacket(tuple):
+    """Keep the existing three-item queue shape and freeze admission intent."""
+
+    __slots__ = ()
+
+
 class Dispatcher:
     NEW_MESSAGE_UPDATES = (
         UpdateNewMessage,
@@ -446,6 +452,7 @@ class Dispatcher:
         *,
         users: dict[int, raw.base.User],
         chats: dict[int, raw.base.Chat],
+        parse: bool = True,
     ) -> None:
         # Only `start()` spawns the workers that drain the queue, so a client that only called
         #  `connect()` queued every update forever. Nothing is lost by dropping: `start()`
@@ -453,7 +460,8 @@ class Dispatcher:
         if not self._accepting_updates:
             return
 
-        self.updates_queue.put_nowait((update, users, chats))
+        packet = (update, users, chats)
+        self.updates_queue.put_nowait(packet if parse else _RawOnlyPacket(packet))
 
     def add_handler(self, handler: Handler[Any], group: int) -> None:
         with self._groups_lock:
@@ -488,7 +496,11 @@ class Dispatcher:
 
             try:
                 update, users, chats = packet
-                parser = self.update_parsers.get(type(update), None)
+                parser = (
+                    None
+                    if isinstance(packet, _RawOnlyPacket)
+                    else self.update_parsers.get(type(update), None)
+                )
 
                 parsed_update, handler_type = (
                     await parser(update, users, chats) if parser is not None else (None, type(None))

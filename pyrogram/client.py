@@ -79,6 +79,7 @@ from .dispatcher import Dispatcher
 from .file_id import FileId, FileType, ThumbnailSource
 from .parser import Parser
 from .session.internals import MsgId
+from .update_parser_policy import should_parse_update
 from .update_peer_cache import (
     PeerIngestionScope,
     UpdatePeerCache,
@@ -301,6 +302,7 @@ class Client(Methods):
     """
 
     APP_VERSION = f"Kurigram {__version__}"
+    UPDATE_PARSER_POLICY_CONTRACT_VERSION = 1
     DEVICE_MODEL = f"{platform.python_implementation()} {platform.python_version()}"
     SYSTEM_VERSION = f"{platform.system()} {platform.release()}"
 
@@ -480,6 +482,10 @@ class Client(Methods):
 
         self.message_cache = utils.Cache(self.max_message_cache_size)
         self._update_peer_cache = UpdatePeerCache()
+        # Optional synchronous native-ingress interest predicate. False retains
+        # raw delivery and cursors, but avoids hydration and parsed consumers.
+        # See update_parser_policy.py; unset preserves all existing behavior.
+        self.update_parser_policy: Callable[[raw.base.Update], bool] | None = None
         self.topic_cache = utils.Cache(self.max_topic_cache_size)
         self.sticker_set_name_cache = utils.Cache(self.max_sticker_set_name_cache_size)
 
@@ -980,7 +986,12 @@ class Client(Methods):
                 if isinstance(update, raw.types.UpdateChannelTooLong):
                     log.info(update)
 
-                if isinstance(update, raw.types.UpdateNewChannelMessage) and is_min:
+                parse_update = should_parse_update(self, update)
+                if (
+                    isinstance(update, raw.types.UpdateNewChannelMessage)
+                    and is_min
+                    and parse_update
+                ):
                     message = update.message
 
                     if not isinstance(message, raw.types.MessageEmpty):
@@ -1026,11 +1037,10 @@ class Client(Methods):
                                     for peer in chain(users.values(), chats.values())
                                 )
 
-                self.dispatcher.enqueue(
-                    update,
-                    users=users,
-                    chats=chats,
-                )
+                if parse_update:
+                    self.dispatcher.enqueue(update, users=users, chats=chats)
+                else:
+                    self.dispatcher.enqueue(update, users=users, chats=chats, parse=False)
 
                 # Hydrating a minimal channel update can suspend. Keep its cursor
                 # recoverable until the hydrated update is available for dispatch.
